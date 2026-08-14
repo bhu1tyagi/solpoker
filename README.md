@@ -4,8 +4,9 @@ Real-time, fully on-chain Texas Hold'em on Solana — built on MagicBlock Epheme
 Rollups for sub-second gameplay and **Private** Ephemeral Rollups (Intel TDX TEE) for
 hole-card secrecy.
 
-> **Status: Phase 0 complete.** The TEE privacy pipe is proven end to end on devnet.
-> The poker engine itself is not built yet. See [SPEC.md](SPEC.md) for the phase plan
+> **Status: Phases 0 and 1 complete.** The TEE privacy pipe is proven end to end on
+> devnet, and the chain-agnostic rules engine is built and property-tested. Nothing is
+> wired together yet — that starts at Phase 2. See [SPEC.md](SPEC.md) for the phase plan
 > and [DECISIONS.md](DECISIONS.md) for the running decision log.
 
 ## Why this architecture
@@ -61,9 +62,48 @@ Denied reads return `null` over the authenticated TEE RPC. Crucially, the progra
 PDA-signed CPI can still update a fully-locked permission, so a table can never be
 bricked — verified by flipping privacy back off after total lockdown.
 
+## The rules engine
+
+`crates/poker-engine` is plain deterministic Rust with **no Solana dependencies**, so
+it can be property-tested and fuzzed off-chain at full speed and then linked into the
+program unchanged. Its types mirror the on-chain account layouts, so no conversion
+layer is needed.
+
+The hand evaluator uses **no lookup tables**. The usual fast evaluators buy speed with
+memory — the Two Plus Two table is ~130 MB — which is a non-starter on chain. This one
+derives every category from a 13-bit rank mask and a count array using bit tricks;
+straight detection is a single four-shift AND.
+
+Measured on devnet inside the SBF VM:
+
+| Operation | CU | Share of the 200,000 default budget |
+| --- | ---: | ---: |
+| Evaluate one 7-card hand | 865 | 0.43% |
+| Six-player showdown, side pots and payout included | 7,075 | 3.54% |
+| 52-card deterministic shuffle | 18,289 | 9.14% |
+
+Showdown settlement fits about 28 times over, so no compute budget increase is needed.
+
+Three invariants are enforced by property tests rather than examples: chips are
+conserved across any legal action sequence, hand ranking is a total order that agrees
+with brute-force search over all 21 five-card subsets, and side pots always sum to
+total contributions.
+
+```bash
+cd crates/poker-engine
+cargo test                                  # 48 unit + 8 property tests
+cargo run --example three_way_side_pot      # worked multi-way all-in
+```
+
 ## Repo layout
 
 ```
+crates/poker-engine/      Chain-agnostic rules engine (Phase 1)
+  src/card.rs             Card encoding, deck, deterministic shuffle
+  src/eval.rs             Table-free 7-card evaluator
+  src/betting.rs          Betting state machine and legal-action rules
+  src/pots.rs             Main and side pot construction and payout
+crates/cu-bench/          Throwaway SBF program that measures on-chain CU
 phase0-private-counter/   Phase 0 TEE proof (deployed on devnet)
   programs/               Anchor program: delegation + permission lifecycle
   tests/                  Adversarial two-wallet privacy tests
