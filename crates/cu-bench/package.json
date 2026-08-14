@@ -1,0 +1,12 @@
+{
+  "name": "cu-bench-harness",
+  "private": true,
+  "type": "module",
+  "description": "Sends each cu-bench workload to devnet and reports measured compute units.",
+  "scripts": {
+    "bench": "node run-bench.mjs"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.98.0"
+  }
+}

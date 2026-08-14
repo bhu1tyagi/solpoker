@@ -1,0 +1,20 @@
+[workspace]
+
+[package]
+name = "cu-bench"
+version = "0.1.0"
+edition = "2021"
+description = "Measures the on-chain compute-unit cost of poker-engine on a real cluster."
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "cu_bench"
+
+[dependencies]
+solana-program = "2.3"
+poker-engine = { path = "../poker-engine" }
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
