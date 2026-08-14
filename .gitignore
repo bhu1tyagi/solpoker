@@ -1,0 +1,11 @@
+node_modules/
+target/
+.anchor/
+dist/
+.env
+.DS_Store
+
+# Never commit wallet material. keys/ holds throwaway devnet test wallets only.
+keys/
+*.pem
+!target/deploy/*-keypair.json
