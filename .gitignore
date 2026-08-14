@@ -9,3 +9,6 @@ dist/
 keys/
 *.pem
 !target/deploy/*-keypair.json
+
+# Rust build artifacts and local bench state
+program-id.json
