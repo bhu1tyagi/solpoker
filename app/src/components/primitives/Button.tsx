@@ -20,9 +20,10 @@ const VARIANTS: Record<Variant, React.CSSProperties> = {
     border: "1px solid var(--line)",
   },
   danger: {
-    background: "transparent",
-    color: "var(--lose)",
-    border: "1px solid rgba(201, 127, 127, 0.35)",
+    background: "var(--grad-danger)",
+    color: "var(--on-danger)",
+    fontWeight: 700,
+    boxShadow: "0 1px 0 rgba(255,255,255,0.18) inset, var(--shadow-1)",
   },
   quiet: {
     background: "transparent",

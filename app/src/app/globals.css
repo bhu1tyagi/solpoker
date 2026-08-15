@@ -17,9 +17,11 @@
   --color-win: var(--win);
   --color-lose: var(--lose);
   --color-info: var(--info);
-  --color-card-face: var(--card-face);
+  --color-card-face: var(--card-face-hi);
 
-  --font-display: var(--font-fraunces), Georgia, serif;
+  /* One bold geometric voice for headings and big numerals. The serif is
+     retired; the room reads as a modern client now, not a book. */
+  --font-display: var(--font-inter), system-ui, sans-serif;
   --font-sans: var(--font-inter), system-ui, sans-serif;
 }
 
@@ -40,8 +42,8 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
@@ -93,19 +95,90 @@ button {
 .wallet-adapter-button:not([disabled]):hover {
   filter: brightness(1.08);
 }
+/* The connect screen: no box, just a dark room with a centred column, a big
+   mint title, and one quiet row per wallet. */
+.wallet-adapter-modal {
+  background: rgba(9, 13, 18, 0.9) !important;
+  backdrop-filter: blur(6px);
+}
 .wallet-adapter-modal-wrapper {
-  background: var(--surface) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: var(--r-modal) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  max-width: 540px !important;
+  padding: 0 24px !important;
 }
 .wallet-adapter-modal-title {
   font-family: var(--font-display) !important;
-  color: var(--text) !important;
+  font-weight: 700 !important;
+  font-size: var(--t-xl) !important;
+  letter-spacing: -0.02em !important;
+  color: var(--accent) !important;
+  text-align: center !important;
+  padding: 24px 0 26px !important;
+}
+.wallet-adapter-modal-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  padding: 0 !important;
+}
+.wallet-adapter-modal-list li {
+  margin: 0 !important;
 }
 .wallet-adapter-modal-list li button {
-  background: var(--surface-2) !important;
+  background: var(--grad-surface) !important;
+  border: 1px solid var(--line) !important;
   color: var(--text) !important;
   border-radius: var(--r-control) !important;
+  height: 56px !important;
+  font-size: var(--t-base) !important;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.wallet-adapter-modal-list li button:hover {
+  background: var(--surface-2) !important;
+  border-color: var(--accent-deep) !important;
+}
+.wallet-adapter-modal-button-close {
+  background: var(--surface-2) !important;
+}
+
+/* Sliders: a thin dark track with a round mint thumb. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--accent-deep);
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--accent-deep);
 }
 
 @media (prefers-reduced-motion: reduce) {

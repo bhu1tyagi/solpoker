@@ -4,26 +4,62 @@ import { motion } from "motion/react";
 import { AnimatedNumber } from "./AnimatedNumber";
 
 /**
- * Chips, drawn as stacked discs with an amount beside them.
+ * Chips, drawn as columns of stacked coins with an amount beside them.
  *
- * Denominations are cosmetic. The real amount is a single number on chain, and
- * the stack height is just a quick read of how big a bet is.
+ * The stack height is a log scale read of how big an amount is, nothing more.
+ * The real amount is a single number on chain.
  */
 
-const DENOMS = [
-  { at: 1000, color: "#3d4a86", edge: "#5f6fb5" },
-  { at: 500, color: "#5a3d7a", edge: "#8262ad" },
-  { at: 100, color: "#1f5c55", edge: "#37847a" },
-  { at: 25, color: "#7a5a32", edge: "#a67f4b" },
-  { at: 5, color: "#7a3d44", edge: "#a65a63" },
-  { at: 1, color: "#44505a", edge: "#66757f" },
-];
+/** The chip mark: a spade in a mint disc. The currency symbol of the room. */
+export function ChipGlyph({ size = 16 }: { size?: number }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: "var(--grad-accent)",
+        color: "var(--on-accent)",
+        fontSize: size * 0.62,
+        lineHeight: 1,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      ♠
+    </span>
+  );
+}
 
-function stackFor(amount: number) {
-  // Up to five discs, biggest denomination the amount justifies.
-  const d = DENOMS.find((x) => amount >= x.at) ?? DENOMS[DENOMS.length - 1];
-  const count = Math.min(5, Math.max(1, Math.round(Math.log10(amount / d.at + 1) * 3) + 1));
-  return { d, count };
+/** How many coins an amount earns, split into columns of at most six. */
+function coinsFor(amount: number) {
+  const total = Math.min(18, Math.max(1, Math.floor(Math.log2(amount + 1) * 1.4)));
+  const columns: number[] = [];
+  let left = total;
+  while (left > 0) {
+    columns.push(Math.min(6, left));
+    left -= 6;
+  }
+  return columns;
+}
+
+function Coin({ size }: { size: number }) {
+  const h = Math.max(3, size * 0.26);
+  return (
+    <div
+      style={{
+        width: size,
+        height: h,
+        borderRadius: h / 2,
+        background:
+          "linear-gradient(180deg, rgba(125, 242, 208, 0.85), rgba(47, 169, 140, 0.85))",
+        boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.45), 0 1px 1px rgba(0,0,0,0.4)",
+      }}
+    />
+  );
 }
 
 export function ChipStack({
@@ -38,49 +74,42 @@ export function ChipStack({
   compact?: boolean;
 }) {
   if (amount <= 0) return null;
-  const { d, count } = stackFor(amount);
-  const lift = Math.max(2, size * 0.16);
+  const columns = coinsFor(amount);
 
   return (
     <div
       style={{
         display: "inline-flex",
-        alignItems: "center",
+        alignItems: "flex-end",
         gap: 7,
         pointerEvents: "none",
       }}
     >
-      <div
-        style={{
-          position: "relative",
-          width: size,
-          height: size + lift * (count - 1),
-        }}
-      >
-        {Array.from({ length: count }, (_, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.02 }}
-            style={{
-              position: "absolute",
-              bottom: i * lift,
-              width: size,
-              height: size * 0.78,
-              borderRadius: "50%",
-              background: d.color,
-              border: `1.5px solid ${d.edge}`,
-              boxShadow: "0 1px 2px rgba(0,0,0,0.5)",
-            }}
-          />
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 2 }}>
+        {columns.map((count, c) => (
+          <div
+            key={c}
+            style={{ display: "flex", flexDirection: "column-reverse", gap: 1 }}
+          >
+            {Array.from({ length: count }, (_, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: (c * 6 + i) * 0.015 }}
+              >
+                <Coin size={size} />
+              </motion.div>
+            ))}
+          </div>
         ))}
       </div>
       {showAmount && (
         <span
+          className="tnum"
           style={{
             fontSize: compact ? "var(--t-xs)" : "var(--t-sm)",
-            fontWeight: 600,
+            fontWeight: 700,
             color: "var(--text)",
             textShadow: "0 1px 3px rgba(0,0,0,0.7)",
           }}

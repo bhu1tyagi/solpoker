@@ -1,16 +1,24 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
-import { NO_CARD, RANK_CHARS, SUIT_SYMBOLS, isRedSuit, rankOf, suitOf } from "@/lib/engine/cards";
+import { NO_CARD, RANK_CHARS, SUIT_SYMBOLS, rankOf, suitOf } from "@/lib/engine/cards";
 import { spring } from "@/styles/theme";
 
 type Size = "sm" | "md" | "lg";
 
-const SIZES: Record<Size, { w: number; h: number; rank: number; suit: number; pip: number }> = {
-  sm: { w: 32, h: 45, rank: 14, suit: 10, pip: 15 },
-  md: { w: 46, h: 64, rank: 19, suit: 13, pip: 21 },
-  lg: { w: 62, h: 87, rank: 25, suit: 17, pip: 29 },
+const SIZES: Record<Size, { w: number; h: number; rank: number; suit: number }> = {
+  sm: { w: 34, h: 46, rank: 20, suit: 10 },
+  md: { w: 48, h: 66, rank: 30, suit: 13 },
+  lg: { w: 64, h: 88, rank: 42, suit: 16 },
 };
+
+/** The four colour deck: every suit its own colour, so a flush reads at a glance. */
+export const SUIT_COLORS = [
+  "var(--suit-clubs)",
+  "var(--suit-diamonds)",
+  "var(--suit-hearts)",
+  "var(--suit-spades)",
+];
 
 interface Props {
   /** Card byte, or NO_CARD. */
@@ -82,8 +90,8 @@ function Face({
   highlighted: boolean;
 }) {
   const known = card !== undefined && card !== NO_CARD && card < 52;
-  const red = known && isRedSuit(card);
-  const rank = known ? RANK_CHARS[rankOf(card)] : "";
+  const color = known ? SUIT_COLORS[suitOf(card)] : "var(--text-faint)";
+  const rank = known ? RANK_CHARS[rankOf(card)].replace("T", "10") : "";
   const suit = known ? SUIT_SYMBOLS[suitOf(card)] : "";
 
   return (
@@ -93,36 +101,28 @@ function Face({
         inset: 0,
         backfaceVisibility: "hidden",
         borderRadius: 8,
-        background: "var(--card-face)",
-        color: red ? "var(--card-red)" : "var(--card-black)",
+        background: "linear-gradient(180deg, var(--card-face-hi), var(--card-face-lo))",
+        border: "1px solid var(--card-line)",
+        color,
         boxShadow: highlighted
           ? "0 0 0 1px var(--accent), 0 0 18px var(--accent-glow), var(--shadow-1)"
           : "var(--shadow-1)",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
-        padding: "3px 4px",
-        fontFamily: "var(--font-display)",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 1,
         lineHeight: 1,
         userSelect: "none",
       }}
     >
-      <span style={{ fontSize: s.rank, fontWeight: 600 }}>{rank}</span>
+      <span style={{ fontSize: s.suit, opacity: 0.95 }}>{suit}</span>
       <span
+        className="tnum"
         style={{
-          fontSize: s.pip,
-          alignSelf: "center",
-          marginTop: -s.pip * 0.25,
-          opacity: 0.9,
-        }}
-      >
-        {suit}
-      </span>
-      <span
-        style={{
-          fontSize: s.suit,
-          alignSelf: "flex-end",
-          transform: "rotate(180deg)",
+          fontSize: rank === "10" ? s.rank * 0.82 : s.rank,
+          fontWeight: 800,
+          letterSpacing: "-0.03em",
         }}
       >
         {rank}
@@ -172,7 +172,7 @@ export function CardSlot({ size = "md" }: { size?: Size }) {
         height: s.h,
         borderRadius: 8,
         border: "1px dashed var(--line)",
-        background: "rgba(0, 0, 0, 0.14)",
+        background: "rgba(0, 0, 0, 0.16)",
       }}
     />
   );

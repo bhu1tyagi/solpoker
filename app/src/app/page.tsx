@@ -8,6 +8,7 @@ import { TopBar } from "@/components/chrome/TopBar";
 import { CreateTableModal } from "@/components/chrome/CreateTableModal";
 import { Button } from "@/components/primitives/Button";
 import { Modal, Panel, Skeleton, Stat } from "@/components/primitives/Surface";
+import { ChipGlyph } from "@/components/primitives/Chip";
 import { usePlayer } from "@/hooks/use-player";
 import { isJoinable, useTables, type LobbyTable } from "@/hooks/use-tables";
 import { spring, stagger } from "@/styles/theme";
@@ -258,10 +259,12 @@ export default function Lobby() {
                 display: "flex",
                 alignItems: "baseline",
                 justifyContent: "space-between",
-                marginBottom: 12,
+                marginBottom: 16,
               }}
             >
-              <h2 style={{ fontSize: "var(--t-md)" }}>Tables</h2>
+              <h2 style={{ fontSize: "var(--t-lg)", color: "var(--accent)" }}>
+                Poker rooms
+              </h2>
               <Button variant="quiet" size="sm" onClick={() => void refreshTables()}>
                 Refresh
               </Button>
@@ -298,7 +301,26 @@ export default function Lobby() {
                 </p>
               </Panel>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: ROW_COLUMNS,
+                    gap: 12,
+                    padding: "0 18px 6px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "var(--text-faint)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.14em",
+                  }}
+                >
+                  <span>Stakes</span>
+                  <span>Buy-in</span>
+                  <span>Players</span>
+                  <span>Status</span>
+                  <span />
+                </div>
                 {tables
                 .filter((t) => (!t.outdated && !t.abandoned) || (me && t.table.seats.includes(me)))
                 .slice(0, 25)
@@ -338,80 +360,83 @@ export default function Lobby() {
   );
 }
 
+/** Stakes, buy-in, players, status, join. One room per row, like a lobby board. */
+const ROW_COLUMNS = "1.2fr 1.2fr 0.8fr 0.8fr auto";
+
 function TableRow({ t }: { t: LobbyTable }) {
   const joinable = isJoinable(t);
   const live = t.delegated;
+  const status = t.outdated
+    ? { label: "outdated", tone: "var(--lose)" }
+    : live
+      ? { label: "playing", tone: "var(--win)" }
+      : joinable
+        ? { label: "open", tone: "var(--accent)" }
+        : { label: "full", tone: "var(--text-faint)" };
 
   return (
     <Link href={`/table/${t.table.tableId}`} style={{ textDecoration: "none" }}>
-      <Panel hoverable padded={false} style={{ padding: "14px 18px" }}>
+      <Panel hoverable padded={false} style={{ padding: "13px 18px" }}>
         <div
           style={{
-            display: "flex",
+            display: "grid",
+            gridTemplateColumns: ROW_COLUMNS,
+            gap: 12,
             alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
           }}
         >
-          <div>
-            <div
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: "var(--t-md)",
-                color: "var(--text)",
-              }}
-            >
-              {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "table"}
-            </div>
-            <div style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>
-              table {t.table.tableId} · hand {t.table.handNumber}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <ChipGlyph size={16} />
+            <div>
+              <div className="tnum" style={{ fontWeight: 700, color: "var(--text)" }}>
+                {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "table"}
+              </div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)" }}>
+                room {String(t.table.tableId)} · hand {t.table.handNumber}
+              </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-            <div style={{ textAlign: "right" }}>
-              <div className="tnum" style={{ fontSize: "var(--t-base)" }}>
-                {t.seated} / 6
-              </div>
-              <div style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>
-                seated
-              </div>
-            </div>
-            <Badge
-              tone={
-                t.outdated
-                  ? "var(--lose)"
-                  : live
-                    ? "var(--win)"
-                    : joinable
-                      ? "var(--accent)"
-                      : "var(--text-faint)"
-              }
-              label={t.outdated ? "outdated" : live ? "playing" : joinable ? "open" : "full"}
-            />
+          <div className="tnum" style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)" }}>
+            {t.config
+              ? `${t.config.minBuyIn.toLocaleString()} - ${t.config.maxBuyIn.toLocaleString()}`
+              : "-"}
           </div>
+
+          <div className="tnum" style={{ color: "var(--text)", fontSize: "var(--t-sm)" }}>
+            {t.seated} / 6
+          </div>
+
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: status.tone,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+            }}
+          >
+            {status.label}
+          </span>
+
+          <span
+            className="plaque"
+            style={{
+              background: joinable && !live ? "var(--grad-accent)" : "var(--surface-2)",
+              color: joinable && !live ? "var(--on-accent)" : "var(--text-dim)",
+              fontSize: 11,
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              padding: "8px 18px",
+              justifySelf: "end",
+            }}
+          >
+            {live ? "Watch" : joinable ? "Join" : "View"}
+          </span>
         </div>
       </Panel>
     </Link>
-  );
-}
-
-function Badge({ tone, label }: { tone: string; label: string }) {
-  return (
-    <span
-      style={{
-        fontSize: "var(--t-xs)",
-        color: tone,
-        border: `1px solid ${tone}`,
-        borderRadius: 999,
-        padding: "3px 10px",
-        textTransform: "uppercase",
-        letterSpacing: "0.07em",
-        opacity: 0.9,
-      }}
-    >
-      {label}
-    </span>
   );
 }
 

@@ -17,6 +17,44 @@ import type { ConfigView, TableView } from "@/stores/table-store";
 /** Anchor account discriminator for Table, from the IDL. */
 const TABLE_DISCRIMINATOR = Uint8Array.from([34, 100, 138, 97, 236, 129, 230, 112]);
 
+/**
+ * Tables this browser deleted. The chain forgets them the moment the close
+ * lands, but an RPC node can echo the dead account for a while afterwards, and
+ * a table you just deleted reappearing in the lobby reads as a failed delete.
+ */
+const TOMBSTONE_KEY = "solpoker:deleted-tables";
+const TOMBSTONE_TTL_MS = 30 * 60 * 1000;
+
+export function tombstoneTable(tableId: number | string) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TOMBSTONE_KEY) ?? "{}") as Record<
+      string,
+      number
+    >;
+    raw[String(tableId)] = Date.now();
+    localStorage.setItem(TOMBSTONE_KEY, JSON.stringify(raw));
+  } catch {
+    // Storage being unavailable only costs the cosmetic filter.
+  }
+}
+
+function tombstonedIds(): Set<string> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TOMBSTONE_KEY) ?? "{}") as Record<
+      string,
+      number
+    >;
+    const now = Date.now();
+    return new Set(
+      Object.entries(raw)
+        .filter(([, ts]) => now - Number(ts) < TOMBSTONE_TTL_MS)
+        .map(([id]) => id),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
 export interface LobbyTable {
   table: TableView;
   config: ConfigView | null;
@@ -78,11 +116,14 @@ export function useTables() {
       // One unreadable account must not take the lobby down with it. Older
       // builds of the program left accounts with a different layout, and a
       // failed listing is indistinguishable from an empty one on screen.
+      const dead = tombstonedIds();
       const decoded = accounts.flatMap((a) => {
         try {
+          const table = decodeTable(new Uint8Array(a.account.data), a.pubkey.toBase58());
+          if (dead.has(String(table.tableId))) return [];
           return [
             {
-              table: decodeTable(new Uint8Array(a.account.data), a.pubkey.toBase58()),
+              table,
               delegated: a.account.owner.equals(DELEGATION_PROGRAM),
             },
           ];

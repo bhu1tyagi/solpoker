@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Avatar, shortKey } from "@/components/primitives/Avatar";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { PlayingCard } from "@/components/primitives/PlayingCard";
+import { ChipGlyph, ChipStack } from "@/components/primitives/Chip";
 import { ClockRing } from "@/components/primitives/ClockRing";
 import { spring } from "@/styles/theme";
 import type { SeatView } from "@/stores/table-store";
@@ -52,14 +53,16 @@ export function SeatPod({
         whileHover={{ scale: 1.04, borderColor: "var(--accent-deep)" }}
         whileTap={{ scale: 0.98 }}
         transition={spring.snappy}
+        className="plaque"
         style={{
-          width: 92,
-          height: 62,
-          borderRadius: "var(--r-card)",
+          width: 96,
+          height: 56,
           border: "1px dashed var(--line)",
           background: "rgba(0,0,0,0.22)",
           color: "var(--text-faint)",
           fontSize: "var(--t-xs)",
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
           cursor: onSit ? "pointer" : "default",
         }}
       >
@@ -80,11 +83,18 @@ export function SeatPod({
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 5,
+        gap: 4,
         position: "relative",
       }}
     >
-      {/* Cards sit above the pod, tucked behind it slightly. */}
+      {/* The physical stack: a quick read of how deep this seat is. */}
+      {seat.stack > 0 && (
+        <div style={{ position: "absolute", right: -8, top: -20, opacity: 0.9 }}>
+          <ChipStack amount={seat.stack} size={13} showAmount={false} />
+        </div>
+      )}
+
+      {/* Cards sit above the plate, tucked behind it slightly. */}
       <div style={{ display: "flex", gap: 3, height: dealtIn ? undefined : 0 }}>
         <AnimatePresence>
           {dealtIn &&
@@ -112,48 +122,69 @@ export function SeatPod({
         </AnimatePresence>
       </div>
 
+      {/* The plate: an angular plaque. The hairline is the outer layer showing
+          through, because a real border would be sliced off at the cut corners. */}
       <div
+        className="plaque"
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          background: "var(--surface)",
-          border: `1px solid ${isTurn ? "var(--accent-deep)" : "var(--line)"}`,
-          borderRadius: "var(--r-card)",
-          padding: "6px 10px 6px 6px",
-          boxShadow: isTurn ? "var(--ring-accent)" : "var(--shadow-1)",
-          minWidth: 132,
-          transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+          background: isTurn ? "var(--accent)" : "var(--line)",
+          padding: 1,
+          filter: isTurn ? "drop-shadow(0 0 10px var(--accent-glow))" : undefined,
+          transition: "filter 0.2s ease",
         }}
       >
-        {isTurn ? (
-          <ClockRing deadline={deadline} totalSecs={timeoutSecs} size={42} thickness={2}>
-            <Avatar pubkey={seat.occupant!} size={32} />
-          </ClockRing>
-        ) : (
-          <Avatar
-            pubkey={seat.occupant!}
-            size={36}
-            ring={isMe ? "var(--accent-deep)" : undefined}
-          />
-        )}
+        <div
+          className="plaque"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 9,
+            background: "var(--plate)",
+            padding: "7px 14px 7px 8px",
+            minWidth: 138,
+          }}
+        >
+          {isTurn ? (
+            <ClockRing deadline={deadline} totalSecs={timeoutSecs} size={42} thickness={2}>
+              <Avatar pubkey={seat.occupant!} size={32} />
+            </ClockRing>
+          ) : (
+            <Avatar
+              pubkey={seat.occupant!}
+              size={36}
+              ring={isMe ? "var(--accent-deep)" : undefined}
+            />
+          )}
 
-        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}>
-          <span
-            style={{
-              fontSize: "var(--t-xs)",
-              color: isMe ? "var(--accent)" : "var(--text-dim)",
-              fontWeight: isMe ? 600 : 400,
-            }}
-          >
-            {isMe ? "you" : shortKey(seat.occupant!)}
-          </span>
-          <span className="tnum" style={{ fontSize: "var(--t-sm)", fontWeight: 600 }}>
-            <AnimatedNumber value={seat.stack} />
-          </span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, lineHeight: 1.15 }}>
+            <span
+              className="tnum"
+              style={{
+                fontSize: "var(--t-base)",
+                fontWeight: 800,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              <AnimatedNumber value={seat.stack} />
+              <ChipGlyph size={13} />
+            </span>
+            <span
+              style={{
+                fontSize: 10,
+                color: isMe ? "var(--accent)" : "var(--text-dim)",
+                fontWeight: isMe ? 700 : 500,
+                textTransform: "uppercase",
+                letterSpacing: "0.12em",
+              }}
+            >
+              {isMe ? "you" : shortKey(seat.occupant!)}
+            </span>
+          </div>
+
+          {isButton && <DealerButton />}
         </div>
-
-        {isButton && <DealerButton />}
       </div>
 
       <AnimatePresence>
@@ -162,13 +193,18 @@ export function SeatPod({
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
+            className="plaque"
             style={{
-              fontSize: "var(--t-xs)",
-              color: status.tone,
+              fontSize: 10,
+              fontWeight: 800,
+              color: status.fg,
+              background: status.bg,
+              padding: "3px 12px",
               textTransform: "uppercase",
-              letterSpacing: "0.08em",
+              letterSpacing: "0.14em",
               position: "absolute",
-              bottom: -16,
+              bottom: -18,
+              whiteSpace: "nowrap",
             }}
           >
             {status.label}
@@ -180,12 +216,13 @@ export function SeatPod({
 }
 
 function statusOf(seat: SeatView, dealtIn: boolean, handLive: boolean) {
-  if (seat.folded) return { label: "folded", tone: "var(--text-faint)" };
-  if (seat.allIn) return { label: "all in", tone: "var(--accent)" };
+  const quiet = { bg: "rgba(0,0,0,0.5)", fg: "var(--text-dim)" };
+  if (seat.folded) return { label: "fold", bg: "var(--grad-danger)", fg: "var(--on-danger)" };
+  if (seat.allIn) return { label: "all in", bg: "var(--grad-accent)", fg: "var(--on-accent)" };
   // Out of chips is worth saying at any time; sitting out only means something
   // once there is a hand to be sitting out of.
-  if (seat.stack === 0) return { label: "no chips", tone: "var(--lose)" };
-  if (handLive && !dealtIn) return { label: "sitting out", tone: "var(--text-faint)" };
+  if (seat.stack === 0) return { label: "no chips", bg: "rgba(0,0,0,0.5)", fg: "var(--lose)" };
+  if (handLive && !dealtIn) return { label: "sitting out", ...quiet };
   return null;
 }
 
@@ -198,10 +235,10 @@ function DealerButton() {
         width: 19,
         height: 19,
         borderRadius: "50%",
-        background: "var(--text)",
-        color: "var(--bg)",
+        background: "var(--grad-accent)",
+        color: "var(--on-accent)",
         fontSize: 10,
-        fontWeight: 700,
+        fontWeight: 800,
         display: "grid",
         placeItems: "center",
         marginLeft: 2,

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
+import { ChipGlyph } from "@/components/primitives/Chip";
 
 // The wallet button reaches for window on mount, so it cannot render on the server.
 const WalletMultiButton = dynamic(
@@ -60,20 +61,21 @@ export function TopBar({ chips }: { chips?: number }) {
           <div
             style={{
               display: "flex",
-              alignItems: "baseline",
-              gap: 7,
+              alignItems: "center",
+              gap: 8,
               background: "var(--surface)",
               border: "1px solid var(--line)",
               borderRadius: 999,
-              padding: "6px 14px",
+              padding: "6px 14px 6px 8px",
             }}
           >
+            <ChipGlyph size={18} />
             <span
               className="tnum"
               style={{
-                fontFamily: "var(--font-display)",
                 fontSize: "var(--t-base)",
-                color: "var(--accent)",
+                fontWeight: 700,
+                color: "var(--text)",
               }}
             >
               <AnimatedNumber value={chips} />

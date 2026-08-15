@@ -25,6 +25,7 @@ import {
 import { DELEGATION_PROGRAM, MAX_SEATS, PROGRAM_ID } from "@/lib/constants";
 import { seatPda } from "@/lib/pdas";
 import { friendlyError, sendEr, sleep } from "@/lib/net";
+import { tombstoneTable } from "@/hooks/use-tables";
 import { toast } from "@/stores/ui-store";
 import type { ActionKind } from "@/components/poker/ActionBar";
 
@@ -155,6 +156,9 @@ export function useTableActions(args: {
             ),
           "delete table",
         );
+        // Some RPC nodes echo the closed account for a while; remember the
+        // delete locally so the lobby does not resurrect the table.
+        if (tableId) tombstoneTable(tableId.toString());
         toast("Table deleted", "good");
         return true;
       } catch (e) {
@@ -164,7 +168,7 @@ export function useTableActions(args: {
         setBusy(null);
       }
     },
-    [table, config, publicKey, sendBase],
+    [table, config, tableId, publicKey, sendBase],
   );
 
   /**

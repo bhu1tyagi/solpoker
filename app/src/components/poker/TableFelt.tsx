@@ -87,7 +87,8 @@ export function TableFelt({
             inset: 14,
             borderRadius: "50% / 50%",
             background:
-              "radial-gradient(ellipse at 50% 40%, var(--felt-glow) 0%, var(--felt-hi) 42%, var(--felt-lo) 78%, var(--felt-edge) 100%)",
+              "radial-gradient(var(--felt-speck) 1px, transparent 1.4px), radial-gradient(ellipse at 50% 40%, var(--felt-glow) 0%, var(--felt-hi) 42%, var(--felt-lo) 78%, var(--felt-edge) 100%)",
+            backgroundSize: "22px 22px, 100% 100%",
             boxShadow:
               "inset 0 10px 40px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.5)",
           }}
@@ -116,6 +117,46 @@ export function TableFelt({
           gap: 12,
         }}
       >
+        <AnimatePresence mode="wait">
+          {pot > 0 && (
+            <motion.div
+              key="pot"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={spring.snappy}
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                gap: 8,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "var(--t-xs)",
+                  fontWeight: 700,
+                  color: "var(--text-faint)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.18em",
+                }}
+              >
+                total pot :
+              </span>
+              <span
+                className="tnum"
+                style={{
+                  fontSize: "var(--t-md)",
+                  fontWeight: 800,
+                  color: "var(--text)",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                <AnimatedNumber value={pot} />
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {working && !handLive ? (
           <div style={{ padding: "6px 0 2px" }}>
             <ShuffleLoop />
@@ -143,48 +184,6 @@ export function TableFelt({
             ))}
           </div>
         )}
-
-        <AnimatePresence mode="wait">
-          {pot > 0 && (
-            <motion.div
-              key="pot"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={spring.snappy}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                background: "rgba(0,0,0,0.35)",
-                borderRadius: 999,
-                padding: "5px 14px",
-                border: "1px solid var(--accent-soft)",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: "var(--t-xs)",
-                  color: "var(--text-faint)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.09em",
-                }}
-              >
-                pot
-              </span>
-              <span
-                className="tnum"
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "var(--t-md)",
-                  color: "var(--accent)",
-                }}
-              >
-                <AnimatedNumber value={pot} />
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         <span
           style={{
