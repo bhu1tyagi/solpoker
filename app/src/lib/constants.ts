@@ -72,6 +72,39 @@ export const OFFSETS = {
   holeCards: 49,
 };
 
+/**
+ * The current on-chain size of a Deck account.
+ *
+ * Tables created by an older build have a shorter deck and cannot be played by
+ * this program, because the account no longer deserializes. Comparing the size
+ * is how the client spots one before offering a game that would only fail.
+ */
+export const DECK_ACCOUNT_SIZE = 8 + 32 + 52 + 1 + 32 + 32 + 1 + 1;
+
+/**
+ * How long a table must sit empty before anyone may sweep it away.
+ *
+ * Solana has no timers, so an abandoned table cannot delete itself. What
+ * happens instead is that any client may remove one once it has been empty
+ * this long, and the lobby does so in the background, which comes to the same
+ * thing from a player's side.
+ */
+export const ABANDONED_AFTER_SECS = 60 * 60;
+
+/**
+ * Anchor's own error codes. Without these a layout mismatch surfaces to a
+ * player as "Custom":3003, which tells them nothing at all.
+ */
+export const ANCHOR_ERRORS: Record<number, string> = {
+  2006: "ConstraintSeeds",
+  3001: "AccountDiscriminatorNotFound",
+  3002: "AccountDiscriminatorMismatch",
+  3003: "AccountDidNotDeserialize",
+  3004: "AccountDidNotSerialize",
+  3007: "AccountOwnedByWrongProgram",
+  3012: "AccountNotInitialized",
+};
+
 /** Program error names by code, for turning a failed transaction into English. */
 export const ERROR_NAMES: Record<number, string> = {
   6000: "FaucetOnCooldown",
@@ -108,10 +141,24 @@ export const ERROR_NAMES: Record<number, string> = {
   6031: "NoShuffleRequested",
   6032: "NotEnoughSalts",
   6033: "ShuffleNotReady",
+  6034: "NotTableCreator",
+  6035: "TableNotEmpty",
+  6036: "TableNotAbandoned",
 };
 
 /** What to show a player when one of these comes back. */
 export const ERROR_MESSAGES: Record<string, string> = {
+  AccountDidNotDeserialize:
+    "This table was created by an older version of the game and cannot be played. Pause it, cash out, and create a new table.",
+  AccountDiscriminatorMismatch:
+    "This table's accounts do not match the current game. Create a new table.",
+  AccountNotInitialized:
+    "Part of this table is missing on chain. Create a new table.",
+  ConstraintSeeds: "An account address did not match what the program expected.",
+  NotTableCreator: "Only the player who created this table can delete it.",
+  TableNotEmpty: "Everyone has to leave the table before it can be deleted.",
+  TableNotAbandoned:
+    "Only the creator can delete this table until it has sat empty for an hour.",
   FaucetOnCooldown: "You already claimed chips today. Try again tomorrow.",
   InsufficientChips: "Not enough chips for that.",
   BuyInOutOfRange: "That buy-in is outside the table limits.",

@@ -7,10 +7,12 @@ import BN from "bn.js";
 import { getBaseConnection } from "@/lib/connection";
 import { makeProgram, type SolpokerProgram } from "@/lib/anchor";
 import {
+  closeTableIx,
   commitResultsIx,
   delegateCoreIx,
   delegateSeatIx,
   joinTableIx,
+  vacateSeatIx,
   leaveTableIx,
   playerActionIx,
   secureDeckIx,
@@ -116,6 +118,53 @@ export function useTableActions(args: {
       }
     },
     [table, sendBase, publicKey],
+  );
+
+  /**
+   * Delete a table you created, reclaiming its rent.
+   *
+   * Anyone still sitting is sent home with their chips first, so nothing is
+   * destroyed. Only works while the table is undelegated, which account
+   * ownership enforces on its own.
+   */
+  const deleteTable = useCallback(
+    async (occupants: { seat: number; occupant: string }[]) => {
+      if (!table || !config || !publicKey) return false;
+      setBusy("delete");
+      try {
+        for (const { seat, occupant } of occupants) {
+          await sendBase(
+            async (program) =>
+              new Transaction().add(
+                await vacateSeatIx(
+                  program,
+                  table,
+                  seat,
+                  new PublicKey(occupant),
+                  config,
+                  publicKey,
+                ),
+              ),
+            `vacate seat ${seat}`,
+          );
+        }
+        await sendBase(
+          async (program) =>
+            new Transaction().add(
+              await closeTableIx(program, table, config, publicKey, publicKey),
+            ),
+          "delete table",
+        );
+        toast("Table deleted", "good");
+        return true;
+      } catch (e) {
+        toast(friendlyError(e), "bad");
+        return false;
+      } finally {
+        setBusy(null);
+      }
+    },
+    [table, config, publicKey, sendBase],
   );
 
   /**
@@ -338,5 +387,5 @@ export function useTableActions(args: {
     [erProgram, erConnection, table, config, session, sessionToken, publicKey],
   );
 
-  return { join, leave, startTable, pauseTable, act, busy };
+  return { join, leave, deleteTable, startTable, pauseTable, act, busy };
 }

@@ -19,7 +19,9 @@ import {
 import { MAX_SEATS } from "@/lib/constants";
 import { playerPda, tablePda } from "@/lib/pdas";
 import { friendlyError } from "@/lib/net";
+import { sweepTransactions } from "@/lib/sweep";
 import { toast } from "@/stores/ui-store";
+import type { LobbyTable } from "@/hooks/use-tables";
 
 const STAKES = [
   { label: "Micro", sb: 5, bb: 10, min: 200, max: 2_000 },
@@ -35,10 +37,13 @@ export function CreateTableModal({
   open,
   onClose,
   onCreated,
+  tables = [],
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
+  /** Used to tidy away abandoned tables in the same signature. */
+  tables?: LobbyTable[];
 }) {
   const { publicKey, signAllTransactions } = useWallet();
   const router = useRouter();
@@ -97,12 +102,16 @@ export function CreateTableModal({
         return tx;
       });
 
+      // Tidy away a couple of long-abandoned tables while we are here. Same
+      // signature, so it costs the player nothing.
+      const sweeps = await sweepTransactions(conn, program, tables, publicKey, bh.blockhash);
+
       setProgress("Waiting for your wallet");
-      const signed = await signAllTransactions(txs);
+      const signed = await signAllTransactions([...txs, ...sweeps]);
 
       // Order matters: seats and holes are seeded on the table address.
       const labels = ["table", "seats", "card slots"];
-      for (let i = 0; i < signed.length; i++) {
+      for (let i = 0; i < txs.length; i++) {
         setProgress(`Creating ${labels[i]}`);
         const sig = await conn.sendRawTransaction(signed[i].serialize(), {
           skipPreflight: true,
@@ -110,6 +119,15 @@ export function CreateTableModal({
         const conf = await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
         if (conf.value.err) {
           throw new Error(`${labels[i]} failed: ${JSON.stringify(conf.value.err)}`);
+        }
+      }
+
+      // Best effort, and never allowed to fail the creation.
+      for (let i = txs.length; i < signed.length; i++) {
+        try {
+          await conn.sendRawTransaction(signed[i].serialize(), { skipPreflight: true });
+        } catch {
+          // Someone else swept it first.
         }
       }
 

@@ -221,7 +221,10 @@ export default function Lobby() {
               </Panel>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {tables.slice(0, 25).map((t, i) => (
+                {tables
+                .filter((t) => !t.outdated && !t.abandoned)
+                .slice(0, 25)
+                .map((t, i) => (
                   <motion.div
                     key={t.table.address}
                     initial={{ opacity: 0, y: 10 }}
@@ -241,6 +244,7 @@ export default function Lobby() {
         open={creating}
         onClose={() => setCreating(false)}
         onCreated={refreshTables}
+        tables={tables}
       />
     </>
   );
@@ -286,8 +290,16 @@ function TableRow({ t }: { t: LobbyTable }) {
               </div>
             </div>
             <Badge
-              tone={live ? "var(--win)" : joinable ? "var(--accent)" : "var(--text-faint)"}
-              label={live ? "playing" : joinable ? "open" : "full"}
+              tone={
+                t.outdated
+                  ? "var(--lose)"
+                  : live
+                    ? "var(--win)"
+                    : joinable
+                      ? "var(--accent)"
+                      : "var(--text-faint)"
+              }
+              label={t.outdated ? "outdated" : live ? "playing" : joinable ? "open" : "full"}
             />
           </div>
         </div>

@@ -180,6 +180,69 @@ export async function leaveTableIx(
     .instruction();
 }
 
+/**
+ * Send a seated player home with their chips, so the table can be closed.
+ *
+ * Creator only, and the chips go to the occupant's own balance, so this can
+ * remove someone from a table but never take anything from them.
+ */
+export async function vacateSeatIx(
+  program: SolpokerProgram,
+  table: PublicKey,
+  i: number,
+  occupant: PublicKey,
+  config: PublicKey,
+  creator: PublicKey,
+) {
+  return program.methods
+    .vacateSeat(i)
+    .accountsPartial({
+      table,
+      config,
+      seat: seatPda(table, i),
+      player: playerPda(occupant),
+      creator,
+    })
+    .instruction();
+}
+
+/**
+ * Delete a table you created and reclaim its rent.
+ *
+ * Every seat must be empty first, so nothing with chips in it can be deleted.
+ * The seat and hole accounts ride as remaining accounts because naming all
+ * eighteen in one context overflows the BPF stack frame.
+ */
+export async function closeTableIx(
+  program: SolpokerProgram,
+  table: PublicKey,
+  config: PublicKey,
+  creator: PublicKey,
+  payer: PublicKey = creator,
+) {
+  const seats = Array.from({ length: MAX_SEATS }, (_, i) => seatPda(table, i));
+  const holes = Array.from({ length: MAX_SEATS }, (_, i) => holePda(table, i));
+  return program.methods
+    .closeTable()
+    .accountsPartial({
+      table,
+      config,
+      hand: handPda(table),
+      deck: deckPda(table),
+      history: historyPda(table),
+      payer,
+      creator,
+    })
+    .remainingAccounts(
+      [...seats, ...holes].map((pubkey) => ({
+        pubkey,
+        isWritable: true,
+        isSigner: false,
+      })),
+    )
+    .instruction();
+}
+
 export async function delegateCoreIx(
   program: SolpokerProgram,
   tableId: BN,

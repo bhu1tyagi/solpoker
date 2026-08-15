@@ -5,7 +5,13 @@ import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeConfig, decodeTable } from "@/lib/decode";
-import { DELEGATION_PROGRAM, PROGRAM_ID } from "@/lib/constants";
+import {
+  ABANDONED_AFTER_SECS,
+  DECK_ACCOUNT_SIZE,
+  DELEGATION_PROGRAM,
+  PROGRAM_ID,
+} from "@/lib/constants";
+import { deckPda } from "@/lib/pdas";
 import type { ConfigView, TableView } from "@/stores/table-store";
 
 /** Anchor account discriminator for Table, from the IDL. */
@@ -17,6 +23,13 @@ export interface LobbyTable {
   /** Delegated means a game is live on the rollup, so seats are locked. */
   delegated: boolean;
   seated: number;
+  /**
+   * Created by an older build, so its deck no longer fits the program. Such a
+   * table can be paused and cashed out but never played.
+   */
+  outdated: boolean;
+  /** Empty long enough that anyone may sweep it away. */
+  abandoned: boolean;
 }
 
 /**
@@ -60,6 +73,15 @@ export function useTables() {
         ? await conn.getMultipleAccountsInfo(decoded.map((d) => new PublicKey(d.table.config)))
         : [];
 
+      // A deck from an older layout cannot be dealt from, so say so here
+      // rather than letting someone sit down and hit a deserialization error
+      // the moment they press start.
+      const decks = decoded.length
+        ? await conn.getMultipleAccountsInfo(
+            decoded.map((d) => deckPda(new PublicKey(d.table.address))),
+          )
+        : [];
+
       setTables(
         decoded
           .map((d, i) => {
@@ -70,11 +92,19 @@ export function useTables() {
             } catch {
               // Show the table without its stakes rather than not at all.
             }
+            const deck = decks[i];
+            const seated = d.table.seats.filter(Boolean).length;
+            const emptyFor = d.table.emptySince
+              ? Math.floor(Date.now() / 1000) - d.table.emptySince
+              : 0;
             return {
               table: d.table,
               delegated: d.delegated,
               config,
-              seated: d.table.seats.filter(Boolean).length,
+              seated,
+              outdated: !deck || deck.data.length < DECK_ACCOUNT_SIZE,
+              abandoned:
+                !d.delegated && seated === 0 && emptyFor >= ABANDONED_AFTER_SECS,
             };
           })
           .sort((a, b) => b.table.tableId - a.table.tableId),
@@ -103,5 +133,8 @@ export function useTables() {
  * the table looked like when play started, not what it looks like now.
  */
 export function isJoinable(t: LobbyTable) {
-  return !t.delegated && t.table.state === 0 && t.seated < 6;
+  return !t.outdated && !t.delegated && t.table.state === 0 && t.seated < 6;
 }
+
+/** Tables that have sat empty long enough for anyone to clear away. */
+export const abandonedTables = (tables: LobbyTable[]) => tables.filter((t) => t.abandoned);

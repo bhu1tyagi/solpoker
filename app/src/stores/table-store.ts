@@ -59,6 +59,8 @@ export interface TableView {
   handNumber: number;
   /** 0 waiting, 1 hand in progress. */
   state: number;
+  /** Unix seconds since the last player left, or 0 while anyone is seated. */
+  emptySince: number;
 }
 
 export interface ConfigView {

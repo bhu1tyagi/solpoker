@@ -39,6 +39,14 @@ async function openBrowser(browser, kp, name) {
     if (m.type() === "error") errors.push(m.text());
   });
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
+  // Surface anything the app tells the player, so a failed step explains
+  // itself instead of just not happening.
+  const toasts = [];
+  page.on("console", (m) => {
+    const t = m.text();
+    if (/failed|Error|error:/i.test(t)) toasts.push(t.slice(0, 240));
+  });
+  page.__toasts = toasts;
 
   await page.exposeFunction("__testSignTransaction", (bytes) => {
     const tx = Transaction.from(Buffer.from(bytes));
@@ -257,6 +265,18 @@ async function main() {
       if (done && acted > 3) break;
       await sleep(1200);
     }
+
+    // Showdown is not the end. Settlement lands a moment later and that is
+    // what writes the hand into history, so wait for it rather than racing it.
+    const settled = await A.page
+      .waitForFunction(
+        () => !/showdown/i.test(document.body.innerText),
+        { timeout: 120_000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    check(settled, "the hand settles after showdown");
+    await A.page.waitForTimeout(3000);
     check(acted > 0, `players could act through the UI (${acted} actions)`);
     await shot(A, "7-after-play");
 
@@ -289,7 +309,66 @@ async function main() {
       await shot(A, "8-verified");
     }
 
-    log("\n11. console errors");
+    log("\n11. the creator can delete the table");
+    await A.page.goto(`${BASE}/table/${tableId}`, { waitUntil: "networkidle" });
+    // The page has to restore the session key and check delegation before it
+    // knows which buttons to offer.
+    await A.page
+      .waitForFunction(() => /pause table|delete table/i.test(document.body.innerText), {
+        timeout: 90_000,
+      })
+      .catch(() => {});
+
+    // Pause first: a live table is delegated and cannot be deleted.
+    const pauseBtn = A.page.getByRole("button", { name: /pause table/i });
+    if (await pauseBtn.isVisible().catch(() => false)) {
+      await pauseBtn.click();
+      const paused = await A.page
+        .waitForFunction(() => /on Solana/i.test(document.body.innerText), { timeout: 300_000 })
+        .then(() => true)
+        .catch(() => false);
+      check(paused, "the table pauses back to the base layer");
+      if (!paused) {
+        const shown = await A.page
+          .evaluate(() => document.body.innerText.slice(0, 700))
+          .catch(() => "");
+        log(`      on screen: ${shown.replace(/\s+/g, " ").slice(0, 400)}`);
+        (A.page.__toasts ?? []).slice(-4).forEach((t) => log(`      console: ${t}`));
+      }
+    }
+    await A.page
+      .waitForFunction(() => /delete table/i.test(document.body.innerText), { timeout: 90_000 })
+      .catch(() => {});
+    const delBtn = A.page.getByRole("button", { name: /delete table/i });
+    const canDelete = await delBtn.isVisible().catch(() => false);
+    check(canDelete, "the creator sees a delete button");
+    if (canDelete) {
+      await delBtn.click();
+      await A.page.waitForTimeout(1000);
+      await A.page.getByRole("button", { name: /delete it/i }).click();
+      const gone = await A.page
+        .waitForURL(/localhost:\d+\/$/, { timeout: 240_000 })
+        .then(() => true)
+        .catch(() => false);
+      check(gone, "deleting returns to the lobby");
+      await A.page.waitForTimeout(4000);
+      const stillListed = await A.page
+        .evaluate((id) => document.body.innerText.includes(id), tableId)
+        .catch(() => true);
+      check(!stillListed, "the deleted table is gone from the lobby");
+      await shot(A, "9-deleted");
+    }
+
+    // B must not be offered a delete on someone else's table.
+    await B.page.goto(`${BASE}/table/${tableId}`, { waitUntil: "networkidle" }).catch(() => {});
+    await B.page.waitForTimeout(2500);
+    const bCanDelete = await B.page
+      .getByRole("button", { name: /delete table/i })
+      .isVisible()
+      .catch(() => false);
+    check(!bCanDelete, "a non-creator is not offered a delete button");
+
+    log("\n12. console errors");
     for (const b of [A, B]) {
       const real = b.errors.filter(
         (e) => !/favicon|Download the React DevTools|preload/i.test(e),

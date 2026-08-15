@@ -70,4 +70,10 @@ pub enum PokerError {
     NotEnoughSalts,
     #[msg("Shuffle seed is not ready yet")]
     ShuffleNotReady,
+    #[msg("Only the player who created this table can do that")]
+    NotTableCreator,
+    #[msg("Every seat must be empty before the table can be closed")]
+    TableNotEmpty,
+    #[msg("Only the creator can delete a table until it has sat empty for an hour")]
+    TableNotAbandoned,
 }

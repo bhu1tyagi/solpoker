@@ -17,7 +17,7 @@ import {
   Transaction,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { ERROR_MESSAGES, ERROR_NAMES, RACE_LOST } from "./constants";
+import { ANCHOR_ERRORS, ERROR_MESSAGES, ERROR_NAMES, RACE_LOST } from "./constants";
 
 /** Failures worth retrying. Everything else is a real error and should surface. */
 export const TRANSIENT =
@@ -32,7 +32,8 @@ export function errorName(e: unknown): string | null {
   const s = String(e);
   const coded = s.match(/custom program error: 0x([0-9a-f]+)/i);
   if (coded) {
-    const name = ERROR_NAMES[parseInt(coded[1], 16)];
+    const code = parseInt(coded[1], 16);
+    const name = ERROR_NAMES[code] ?? ANCHOR_ERRORS[code];
     if (name) return name;
   }
   // confirmTransaction reports {"InstructionError":[0,{"Custom":6030}]}, and
@@ -40,7 +41,8 @@ export function errorName(e: unknown): string | null {
   // so a lost race is recognised even when the logs never arrive.
   const custom = s.match(/"Custom"\s*:\s*(\d+)/);
   if (custom) {
-    const name = ERROR_NAMES[Number(custom[1])];
+    const code = Number(custom[1]);
+    const name = ERROR_NAMES[code] ?? ANCHOR_ERRORS[code];
     if (name) return name;
   }
   const anchorCode = (e as { error?: { errorCode?: { number?: number } } })?.error

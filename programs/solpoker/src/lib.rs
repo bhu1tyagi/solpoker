@@ -82,6 +82,14 @@ pub mod solpoker {
         instructions::table::leave_table(ctx, seat_index)
     }
 
+    pub fn vacate_seat(ctx: Context<VacateSeat>, seat_index: u8) -> Result<()> {
+        instructions::table::vacate_seat(ctx, seat_index)
+    }
+
+    pub fn close_table(ctx: Context<CloseTable>) -> Result<()> {
+        instructions::table::close_table(ctx)
+    }
+
     pub fn create_hole(ctx: Context<CreateHole>, seat_index: u8) -> Result<()> {
         instructions::hand::create_hole(ctx, seat_index)
     }

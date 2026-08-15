@@ -106,6 +106,9 @@ export function decodeTable(d: Uint8Array, address: string): TableView {
     button: u8(d, 240),
     handNumber: u64(d, 241),
     state: u8(d, 249),
+    // Appended after bump, so a table from an older build stops before it and
+    // reads as 0, meaning "not known to be empty".
+    emptySince: i64(d, 251),
   };
 }
 

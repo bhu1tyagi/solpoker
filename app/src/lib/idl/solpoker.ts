@@ -133,6 +133,62 @@ export type Solpoker = {
       "args": []
     },
     {
+      "name": "closeTable",
+      "discriminator": [
+        149,
+        214,
+        44,
+        14,
+        190,
+        244,
+        132,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "table",
+          "docs": [
+            "deserialized so a table from an older build is still deletable."
+          ],
+          "writable": true
+        },
+        {
+          "name": "config",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Whoever asked for this. Only matters as the fee payer: the rent goes to",
+            "the creator regardless, so there is nothing to gain by sweeping someone",
+            "else's empty table."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "hand",
+          "docs": [
+            "cannot make a table impossible to delete."
+          ],
+          "writable": true
+        },
+        {
+          "name": "deck",
+          "writable": true
+        },
+        {
+          "name": "history",
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "commitResults",
       "docs": [
         "Commit table state and record the last hand on the base layer."
@@ -2649,6 +2705,85 @@ export type Solpoker = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "vacateSeat",
+      "discriminator": [
+        64,
+        212,
+        25,
+        14,
+        67,
+        107,
+        59,
+        17
+      ],
+      "accounts": [
+        {
+          "name": "table",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  98,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table.table_id",
+                "account": "table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "seat",
+          "writable": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player.authority",
+                "account": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "seatIndex",
+          "type": "u8"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -2927,6 +3062,21 @@ export type Solpoker = {
       "code": 6033,
       "name": "shuffleNotReady",
       "msg": "Shuffle seed is not ready yet"
+    },
+    {
+      "code": 6034,
+      "name": "notTableCreator",
+      "msg": "Only the player who created this table can do that"
+    },
+    {
+      "code": 6035,
+      "name": "tableNotEmpty",
+      "msg": "Every seat must be empty before the table can be closed"
+    },
+    {
+      "code": 6036,
+      "name": "tableNotAbandoned",
+      "msg": "Only the creator can delete a table until it has sat empty for an hour"
     }
   ],
   "types": [
@@ -3485,6 +3635,21 @@ export type Solpoker = {
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "emptySince",
+            "docs": [
+              "When the last player left, or 0 while anyone is still seated.",
+              "",
+              "Appended after `bump` on purpose: every field before it keeps the",
+              "offset it has always had, so a client reading a table written by an",
+              "older build gets the same answers and simply finds nothing here.",
+              "",
+              "An abandoned table would otherwise sit in the lobby forever, because",
+              "only its creator can delete it and creators lose keys. This is the",
+              "clock that lets anyone sweep one once it has been empty long enough."
+            ],
+            "type": "i64"
           }
         ]
       }

@@ -40,19 +40,45 @@ fn assert_is<T: Discriminator>(info: &AccountInfo) -> Result<()> {
     Ok(())
 }
 
+/// Deck offsets, read raw rather than deserialized.
+///
+/// Deserializing would tie this check to the current layout, and an account
+/// written by an older build would fail to deserialize and could then never
+/// leave the rollup at all. A table that cannot be exited is worse than one
+/// that cannot be played, so this reads the bytes it cares about and ignores
+/// the rest.
+const DECK_CARDS: usize = 8 + 32;
+const DECK_CARDS_END: usize = DECK_CARDS + 52;
+/// Where the randomness and seed start, in layouts that carry them.
+const DECK_SECRETS: usize = DECK_CARDS_END + 1;
+const DECK_SECRETS_END: usize = DECK_SECRETS + 64;
+
 fn assert_deck_publishable(info: &AccountInfo) -> Result<()> {
     let data = info.try_borrow_data()?;
-    let deck =
-        Deck::try_deserialize(&mut &data[..]).map_err(|_| error!(PokerError::SeatOrderMismatch))?;
-    require!(deck.holds_no_secrets(), PokerError::HandInProgress);
+    require!(data.len() >= DECK_CARDS_END, PokerError::SeatOrderMismatch);
+    require!(
+        data[DECK_CARDS..DECK_CARDS_END].iter().all(|c| *c == NO_CARD),
+        PokerError::HandInProgress
+    );
+    // Older decks stop before the seed. Newer ones must have it wiped too.
+    if data.len() >= DECK_SECRETS_END {
+        require!(
+            data[DECK_SECRETS..DECK_SECRETS_END].iter().all(|b| *b == 0),
+            PokerError::HandInProgress
+        );
+    }
     Ok(())
 }
 
+const HOLE_CARDS: usize = 8 + 32 + 1 + 8;
+
 fn assert_hole_publishable(info: &AccountInfo) -> Result<()> {
     let data = info.try_borrow_data()?;
-    let hole = HoleCards::try_deserialize(&mut &data[..])
-        .map_err(|_| error!(PokerError::SeatOrderMismatch))?;
-    require!(hole.cards == [NO_CARD; 2], PokerError::HandInProgress);
+    require!(data.len() >= HOLE_CARDS + 2, PokerError::SeatOrderMismatch);
+    require!(
+        data[HOLE_CARDS] == NO_CARD && data[HOLE_CARDS + 1] == NO_CARD,
+        PokerError::HandInProgress
+    );
     Ok(())
 }
 

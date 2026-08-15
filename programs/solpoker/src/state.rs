@@ -101,10 +101,39 @@ pub struct Table {
     pub hand_number: u64,
     pub state: TableState,
     pub bump: u8,
+    /// When the last player left, or 0 while anyone is still seated.
+    ///
+    /// Appended after `bump` on purpose: every field before it keeps the
+    /// offset it has always had, so a client reading a table written by an
+    /// older build gets the same answers and simply finds nothing here.
+    ///
+    /// An abandoned table would otherwise sit in the lobby forever, because
+    /// only its creator can delete it and creators lose keys. This is the
+    /// clock that lets anyone sweep one once it has been empty long enough.
+    pub empty_since: i64,
 }
+
+/// How long a table must sit empty before anyone may sweep it away.
+pub const ABANDONED_AFTER_SECS: i64 = 60 * 60;
 
 impl Table {
     pub const EMPTY_SEAT: Pubkey = Pubkey::new_from_array([0u8; 32]);
+
+    /// Is anybody sitting here?
+    pub fn is_vacant(&self) -> bool {
+        self.seats.iter().all(|s| *s == Self::EMPTY_SEAT)
+    }
+
+    /// Start or stop the abandonment clock to match who is seated.
+    pub fn touch_vacancy(&mut self, now: i64) {
+        if self.is_vacant() {
+            if self.empty_since == 0 {
+                self.empty_since = now;
+            }
+        } else {
+            self.empty_since = 0;
+        }
+    }
 
     pub fn is_empty_seat(&self, index: usize) -> bool {
         self.seats[index] == Self::EMPTY_SEAT

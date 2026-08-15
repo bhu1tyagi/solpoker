@@ -57,6 +57,7 @@ pub fn create_table(
     table.hand_number = 0;
     table.state = TableState::Waiting;
     table.bump = ctx.bumps.table;
+    table.empty_since = Clock::get()?.unix_timestamp;
 
     let hand = &mut ctx.accounts.hand;
     hand.table = table.key();
@@ -184,6 +185,7 @@ pub fn join_table(ctx: Context<JoinTable>, seat_index: u8, buy_in: u64) -> Resul
     seat.last_action_slot = 0;
 
     ctx.accounts.table.seats[seat_index as usize] = authority;
+    ctx.accounts.table.empty_since = 0;
 
     msg!(
         "player {} took seat {} with {} chips ({} left in balance)",
@@ -223,6 +225,8 @@ pub fn leave_table(ctx: Context<LeaveTable>, seat_index: u8) -> Result<()> {
     seat.reset_for_new_hand(false);
 
     ctx.accounts.table.seats[seat_index as usize] = Table::EMPTY_SEAT;
+    let now = Clock::get()?.unix_timestamp;
+    ctx.accounts.table.touch_vacancy(now);
 
     msg!(
         "player {} left seat {} with {} chips (balance now {})",
@@ -354,4 +358,250 @@ pub struct LeaveTable<'info> {
     )]
     pub player: Account<'info, Player>,
     pub authority: Signer<'info>,
+}
+
+/// Send a seated player home, with their chips.
+///
+/// A table's creator can clear a seat so the table can be closed, without
+/// needing everyone who ever sat down to come back and cash out themselves.
+/// Chips go to the occupant's own balance, never to the creator, so this
+/// removes a player from a table but cannot take anything from them.
+///
+/// Everything the seat holds is returned, both the stack and whatever was
+/// committed to a pot, because an undelegated table in the middle of a hand is
+/// an abandoned one and those chips belong to somebody.
+///
+/// Only while the table is undelegated, which is enforced by account
+/// ownership: a delegated table belongs to the delegation program and Anchor
+/// refuses it outright. So this can never reach into a running game.
+pub fn vacate_seat(ctx: Context<VacateSeat>, seat_index: u8) -> Result<()> {
+    require!(
+        (seat_index as usize) < MAX_SEATS,
+        PokerError::SeatIndexOutOfRange
+    );
+    assert_creator(&ctx.accounts.config, &ctx.accounts.table, &ctx.accounts.creator)?;
+
+    let seat = &mut ctx.accounts.seat;
+    require!(seat.is_occupied(), PokerError::SeatEmpty);
+    // The balance being credited must belong to whoever is in the seat.
+    require_keys_eq!(
+        ctx.accounts.player.authority,
+        seat.occupant,
+        PokerError::NotSeated
+    );
+
+    let returned = seat
+        .stack
+        .checked_add(seat.committed_total)
+        .ok_or(PokerError::InsufficientChips)?;
+    let player = &mut ctx.accounts.player;
+    player.chips = player
+        .chips
+        .checked_add(returned)
+        .ok_or(PokerError::InsufficientChips)?;
+
+    seat.occupant = Table::EMPTY_SEAT;
+    seat.stack = 0;
+    seat.reset_for_new_hand(false);
+    ctx.accounts.table.seats[seat_index as usize] = Table::EMPTY_SEAT;
+    let now = Clock::get()?.unix_timestamp;
+    ctx.accounts.table.touch_vacancy(now);
+
+    msg!("seat {} vacated, {} chips returned", seat_index, returned);
+    Ok(())
+}
+
+/// Read the creator straight out of the config account and check the signer.
+///
+/// Raw rather than deserialized because a table created by an older build has
+/// a shorter config, and a table nobody can delete is worse than one nobody
+/// can play. The creator has sat at the same offset in every version.
+fn assert_creator(
+    config: &AccountInfo,
+    table: &Account<Table>,
+    creator: &Signer,
+) -> Result<()> {
+    require_keys_eq!(*config.key, table.config, PokerError::SeatTableMismatch);
+    require_keys_eq!(*config.owner, crate::ID, PokerError::SeatTableMismatch);
+    let data = config.try_borrow_data()?;
+    require!(data.len() >= 48, PokerError::SeatOrderMismatch);
+    let stored = Pubkey::try_from(&data[16..48]).map_err(|_| error!(PokerError::SeatOrderMismatch))?;
+    require_keys_eq!(stored, creator.key(), PokerError::NotTableCreator);
+    Ok(())
+}
+
+/// Delete a table, refunding its rent to whoever paid for it.
+///
+/// Every seat must be empty, so no chips can be destroyed here: what is left is
+/// the empty scaffolding of a table nobody is at. Use [`vacate_seat`] to send
+/// anyone still sitting home with their chips first.
+///
+/// The creator can delete their own table whenever it is empty. Anyone else
+/// has to wait an hour. Solana has no timers, so "abandoned tables clean
+/// themselves up" really means any client may sweep one once it has sat empty
+/// that long, and the lobby does exactly that in the background. Without it an
+/// abandoned table would sit there forever, because creators lose keys and
+/// nobody else could ever remove it. Sweeping earns nothing: the rent goes back
+/// to the creator either way.
+///
+/// The table is read raw rather than deserialized, like everything else here.
+/// The one job of a delete path is to clear away old things, so it must not be
+/// the thing that stops working when a layout changes.
+pub fn close_table(ctx: Context<CloseTable>) -> Result<()> {
+    let table_info = &ctx.accounts.table;
+    require_keys_eq!(*table_info.owner, crate::ID, PokerError::SeatTableMismatch);
+
+    let (table_id, config_key, occupied, empty_since) = {
+        let data = table_info.try_borrow_data()?;
+        // 8 discriminator, 8 table_id, 32 config, 6 x 32 seats, then the rest.
+        require!(data.len() >= 240, PokerError::SeatOrderMismatch);
+        let table_id = u64::from_le_bytes(
+            data[8..16].try_into().map_err(|_| error!(PokerError::SeatOrderMismatch))?,
+        );
+        let config_key = Pubkey::try_from(&data[16..48])
+            .map_err(|_| error!(PokerError::SeatOrderMismatch))?;
+        let occupied = (0..MAX_SEATS)
+            .any(|i| data[48 + i * 32..80 + i * 32].iter().any(|b| *b != 0));
+        // Appended after bump at offset 251, so older tables simply stop
+        // before it and read as never-empty.
+        let empty_since = if data.len() >= 259 {
+            i64::from_le_bytes(
+                data[251..259].try_into().map_err(|_| error!(PokerError::SeatOrderMismatch))?,
+            )
+        } else {
+            0
+        };
+        (table_id, config_key, occupied, empty_since)
+    };
+
+    let (expected_table, _) =
+        Pubkey::find_program_address(&[TABLE_SEED, &table_id.to_le_bytes()], &crate::ID);
+    require_keys_eq!(table_info.key(), expected_table, PokerError::SeatOrderMismatch);
+    require!(!occupied, PokerError::TableNotEmpty);
+
+    // Rent always returns to whoever paid it, whoever asked for the delete.
+    require_keys_eq!(*ctx.accounts.config.key, config_key, PokerError::SeatTableMismatch);
+    require_keys_eq!(*ctx.accounts.config.owner, crate::ID, PokerError::SeatTableMismatch);
+    let stored_creator = {
+        let data = ctx.accounts.config.try_borrow_data()?;
+        require!(data.len() >= 48, PokerError::SeatOrderMismatch);
+        Pubkey::try_from(&data[16..48]).map_err(|_| error!(PokerError::SeatOrderMismatch))?
+    };
+    require_keys_eq!(
+        ctx.accounts.creator.key(),
+        stored_creator,
+        PokerError::NotTableCreator
+    );
+
+    if ctx.accounts.payer.key() != stored_creator {
+        let now = Clock::get()?.unix_timestamp;
+        require!(empty_since != 0, PokerError::TableNotAbandoned);
+        require!(
+            now - empty_since >= ABANDONED_AFTER_SECS,
+            PokerError::TableNotAbandoned
+        );
+    }
+
+    let table_key = table_info.key();
+    require!(
+        ctx.remaining_accounts.len() == MAX_SEATS * 2,
+        PokerError::SeatOrderMismatch
+    );
+
+    for i in 0..MAX_SEATS {
+        let seat_info = &ctx.remaining_accounts[i];
+        let (expected, _) =
+            Pubkey::find_program_address(&[SEAT_SEED, table_key.as_ref(), &[i as u8]], &crate::ID);
+        require_keys_eq!(seat_info.key(), expected, PokerError::SeatOrderMismatch);
+        drain(seat_info, &ctx.accounts.creator)?;
+
+        let hole_info = &ctx.remaining_accounts[MAX_SEATS + i];
+        let (expected_hole, _) =
+            Pubkey::find_program_address(&[HOLE_SEED, table_key.as_ref(), &[i as u8]], &crate::ID);
+        require_keys_eq!(hole_info.key(), expected_hole, PokerError::SeatOrderMismatch);
+        drain(hole_info, &ctx.accounts.creator)?;
+    }
+
+    let expect = |seed: &[u8]| Pubkey::find_program_address(&[seed, table_key.as_ref()], &crate::ID).0;
+    require_keys_eq!(ctx.accounts.hand.key(), expect(HAND_SEED), PokerError::SeatOrderMismatch);
+    require_keys_eq!(ctx.accounts.deck.key(), expect(DECK_SEED), PokerError::SeatOrderMismatch);
+    drain(&ctx.accounts.hand, &ctx.accounts.creator)?;
+    drain(&ctx.accounts.deck, &ctx.accounts.creator)?;
+    // History is optional: older tables may never have had one created.
+    if ctx.accounts.history.owner == &crate::ID {
+        require_keys_eq!(
+            ctx.accounts.history.key(),
+            expect(HISTORY_SEED),
+            PokerError::SeatOrderMismatch
+        );
+        drain(&ctx.accounts.history, &ctx.accounts.creator)?;
+    }
+    drain(&ctx.accounts.config, &ctx.accounts.creator)?;
+    drain(table_info, &ctx.accounts.creator)?;
+
+    msg!("table {} closed", table_id);
+    Ok(())
+}
+
+/// Close an account this program owns, refunding its rent to `to`.
+///
+/// The discriminator is overwritten so the account cannot be mistaken for a
+/// live one if something recreates it at the same address later.
+fn drain<'a, 'b>(account: &AccountInfo<'a>, to: &AccountInfo<'b>) -> Result<()> {
+    require_keys_eq!(*account.owner, crate::ID, PokerError::SeatOrderMismatch);
+    let lamports = account.lamports();
+    **account.try_borrow_mut_lamports()? = 0;
+    **to.try_borrow_mut_lamports()? = to
+        .lamports()
+        .checked_add(lamports)
+        .ok_or(PokerError::InsufficientChips)?;
+
+    let mut data = account.try_borrow_mut_data()?;
+    for byte in data.iter_mut() {
+        *byte = 0;
+    }
+    Ok(())
+}
+
+#[derive(Accounts)]
+#[instruction(seat_index: u8)]
+pub struct VacateSeat<'info> {
+    #[account(mut, seeds = [TABLE_SEED, &table.table_id.to_le_bytes()], bump = table.bump)]
+    pub table: Account<'info, Table>,
+    /// CHECK: read raw for the creator, so an older config layout still works.
+    pub config: AccountInfo<'info>,
+    #[account(mut, seeds = [SEAT_SEED, table.key().as_ref(), &[seat_index]], bump = seat.bump)]
+    pub seat: Account<'info, Seat>,
+    #[account(mut, seeds = [PLAYER_SEED, player.authority.as_ref()], bump = player.bump)]
+    pub player: Account<'info, Player>,
+    pub creator: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CloseTable<'info> {
+    /// CHECK: address re-derived from the table id inside, then drained. Not
+    /// deserialized so a table from an older build is still deletable.
+    #[account(mut)]
+    pub table: AccountInfo<'info>,
+    /// CHECK: address and creator checked against the table, then drained.
+    #[account(mut)]
+    pub config: AccountInfo<'info>,
+    /// Whoever asked for this. Only matters as the fee payer: the rent goes to
+    /// the creator regardless, so there is nothing to gain by sweeping someone
+    /// else's empty table.
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    /// CHECK: seed checked, then drained. Not deserialized so an older layout
+    /// cannot make a table impossible to delete.
+    #[account(mut)]
+    pub hand: AccountInfo<'info>,
+    /// CHECK: same.
+    #[account(mut)]
+    pub deck: AccountInfo<'info>,
+    /// CHECK: same, and older tables may never have had one.
+    #[account(mut)]
+    pub history: AccountInfo<'info>,
+    /// CHECK: must match the creator recorded in config; receives the rent.
+    #[account(mut)]
+    pub creator: AccountInfo<'info>,
 }

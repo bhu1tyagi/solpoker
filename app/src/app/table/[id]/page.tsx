@@ -2,6 +2,7 @@
 
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Keypair, PublicKey } from "@solana/web3.js";
@@ -24,13 +25,18 @@ import {
   type SeatView,
   type TableView,
 } from "@/stores/table-store";
-import { configPda, tablePda } from "@/lib/pdas";
+import { configPda, deckPda, tablePda } from "@/lib/pdas";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeConfig } from "@/lib/decode";
 import { ensureSession, loadSession } from "@/lib/session";
 import { bestFive, describe, evaluate } from "@/lib/engine/evaluate";
 import { NO_CARD } from "@/lib/engine/cards";
-import { MAX_SEATS, NO_SEAT, SHUFFLE_FULFILLED, SHUFFLE_REQUESTED } from "@/lib/constants";
+import {
+  DECK_ACCOUNT_SIZE,
+  MAX_SEATS,
+  NO_SEAT,
+  SHUFFLE_REQUESTED,
+} from "@/lib/constants";
 import { friendlyError } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
 import { spring } from "@/styles/theme";
@@ -43,6 +49,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const table = useMemo(() => tablePda(tableId), [tableId]);
   const config = useMemo(() => configPda(tableId), [tableId]);
 
+  const router = useRouter();
   const { publicKey, signTransaction, connected } = useWallet();
   const { connection: erConnection, program: erProgram, connect: connectTee } = useTee();
   const player = usePlayer();
@@ -100,6 +107,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const [buyIn, setBuyIn] = useState(0);
   const [delegated, setDelegated] = useState<boolean | null>(null);
   const [acting, setActing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const me = publicKey?.toBase58() ?? null;
   const mySeat = useMemo(
@@ -133,11 +141,36 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     setDelegated(await isDelegated(getBaseConnection(), table));
   }, [table]);
 
+  // A table whose deck predates the current program cannot deal. Spot it here
+  // rather than letting the player press start and collect a raw error.
+  const [outdated, setOutdated] = useState(false);
+  useEffect(() => {
+    void getBaseConnection()
+      .getAccountInfo(deckPda(table))
+      .then((info) => setOutdated(!!info && info.data.length < DECK_ACCOUNT_SIZE))
+      .catch(() => {});
+  }, [table]);
+
   useEffect(() => {
     void refreshDelegation();
     const t = setInterval(() => void refreshDelegation(), 6000);
     return () => clearInterval(t);
   }, [refreshDelegation]);
+
+  // Only the creator gets a delete button. The config is immutable, so this is
+  // read once alongside it.
+  const [creator, setCreator] = useState<string | null>(null);
+  useEffect(() => {
+    void getBaseConnection()
+      .getAccountInfo(config)
+      .then((info) => {
+        if (info && info.data.length >= 48) {
+          setCreator(new PublicKey(info.data.subarray(16, 48)).toBase58());
+        }
+      })
+      .catch(() => {});
+  }, [config]);
+  const isCreator = !!me && creator === me;
 
   const capture = useHandCapture(tableView?.tableId ?? null);
 
@@ -171,7 +204,9 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     sessionToken,
     wallet: publicKey ?? null,
     mySeat,
-    enabled: Boolean(delegated && session && sessionToken && erProgram && mySeat >= 0),
+    enabled: Boolean(
+      delegated && !outdated && session && sessionToken && erProgram && mySeat >= 0,
+    ),
     captureReady: capture.ready,
   });
 
@@ -293,7 +328,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
                 Authorise session key
               </Button>
             )}
-            {session && mySeat >= 0 && delegated === false && seatedCount >= 2 && (
+            {session && mySeat >= 0 && !outdated && delegated === false && seatedCount >= 2 && (
               <Button
                 variant="primary"
                 size="sm"
@@ -332,6 +367,16 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
                 Cash out
               </Button>
             )}
+            {isCreator && delegated === false && (
+              <Button
+                variant="danger"
+                size="sm"
+                loading={actions.busy === "delete"}
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete table
+              </Button>
+            )}
           </div>
         </div>
 
@@ -367,6 +412,19 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             minHeight: 96,
           }}
         >
+          {outdated && (
+            <Panel style={{ textAlign: "center", maxWidth: 520 }}>
+              <p style={{ margin: "0 0 6px", color: "var(--lose)" }}>
+                This table cannot be played.
+              </p>
+              <p style={{ margin: 0, color: "var(--text-dim)", fontSize: "var(--t-sm)" }}>
+                It was created by an earlier version of the game, and its deck no
+                longer matches. Pause it if it is running, cash out, and create a
+                new table from the lobby.
+              </p>
+            </Panel>
+          )}
+
           <AnimatePresence>
             {myHandName && (
               <motion.div
@@ -418,6 +476,43 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           )}
         </div>
       </main>
+
+      <Modal
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title="Delete this table?"
+      >
+        <p style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)", marginTop: 0 }}>
+          The table and its seats are removed and the rent comes back to you.
+          Anyone still sitting is sent home with their chips first, so nobody
+          loses anything.
+        </p>
+        {seatedCount > 0 && (
+          <p style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)" }}>
+            {seatedCount} {seatedCount === 1 ? "player is" : "players are"} still
+            seated and will be cashed out.
+          </p>
+        )}
+        <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+          <Button
+            variant="danger"
+            loading={actions.busy === "delete"}
+            onClick={async () => {
+              const occupants = seats
+                .map((s, i) => (s?.occupant ? { seat: i, occupant: s.occupant } : null))
+                .filter((x): x is { seat: number; occupant: string } => x !== null);
+              const ok = await actions.deleteTable(occupants);
+              setConfirmDelete(false);
+              if (ok) router.push("/");
+            }}
+          >
+            Delete it
+          </Button>
+          <Button variant="quiet" onClick={() => setConfirmDelete(false)}>
+            Cancel
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         open={sitting !== null}
