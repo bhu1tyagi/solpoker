@@ -52,6 +52,9 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
     // Rank every player still holding cards. A hand that ended on a fold has one
     // such player, who wins without showing anything.
     let mut ranks = [None::<HandRank>; MAX_SEATS];
+    // Cards of players who reach showdown become public; everyone else mucks.
+    let mut revealed = [[NO_CARD; 2]; MAX_SEATS];
+    let mut revealed_mask: u8 = 0;
     let contested = betting
         .seats
         .iter()
@@ -99,6 +102,8 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
                 board[4],
             ];
             ranks[i] = Some(evaluate(&seven));
+            revealed[i] = hole.cards;
+            revealed_mask |= 1 << i;
         } else {
             // Uncontested: any rank works, since there is nobody to compare to.
             ranks[i] = Some(HandRank::WORST);
@@ -141,13 +146,18 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
 
     {
         let hand = &mut ctx.accounts.hand;
-        hand.board = [NO_CARD; 5];
+        // The board stays. It is public by definition and the shuffle verifier
+        // needs it; start_hand clears it for the next deal.
         hand.to_act = NO_SEAT;
         hand.current_bet = 0;
         hand.min_raise = 0;
         hand.last_aggressor = NO_SEAT;
         hand.dealt_in = 0;
         hand.street = street_to_u8(poker_engine::betting::Street::Showdown);
+        // Only contested hands are shown. A pot won on a fold reveals nothing,
+        // which is the same as at a real table.
+        hand.revealed = revealed;
+        hand.revealed_mask = revealed_mask;
     }
     ctx.accounts.table.state = TableState::Waiting;
 

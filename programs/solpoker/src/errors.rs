@@ -58,4 +58,16 @@ pub enum PokerError {
     NotDelegated,
     #[msg("Hand number does not match the table")]
     HandNumberMismatch,
+    #[msg("No salt commitment for this seat")]
+    SaltNotCommitted,
+    #[msg("Revealed salt does not match the commitment")]
+    SaltMismatch,
+    #[msg("Shuffle randomness was already requested")]
+    ShuffleAlreadyRequested,
+    #[msg("No shuffle request is outstanding")]
+    NoShuffleRequested,
+    #[msg("Need at least two revealed salts")]
+    NotEnoughSalts,
+    #[msg("Shuffle seed is not ready yet")]
+    ShuffleNotReady,
 }

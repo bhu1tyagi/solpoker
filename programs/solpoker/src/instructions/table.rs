@@ -15,6 +15,8 @@
 //! untouchable from inside the rollup.
 
 use anchor_lang::prelude::*;
+use anchor_lang::system_program::{transfer, Transfer};
+use ephemeral_rollups_sdk::access_control::structs::EphemeralPermission;
 
 use crate::errors::PokerError;
 use crate::state::*;
@@ -65,6 +67,8 @@ pub fn create_table(
     hand.last_aggressor = NO_SEAT;
     hand.deadline = 0;
     hand.shuffle_seed = [0u8; 32];
+    hand.revealed = [[NO_CARD; 2]; MAX_SEATS];
+    hand.revealed_mask = 0;
     hand.bump = ctx.bumps.hand;
 
     let deck = &mut ctx.accounts.deck;
@@ -72,6 +76,20 @@ pub fn create_table(
     deck.cards = [NO_CARD; 52];
     deck.next_index = 0;
     deck.bump = ctx.bumps.deck;
+
+    // Pre-fund the deck for the ephemeral permission it will create on the
+    // rollup. A delegated PDA cannot be topped up later, so this is the only
+    // chance. The deck's permission has no members, hence size_of(0).
+    transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.key(),
+            Transfer {
+                from: ctx.accounts.creator.to_account_info(),
+                to: ctx.accounts.deck.to_account_info(),
+            },
+        ),
+        ephemeral_rollups_sdk::ephemeral_accounts::rent(EphemeralPermission::size_of(0) as u32),
+    )?;
 
     msg!(
         "table {} created: blinds {}/{}, buy-in {}..{}",

@@ -138,3 +138,57 @@ trade.
 **Open optimisation:** using Solana's sha256 syscall instead of the software one would
 drop sha2 from the binary, cut the 18,289 CU shuffle, and remove those frames. Needs the
 engine's shuffle to become generic over its hash so the crate stays Solana-free.
+
+## Phase 4: TEE privacy
+
+**Two permission shapes for two secrets.** The deck gets `is_private = true` with an
+empty member list, so no wallet reads it and the enclave is the dealer. Each hole-card
+account gets exactly one member, that seat's occupant. Measured on devnet: deck denied to
+the creator, to a seated player and to an outsider; hole cards allowed to their owner and
+denied to both an opponent and an outsider.
+
+**Accounts are pre-funded for permission rent at creation.** A delegated PDA cannot be
+topped up later, so the deck and each hole-card account receive
+`rent(EphemeralPermission::size_of(n))` when they are created on the base layer. The deck
+uses `size_of(0)`, hole cards `size_of(1)`.
+
+**Only showdown hands are revealed.** Settlement copies the cards of players who reached
+showdown into `Hand::revealed` and mucks everyone else. A pot won on a fold shows nothing,
+the same as at a real table.
+
+**Settlement no longer wipes the board.** The board is public by definition and the
+shuffle verifier needs it. Wiping it destroyed the hand history. Only the deck and hole
+cards are zeroized, which is what the commit-safety rule actually requires.
+
+**Anchor's `fetch` does not enforce the account owner.** A delegated account can still be
+decoded from the base layer, so "cannot be read" is the wrong assertion. The property that
+matters, and what the test now asserts, is that the frozen base-layer copy holds no card
+bytes.
+
+## Phase 5: verifiable shuffle
+
+**Order is the security argument.** Players commit `sha256(salt)`, then everyone reveals,
+and only then is VRF drawn with a caller seed derived from those salts. Committing first
+stops a player choosing a salt after seeing others. Drawing VRF last stops a player
+steering the result. Deriving the caller seed from the salts stops anyone re-requesting
+until they like the answer. Biasing the deck needs the oracle and every seated player to
+collude.
+
+**The verifier shares no code with the program.** `tools/verify-shuffle.mjs` reimplements
+the shuffle in plain JavaScript with only `node:crypto`. Both produce
+`3d 5c 7s Kd Qc 8c As Jd 4d 2d` from seed `[7u8; 32]`, and a test pins that so the two
+cannot drift apart silently. If they ever disagree, published histories stop being
+checkable.
+
+**Statistical results over 10,000 shuffles.** Chi-square on card position: worst card
+scored 78.0 against a critical value of 95 at p=0.001 with 51 degrees of freedom. Mean
+displacement 17.34 against a uniform expectation of 17.3. A one-bit seed change left 1 of
+52 cards in place, which is what two independent permutations should look like.
+
+**`anchor_lang::solana_program` does not re-export the hash module** in this version, so
+commitments use the `sha2` crate directly. That also keeps the on-chain hash identical to
+the one the shuffle and the verifier use.
+
+**Measured latency improved to 300ms min, 362ms p50, 397ms avg, 689ms max** over 12
+session-key actions, with privacy enabled. Still above the sub-100ms target for the same
+network-distance reason.

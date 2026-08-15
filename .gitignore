@@ -12,3 +12,4 @@ keys/
 
 # Rust build artifacts and local bench state
 program-id.json
+hand-history.json

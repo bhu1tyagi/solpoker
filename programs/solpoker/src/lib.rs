@@ -100,8 +100,33 @@ pub mod solpoker {
 
     // --- the game itself, running on the ER --------------------------------
 
-    pub fn start_hand(ctx: Context<StartHand>, shuffle_seed: [u8; 32]) -> Result<()> {
-        instructions::hand::start_hand(ctx, shuffle_seed)
+    // --- verifiable shuffle ------------------------------------------------
+
+    pub fn commit_salt(
+        ctx: Context<SaltCtx>,
+        seat_index: u8,
+        commitment: [u8; 32],
+    ) -> Result<()> {
+        instructions::shuffle::commit_salt(ctx, seat_index, commitment)
+    }
+
+    pub fn reveal_salt(ctx: Context<SaltCtx>, seat_index: u8, salt: [u8; 32]) -> Result<()> {
+        instructions::shuffle::reveal_salt(ctx, seat_index, salt)
+    }
+
+    pub fn request_shuffle(ctx: Context<RequestShuffle>) -> Result<()> {
+        instructions::shuffle::request_shuffle(ctx)
+    }
+
+    pub fn shuffle_callback(
+        ctx: Context<ShuffleCallback>,
+        randomness: [u8; 32],
+    ) -> Result<()> {
+        instructions::shuffle::shuffle_callback(ctx, randomness)
+    }
+
+    pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
+        instructions::hand::start_hand(ctx)
     }
 
     pub fn deal_hole_cards(ctx: Context<DealHoleCards>) -> Result<()> {
@@ -114,6 +139,16 @@ pub mod solpoker {
 
     pub fn player_action(ctx: Context<PlayerAction>, action: PlayerMove) -> Result<()> {
         instructions::action::player_action(ctx, action)
+    }
+
+    /// Lock the deck so no wallet can read it. Runs on the rollup.
+    pub fn secure_deck(ctx: Context<SecureDeck>) -> Result<()> {
+        instructions::privacy::secure_deck(ctx)
+    }
+
+    /// Restrict a seat's hole cards to its occupant. Runs on the rollup.
+    pub fn secure_hole(ctx: Context<SecureHole>, seat_index: u8) -> Result<()> {
+        instructions::privacy::secure_hole(ctx, seat_index)
     }
 
     pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {

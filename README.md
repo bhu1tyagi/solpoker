@@ -8,15 +8,25 @@ or back.
 
 ## Status
 
-Phases 0 to 3 are done. A full hand plays end to end on a devnet rollup, with betting
-actions signed by session keys instead of a wallet prompt per action.
+Phases 0 to 5 are done. A full hand plays end to end on a devnet rollup with **hidden
+hole cards**, a **verifiable shuffle**, and betting actions signed by session keys
+instead of a wallet prompt per action.
 
-**Cards are still face up.** The deck and hole cards live in ordinary public PDAs that
-anyone can read. Hiding them is Phase 4. The TEE mechanism is proven (see below) but is
-not yet wired into the game, so do not call this hidden-information poker yet.
+Measured on devnet:
 
-See [SPEC.md](SPEC.md) for the phase plan and [DECISIONS.md](DECISIONS.md) for the
-decision log.
+| Check | Result |
+| --- | --- |
+| Deck read by the table creator, a seated player, an outsider | denied to all three |
+| Your own hole cards | allowed |
+| An opponent's hole cards | denied |
+| Base layer during a live hand | no card data |
+| Base layer after the hand | no unrevealed cards |
+| Published history reproduces the deal | verified |
+
+Still to do: turn clocks and disconnect handling (Phase 6) and the frontend (Phase 7).
+
+See [SPEC.md](SPEC.md) for the phase plan, [TRUST_MODEL.md](TRUST_MODEL.md) for what is
+and is not guaranteed, and [DECISIONS.md](DECISIONS.md) for the decision log.
 
 ## Why this design
 
@@ -41,9 +51,23 @@ ordinary auto-fold. That is what makes this buildable.
 The accurate claim is "provably fair shuffle, TEE-protected hole cards". Not "provably
 fair hole cards", and not "trustless".
 
-One nuance already surfaced in Phase 0: `verifyTeeRpcIntegrity` proves you are talking to
-genuine TDX hardware over a fresh challenge, but it does not check what code is running
-inside the enclave. A full `TRUST_MODEL.md` lands with Phase 4.
+One nuance worth knowing: `verifyTeeRpcIntegrity` proves you are talking to genuine TDX
+hardware over a fresh challenge, but it does not check what code is running inside the
+enclave. [TRUST_MODEL.md](TRUST_MODEL.md) covers this and the rest in full.
+
+## Verifying a hand yourself
+
+Every hand publishes the VRF output, each player's salt, their prior commitment, and the
+final seed. Recompute the deck with a script that shares no code with the program:
+
+```bash
+node tools/verify-shuffle.mjs hand-history.json
+```
+
+Players commit to a salt, everyone reveals, and only then is VRF drawn with a seed derived
+from those salts. Nobody can pick a salt after seeing others, steer the draw, or re-request
+until they like the answer. Rigging the deck needs the oracle and every seated player to
+collude.
 
 ## Phase 0 result
 
@@ -115,7 +139,7 @@ Measured over a full hand, 12 session-key actions:
 
 | min | p50 | avg | max |
 | ---: | ---: | ---: | ---: |
-| 249ms | 324ms | 484ms | 1133ms |
+| 300ms | 362ms | 397ms | 689ms |
 
 That is above the sub-100ms target. The limit is network distance, not rollup block time,
 since devnet's only TEE region is in Asia. Closing it is client-side work (optimistic
@@ -134,16 +158,18 @@ npm run test:er     # full hand on the rollup
 programs/solpoker/        The game program
   src/state.rs            Account layouts
   src/bridge.rs           Accounts <-> poker-engine
-  src/instructions/       player, table, delegation, hand, action, settle
+  src/instructions/       player, table, delegation, hand, action, settle,
+                          privacy (TEE permissions), shuffle (salts + VRF)
 crates/poker-engine/      Rules engine, no Solana deps
 crates/cu-bench/          Throwaway SBF program for measuring compute cost
+tools/verify-shuffle.mjs  Standalone shuffle verifier, no shared code
 phase0-private-counter/   TEE privacy proof, deployed on devnet
 ```
 
 ## Stack
 
 Rust 1.89.0, Solana CLI 3.1.9, Anchor CLI 1.0.2, `ephemeral-rollups-sdk` 0.16.2
-(features `anchor`, `access-control`), npm SDK 0.14.3.
+(features `anchor`, `access-control`, `vrf`), npm SDK 0.14.3.
 
 Devnet TEE endpoint `https://devnet-tee.magicblock.app`, validator
 `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo`.

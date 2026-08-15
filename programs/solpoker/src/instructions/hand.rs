@@ -9,6 +9,8 @@
 //! Phase 5 verifier.
 
 use anchor_lang::prelude::*;
+use anchor_lang::system_program::{transfer, Transfer};
+use ephemeral_rollups_sdk::access_control::structs::EphemeralPermission;
 use poker_engine::betting::Betting;
 
 use crate::bridge::*;
@@ -32,21 +34,36 @@ pub fn create_hole(ctx: Context<CreateHole>, seat_index: u8) -> Result<()> {
     hole.hand_number = 0;
     hole.cards = [NO_CARD; 2];
     hole.bump = ctx.bumps.hole;
+
+    // Pre-fund for a one-member permission: the seat's occupant.
+    transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.key(),
+            Transfer {
+                from: ctx.accounts.payer.to_account_info(),
+                to: ctx.accounts.hole.to_account_info(),
+            },
+        ),
+        ephemeral_rollups_sdk::ephemeral_accounts::rent(EphemeralPermission::size_of(1) as u32),
+    )?;
     Ok(())
 }
 
 /// Shuffle, post blinds, and open preflop betting.
 ///
-/// `shuffle_seed` is supplied by the caller in Phase 3 so the deal is
-/// reproducible in tests. Phase 5 replaces it with VRF output combined with
-/// per-player commit-reveal salts, so that neither the operator nor any player
-/// controls the deck. The seed is stored on the hand either way, which is what
-/// makes the shuffle publicly verifiable after the fact.
-pub fn start_hand(ctx: Context<StartHand>, shuffle_seed: [u8; 32]) -> Result<()> {
+/// The seed comes from the VRF plus player salts fixed by
+/// [`crate::instructions::shuffle`], never from the caller. It stays on the hand
+/// so anyone can recompute the deck afterwards.
+pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
     require!(
         ctx.accounts.table.state == TableState::Waiting,
         PokerError::HandInProgress
     );
+    require!(
+        ctx.accounts.hand.shuffle_state == crate::instructions::shuffle::SHUFFLE_FULFILLED,
+        PokerError::ShuffleNotReady
+    );
+    let shuffle_seed = ctx.accounts.hand.shuffle_seed;
 
     let table_key = ctx.accounts.table.key();
     {
@@ -102,7 +119,8 @@ pub fn start_hand(ctx: Context<StartHand>, shuffle_seed: [u8; 32]) -> Result<()>
         hand.hand_number = hand_number;
         hand.board = [NO_CARD; 5];
         hand.dealt_in = dealt_in;
-        hand.shuffle_seed = shuffle_seed;
+        hand.revealed = [[NO_CARD; 2]; MAX_SEATS];
+        hand.revealed_mask = 0;
         hand.deadline = Clock::get()?.unix_timestamp + ACTION_TIMEOUT_SECS;
     }
     {
@@ -286,11 +304,12 @@ pub struct DealHoleCards<'info> {
 
 #[derive(Accounts)]
 pub struct AdvanceStreet<'info> {
+    // Boxed: Hand plus six seats does not fit the 4KB BPF stack frame.
     #[account(mut)]
-    pub hand: Account<'info, Hand>,
-    pub config: Account<'info, TableConfig>,
+    pub hand: Box<Account<'info, Hand>>,
+    pub config: Box<Account<'info, TableConfig>>,
     #[account(mut, seeds = [DECK_SEED, hand.table.as_ref()], bump = deck.bump)]
-    pub deck: Account<'info, Deck>,
+    pub deck: Box<Account<'info, Deck>>,
     #[account(mut)]
     pub seat_0: Account<'info, Seat>,
     #[account(mut)]

@@ -144,6 +144,12 @@ pub struct Seat {
     /// Dealt in for the current hand. False for someone who joined mid-hand.
     pub in_hand: bool,
     pub last_action_slot: u64,
+    /// SHA-256 of this seat's shuffle salt, submitted before the deal.
+    pub salt_commit: [u8; 32],
+    /// The revealed salt. Published so anyone can recompute the shuffle.
+    pub salt: [u8; 32],
+    /// 0 none, 1 committed, 2 revealed.
+    pub salt_state: u8,
     pub bump: u8,
 }
 
@@ -194,6 +200,19 @@ pub struct Hand {
     /// Seed the deck was shuffled from, published at hand end so the shuffle can
     /// be verified. Phase 5 fills this from VRF combined with player salts.
     pub shuffle_seed: [u8; 32],
+    /// Hole cards of players who reached showdown, copied here at settlement so
+    /// they become public. Everyone else is mucked and stays `0xFF`.
+    pub revealed: [[u8; 2]; MAX_SEATS],
+    /// Bitmask of seats whose cards were revealed rather than mucked.
+    pub revealed_mask: u8,
+    /// XOR of every revealed salt, accumulated as players reveal.
+    pub salt_xor: [u8; 32],
+    /// Bitmask of seats that have revealed a salt this hand.
+    pub salt_mask: u8,
+    /// Raw VRF output, kept alongside the salts so the combination is checkable.
+    pub vrf_randomness: [u8; 32],
+    /// 0 idle, 1 requested, 2 fulfilled.
+    pub shuffle_state: u8,
     pub bump: u8,
 }
 

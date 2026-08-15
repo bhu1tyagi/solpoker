@@ -126,9 +126,10 @@ pub struct PlayerAction<'info> {
     /// CHECK: the player this action is for. Verified against the seat occupant,
     /// and bound to `payer` by the session token when a session is used.
     pub authority: UncheckedAccount<'info>,
+    // Boxed for the same stack-frame reason as AdvanceStreet.
     #[account(mut)]
-    pub hand: Account<'info, Hand>,
-    pub config: Account<'info, TableConfig>,
+    pub hand: Box<Account<'info, Hand>>,
+    pub config: Box<Account<'info, TableConfig>>,
     #[account(mut)]
     pub seat_0: Account<'info, Seat>,
     #[account(mut)]
