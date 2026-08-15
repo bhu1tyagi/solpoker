@@ -79,6 +79,9 @@ pub fn create_table(
     deck.table = table.key();
     deck.cards = [NO_CARD; 52];
     deck.next_index = 0;
+    deck.vrf_randomness = [0u8; 32];
+    deck.shuffle_seed = [0u8; 32];
+    deck.shuffle_state = 0;
     deck.bump = ctx.bumps.deck;
 
     // Pre-fund the deck for the ephemeral permission it will create on the

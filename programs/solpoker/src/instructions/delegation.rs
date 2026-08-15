@@ -11,6 +11,7 @@
 //! a table lands on could change between hands.
 
 use anchor_lang::prelude::*;
+use anchor_lang::Discriminator;
 use ephemeral_rollups_sdk::anchor::{commit, delegate};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 // The chained .commit_and_undelegate() methods are trait methods. #[ephemeral]
@@ -18,7 +19,42 @@ use ephemeral_rollups_sdk::cpi::DelegateConfig;
 // in other modules must bring it in themselves.
 use ephemeral_rollups_sdk::ephem::{FoldableIntentBuilder, MagicIntentBundleBuilder};
 
+use crate::errors::PokerError;
 use crate::state::*;
+
+/// Refuse to publish anything that still holds card data.
+///
+/// Undelegation commits account contents to public Solana state permanently,
+/// and it is permissionless, so "the client only calls it after settlement" is
+/// not a guarantee, it is a habit. This is the guarantee: every account leaving
+/// the rollup is checked, by type, for the bytes it must not carry. The type
+/// check matters as much as the content check, because the account slots here
+/// are unchecked and a deck handed in through the table's slot would otherwise
+/// ride out unexamined.
+fn assert_is<T: Discriminator>(info: &AccountInfo) -> Result<()> {
+    let data = info.try_borrow_data()?;
+    require!(
+        data.len() >= 8 && data[..8] == T::DISCRIMINATOR[..],
+        PokerError::SeatOrderMismatch
+    );
+    Ok(())
+}
+
+fn assert_deck_publishable(info: &AccountInfo) -> Result<()> {
+    let data = info.try_borrow_data()?;
+    let deck =
+        Deck::try_deserialize(&mut &data[..]).map_err(|_| error!(PokerError::SeatOrderMismatch))?;
+    require!(deck.holds_no_secrets(), PokerError::HandInProgress);
+    Ok(())
+}
+
+fn assert_hole_publishable(info: &AccountInfo) -> Result<()> {
+    let data = info.try_borrow_data()?;
+    let hole = HoleCards::try_deserialize(&mut &data[..])
+        .map_err(|_| error!(PokerError::SeatOrderMismatch))?;
+    require!(hole.cards == [NO_CARD; 2], PokerError::HandInProgress);
+    Ok(())
+}
 
 fn config_for(validator: Option<Pubkey>) -> DelegateConfig {
     DelegateConfig {
@@ -78,13 +114,18 @@ pub fn delegate_seat(ctx: Context<DelegateSeat>, seat_index: u8) -> Result<()> {
 /// Commit table/hand/deck state back to the base layer and undelegate.
 ///
 /// COMMIT AUDIT: commits `table` (seat map, button, hand number), `hand`
-/// (street, board, betting state), and `deck`.
+/// (street, board, betting state, and the seed of the *settled* hand), and
+/// `deck`.
 ///
-/// The deck is only safe to commit because [`crate::instructions::settle`]
-/// zeroizes it at hand end, before any undelegation path can run. Committing a
-/// live deck would publish every card to Solana permanently. From Phase 4 the
-/// deck is TEE-private and must be zeroized here as well, see SPEC.md §4.
+/// The deck is only safe to commit because it is checked, right here, to be
+/// zeroized: no cards, no VRF output, no seed. [`crate::instructions::settle`]
+/// is what puts it in that state. Anyone calling this mid-hand is refused, so a
+/// live deck cannot be published no matter who asks.
 pub fn undelegate_core(ctx: Context<UndelegateCore>) -> Result<()> {
+    assert_is::<Table>(&ctx.accounts.table)?;
+    assert_is::<Hand>(&ctx.accounts.hand)?;
+    assert_deck_publishable(&ctx.accounts.deck)?;
+
     MagicIntentBundleBuilder::new(
         ctx.accounts.payer.to_account_info(),
         ctx.accounts.magic_context.to_account_info(),
@@ -102,10 +143,13 @@ pub fn undelegate_core(ctx: Context<UndelegateCore>) -> Result<()> {
 /// Commit one seat and its hole cards back to the base layer and undelegate.
 ///
 /// COMMIT AUDIT: commits `seat` (occupant, stack, per-hand flags) and `hole`
-/// (two card bytes). Hole cards are zeroized at hand end by
-/// [`crate::instructions::settle`], so what lands on the base layer is `0xFF`
-/// padding rather than anyone's cards.
+/// (two card bytes). The hole account is checked, right here, to hold `0xFF`
+/// padding rather than cards, so calling this mid-hand to expose an opponent's
+/// hand is refused no matter who asks.
 pub fn undelegate_seat(ctx: Context<UndelegateSeat>) -> Result<()> {
+    assert_is::<Seat>(&ctx.accounts.seat)?;
+    assert_hole_publishable(&ctx.accounts.hole)?;
+
     MagicIntentBundleBuilder::new(
         ctx.accounts.payer.to_account_info(),
         ctx.accounts.magic_context.to_account_info(),

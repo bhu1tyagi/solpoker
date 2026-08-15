@@ -29,6 +29,15 @@ use crate::{seats_mut, seats_ref};
 /// Permissionless, anyone may call it once the hand is over, so a disconnected
 /// winner cannot leave the table stuck.
 pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
+    // Settlement is permissionless and several clients race to be the one who
+    // lands it. The winner flips the table to Waiting, and this check is what
+    // makes the losers bounce off: a second settle would re-run against
+    // cleared seats, wiping the revealed cards and recomputing the result
+    // hash over zero payouts.
+    require!(
+        ctx.accounts.table.state == TableState::HandInProgress,
+        PokerError::NoHandInProgress
+    );
     let table_key = ctx.accounts.table.key();
     let hand_number = ctx.accounts.hand.hand_number;
     let board = ctx.accounts.hand.board;
@@ -132,6 +141,15 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
             // Salts are single use, so the next hand needs fresh commitments.
             seats[i].salt_state = crate::instructions::shuffle::SALT_NONE;
         }
+    }
+
+    // The hand is over, so the seed and randomness stop being dangerous and
+    // start being the public record the verifier runs on. Publish them on the
+    // hand before the deck is wiped, or they are gone.
+    {
+        let hand = &mut ctx.accounts.hand;
+        hand.vrf_randomness = ctx.accounts.deck.vrf_randomness;
+        hand.shuffle_seed = ctx.accounts.deck.shuffle_seed;
     }
 
     // --- wipe every card before anything can commit it to the base layer ---

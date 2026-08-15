@@ -27,7 +27,7 @@ import {
 import { configPda, tablePda } from "@/lib/pdas";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeConfig } from "@/lib/decode";
-import { ensureSession } from "@/lib/session";
+import { ensureSession, loadSession } from "@/lib/session";
 import { bestFive, describe, evaluate } from "@/lib/engine/evaluate";
 import { NO_CARD } from "@/lib/engine/cards";
 import { MAX_SEATS, NO_SEAT, SHUFFLE_FULFILLED, SHUFFLE_REQUESTED } from "@/lib/constants";
@@ -35,6 +35,7 @@ import { friendlyError } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
 import { spring } from "@/styles/theme";
 import { isDelegated } from "@/lib/instructions";
+import { applyPending, applyPendingHand, pendingApplies } from "@/lib/optimistic";
 
 export default function TablePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -43,7 +44,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const config = useMemo(() => configPda(tableId), [tableId]);
 
   const { publicKey, signTransaction, connected } = useWallet();
-  const { connection: erConnection, program: erProgram } = useTee();
+  const { connection: erConnection, program: erProgram, connect: connectTee } = useTee();
   const player = usePlayer();
 
   // Selectors, not the whole store. Subscribing to everything makes the store
@@ -63,6 +64,38 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
 
   const [session, setSession] = useState<Keypair | null>(null);
   const [sessionToken, setSessionToken] = useState<PublicKey | null>(null);
+
+  // A valid session may already be sitting in storage from an earlier visit.
+  // Restore it silently, so a reload does not demand re-authorising a key that
+  // never expired.
+  useEffect(() => {
+    if (!publicKey) {
+      setSession(null);
+      setSessionToken(null);
+      return;
+    }
+    // Clear first. Switching wallets must not leave the previous wallet's
+    // session key in place, or the Authorise button never comes back and every
+    // action is signed for the wrong player.
+    setSession(null);
+    setSessionToken(null);
+    const stored = loadSession(publicKey);
+    if (!stored) return;
+    setSession(stored.keypair);
+    setSessionToken(stored.tokenPda);
+    // Trust it optimistically, but confirm the token account still exists.
+    // A stored key whose token is gone would fail every action with no way
+    // to re-authorise, because the button hides once a session is set.
+    void getBaseConnection()
+      .getAccountInfo(stored.tokenPda)
+      .then((info) => {
+        if (!info) {
+          setSession(null);
+          setSessionToken(null);
+        }
+      })
+      .catch(() => {});
+  }, [publicKey]);
   const [sitting, setSitting] = useState<number | null>(null);
   const [buyIn, setBuyIn] = useState(0);
   const [delegated, setDelegated] = useState<boolean | null>(null);
@@ -73,6 +106,15 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     () => seats.findIndex((s) => s?.occupant && s.occupant === me),
     [seats, me],
   );
+
+  // The store outlives navigation, so clear the previous table's state before
+  // this one starts writing. Without this, opening a second table briefly
+  // shows the first table's seats and hand.
+  const resetStore = useTableStore((s) => s.reset);
+  useEffect(() => {
+    resetStore();
+    return () => resetStore();
+  }, [table, resetStore]);
 
   // Config never changes, so read it once.
   useEffect(() => {
@@ -99,7 +141,16 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
 
   const capture = useHandCapture(tableView?.tableId ?? null);
 
-  useTableSubscriptions(delegated ? erConnection : null, table, mySeat);
+  // Read from whichever layer owns the accounts right now. Before delegation
+  // the game lives on the base layer, and that is where seats fill up. Hole
+  // cards only ever come over the player's own authenticated rollup
+  // connection, and only matter while a game is live.
+  useTableSubscriptions(
+    delegated === true ? erConnection : getBaseConnection(),
+    delegated === true ? erConnection : null,
+    table,
+    mySeat,
+  );
 
   const actions = useTableActions({
     erConnection,
@@ -137,12 +188,28 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     }
   }, [publicKey, signTransaction]);
 
-  const pot = potTotal(seats);
+  // What this player can actually put on the table: the table's limits capped
+  // by what they hold. A modal that opens above their balance produces a join
+  // that the program refuses.
+  const minBuyIn = tableConfig?.minBuyIn ?? 200;
+  const maxAffordable = Math.min(tableConfig?.maxBuyIn ?? 2000, player.state?.chips ?? 0);
+  const canAfford = maxAffordable >= minBuyIn;
+  const affordableBuyIn = Math.max(minBuyIn, maxAffordable);
+
   const seatedCount = seats.filter((s) => s?.occupant).length;
   const occupiedSeats = useMemo(
     () => seats.map((s, i) => (s?.occupant ? i : -1)).filter((i) => i >= 0),
     [seats],
   );
+
+  // Your own action, shown before the chain confirms it. The overlay drops the
+  // moment the chain reports something newer, so it can never mask reality for
+  // more than the round trip.
+  const pending = useTableStore((s) => s.pending);
+  const showPending = pendingApplies(pending, hand);
+  const viewSeats = showPending ? applyPending(seats, pending) : seats;
+  const viewHand = showPending && hand ? applyPendingHand(hand, pending) : hand;
+  const pot = potTotal(viewSeats);
 
   // Showdown highlighting: work out the winning five from what was shown.
   const { winningCards, winnerSeats, myHandName } = useShowdown(
@@ -178,7 +245,10 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     [actions, hand, mySeat, setPending],
   );
 
-  const status = useStatusLine(delegated, tableView, hand, seatedCount);
+  // A seat with no chips left cannot be dealt in, so it does not count toward
+  // the two players a hand needs.
+  const fundedCount = seats.filter((s) => s?.occupant && s.stack > 0).length;
+  const status = useStatusLine(delegated, tableView, hand, seats, fundedCount);
 
   return (
     <>
@@ -205,6 +275,11 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
               table {id} · hand {tableView?.handNumber ?? 0}
             </span>
             <LinkPill state={link} delegated={delegated} />
+            {connected && link === "offline" && (
+              <Button variant="quiet" size="sm" onClick={() => void connectTee()}>
+                Retry connection
+              </Button>
+            )}
           </div>
 
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -218,22 +293,28 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
                 Authorise session key
               </Button>
             )}
-            {session && delegated === false && seatedCount >= 2 && (
+            {session && mySeat >= 0 && delegated === false && seatedCount >= 2 && (
               <Button
                 variant="primary"
                 size="sm"
                 loading={actions.busy?.startsWith("start")}
-                onClick={() => actions.startTable(occupiedSeats)}
+                onClick={async () => {
+                  await actions.startTable(occupiedSeats);
+                  await refreshDelegation();
+                }}
               >
                 Start playing
               </Button>
             )}
-            {session && delegated && tableView?.state === 0 && (
+            {session && mySeat >= 0 && delegated && tableView?.state === 0 && (
               <Button
                 variant="ghost"
                 size="sm"
                 loading={actions.busy === "pause"}
-                onClick={actions.pauseTable}
+                onClick={async () => {
+                  await actions.pauseTable();
+                  await refreshDelegation();
+                }}
               >
                 Pause table
               </Button>
@@ -256,8 +337,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
 
         <TableFelt
           table={tableView}
-          hand={hand}
-          seats={seats}
+          hand={viewHand}
+          seats={viewSeats}
           mySeat={mySeat}
           myHole={myHole}
           myHoleHandNumber={myHoleHandNumber}
@@ -270,7 +351,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             delegated === false && mySeat < 0 && connected
               ? (i) => {
                   setSitting(i);
-                  setBuyIn(tableConfig?.maxBuyIn ?? 2000);
+                  setBuyIn(affordableBuyIn);
                 }
               : undefined
           }
@@ -306,8 +387,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
 
           {mySeat >= 0 && session && (
             <ActionBar
-              hand={hand}
-              seat={seats[mySeat]}
+              hand={viewHand}
+              seat={viewSeats[mySeat]}
               seatIndex={mySeat}
               pot={pot}
               busy={acting}
@@ -350,8 +431,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0" }}>
           <input
             type="range"
-            min={tableConfig?.minBuyIn ?? 200}
-            max={Math.min(tableConfig?.maxBuyIn ?? 2000, player.state?.chips ?? 0)}
+            min={minBuyIn}
+            max={Math.max(minBuyIn, maxAffordable)}
             step={10}
             value={buyIn}
             onChange={(e) => setBuyIn(Number(e.target.value))}
@@ -370,12 +451,19 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             {buyIn.toLocaleString()}
           </span>
         </div>
+        {!canAfford && (
+          <p style={{ color: "var(--lose)", fontSize: "var(--t-sm)", marginTop: 0 }}>
+            You need at least {minBuyIn.toLocaleString()} chips to sit here.
+            Claim from the faucet in the lobby.
+          </p>
+        )}
         <Button
           variant="primary"
+          disabled={!canAfford}
           loading={actions.busy === "join"}
           onClick={async () => {
             if (sitting === null) return;
-            await actions.join(sitting, buyIn);
+            await actions.join(sitting, Math.min(Math.max(buyIn, minBuyIn), maxAffordable));
             setSitting(null);
             await player.refresh();
           }}
@@ -392,17 +480,25 @@ function useStatusLine(
   delegated: boolean | null,
   table: TableView | null,
   hand: HandView | null,
-  seated: number,
+  seats: (SeatView | null)[],
+  funded: number,
 ): string | undefined {
   if (delegated === null) return "loading";
   if (!delegated) {
-    if (seated < 2) return "waiting for players";
+    if (funded < 2) return "waiting for players";
     return "ready to start";
   }
   if (!hand || !table) return "connecting";
   if (table.state === 1) return undefined;
-  if (hand.shuffleState === SHUFFLE_REQUESTED) return "drawing randomness";
-  if (hand.shuffleState === SHUFFLE_FULFILLED) return "dealing";
+
+  // Between hands. Say what is actually being waited on, and in particular
+  // say when the table cannot continue at all, rather than showing a
+  // reassuring "shuffling" forever.
+  if (funded < 2) return "not enough players with chips";
+  if (hand.shuffleState === SHUFFLE_REQUESTED) return "shuffling";
+  const committed = seats.filter((s) => s?.occupant && s.saltState > 0).length;
+  if (committed === 0) return "starting the next hand";
+  if (committed < 2) return "waiting for players to shuffle in";
   return "shuffling";
 }
 

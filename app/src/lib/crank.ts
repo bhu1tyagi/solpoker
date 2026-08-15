@@ -25,8 +25,6 @@ import {
   NO_SEAT,
   SALT_COMMITTED,
   SALT_NONE,
-  SALT_REVEALED,
-  SHUFFLE_FULFILLED,
   SHUFFLE_IDLE,
 } from "./constants";
 import {
@@ -73,14 +71,24 @@ const BASE_DELAY_MS = 350;
 const PER_RANK_MS = 1200;
 /** How long to let stragglers reveal before asking for randomness. */
 const SALT_QUIET_MS = 2500;
+/**
+ * How long to wait for a committed-but-unrevealed salt before going on
+ * without it. A player who commits and then closes the tab must not be able
+ * to hold the table hostage; their commitment simply misses this shuffle.
+ */
+const SALT_ABANDON_MS = 20_000;
+/** An armed step whose condition stopped holding forgets its arming time. */
+const ARM_EXPIRY_MS = 1_500;
 
 type StepKey = string;
 
 export class Crank {
   private inflight = new Set<StepKey>();
   private backoff = new Map<StepKey, number>();
-  private armedAt = new Map<StepKey, number>();
-  private lastSaltActivity = 0;
+  private armedAt = new Map<StepKey, { since: number; lastSeen: number }>();
+  /** When observed salt state last advanced, across every seat, any client. */
+  private lastSaltProgress = 0;
+  private lastSaltFingerprint = "";
   /** Hands this client has already sent a deal for, for the not-dealt-in case. */
   private dealtHands = new Set<number>();
 
@@ -140,12 +148,17 @@ export class Crank {
     const until = this.backoff.get(key) ?? 0;
     if (Date.now() < until) return;
 
+    // Arming only counts while the condition keeps holding. A step whose
+    // condition lapsed and came back must wait its full delay again, or a
+    // stale entry would let it fire instantly and skip the grace period.
+    const now = Date.now();
     const armed = this.armedAt.get(key);
-    if (armed === undefined) {
-      this.armedAt.set(key, Date.now());
+    if (armed === undefined || now - armed.lastSeen > ARM_EXPIRY_MS) {
+      this.armedAt.set(key, { since: now, lastSeen: now });
       return;
     }
-    if (Date.now() - armed < delayMs) return;
+    armed.lastSeen = now;
+    if (now - armed.since < delayMs) return;
 
     this.inflight.add(key);
     try {
@@ -153,7 +166,9 @@ export class Crank {
       this.backoff.delete(key);
     } catch (e) {
       if (isRaceLost(e)) {
-        // Someone else did it. That is the system working.
+        // Someone else did it, or the chain is not ready for it yet. Either
+        // way, pause briefly rather than knocking every tick.
+        this.backoff.set(key, Date.now() + 2000);
       } else {
         const attempts = (this.backoff.get(`${key}:n`) ?? 0) + 1;
         this.backoff.set(`${key}:n`, attempts);
@@ -175,10 +190,25 @@ export class Crank {
     });
   }
 
+  /**
+   * Note whether anyone's salt state moved since last tick. This watches the
+   * chain rather than this client's own sends, so six clients agree on when
+   * the protocol went quiet.
+   */
+  private observeSaltProgress(hand: HandView, seats: (SeatView | null)[]) {
+    const fingerprint =
+      hand.saltMask + ":" + seats.map((s) => s?.saltState ?? 0).join("");
+    if (fingerprint !== this.lastSaltFingerprint) {
+      this.lastSaltFingerprint = fingerprint;
+      this.lastSaltProgress = Date.now();
+    }
+  }
+
   /** One pass over the state machine. Called on a timer and on every update. */
   async tick(snap: CrankSnapshot): Promise<void> {
     const { table, hand, seats } = snap;
     if (!table || !hand) return;
+    this.observeSaltProgress(hand, seats);
 
     const shared = this.sharedDelay(snap);
     const me = this.ctx.mySeat >= 0 ? seats[this.ctx.mySeat] : null;
@@ -204,22 +234,39 @@ export class Crank {
             this.signer(),
           );
           await this.send(ix, "commit salt");
-          this.lastSaltActivity = Date.now();
         });
         return;
       }
 
       if (me.saltState === SALT_COMMITTED) {
         await this.armed(`reveal:${nextHand}`, 0, async () => {
-          const ix = await revealSaltIx(
-            this.ctx.program,
-            this.ctx.table,
-            this.ctx.mySeat,
-            salt,
-            this.signer(),
-          );
-          await this.send(ix, "reveal salt");
-          this.lastSaltActivity = Date.now();
+          try {
+            const ix = await revealSaltIx(
+              this.ctx.program,
+              this.ctx.table,
+              this.ctx.mySeat,
+              salt,
+              this.signer(),
+            );
+            await this.send(ix, "reveal salt");
+          } catch (e) {
+            // The commitment on chain does not open with the salt we hold,
+            // which means storage was lost between commit and reveal. The way
+            // out is to commit again with the salt we do have; retrying the
+            // reveal would fail identically forever.
+            if (String(e).includes("SaltMismatch")) {
+              const ix = await commitSaltIx(
+                this.ctx.program,
+                this.ctx.table,
+                this.ctx.mySeat,
+                commitmentFor(salt),
+                this.signer(),
+              );
+              await this.send(ix, "recommit salt");
+              return;
+            }
+            throw e;
+          }
         });
         return;
       }
@@ -227,13 +274,17 @@ export class Crank {
 
     // ---- shared work from here down ----
 
-    // Ask for randomness once enough salts are in and the others have settled.
+    // Ask for randomness once enough salts are in and the protocol has gone
+    // quiet. Waiting for every committed seat to reveal is polite, but a seat
+    // that committed and vanished must not stall the table forever, so after
+    // long enough the shuffle goes on without it.
+    const saltQuietFor = Date.now() - this.lastSaltProgress;
     if (
       table.state === 0 &&
       hand.shuffleState === SHUFFLE_IDLE &&
       countBits(hand.saltMask) >= 2 &&
-      allRevealersDone(seats) &&
-      Date.now() - this.lastSaltActivity > SALT_QUIET_MS
+      saltQuietFor > SALT_QUIET_MS &&
+      (allRevealersDone(seats) || saltQuietFor > SALT_ABANDON_MS)
     ) {
       await this.armed(`shuffle:${nHand}`, shared, async () => {
         const ix = await requestShuffleIx(
@@ -246,8 +297,10 @@ export class Crank {
       return;
     }
 
-    // Randomness landed, so deal.
-    if (table.state === 0 && hand.shuffleState === SHUFFLE_FULFILLED) {
+    // Once randomness is requested, knock with start_hand until the program
+    // stops refusing it. Fulfillment lands on the private deck, so there is
+    // nothing public to watch for; ShuffleNotReady refusals pace the knocking.
+    if (table.state === 0 && hand.shuffleState !== SHUFFLE_IDLE) {
       await this.armed(`start:${nHand}`, shared, async () => {
         const ix = await startHandIx(
           this.ctx.program,
@@ -326,13 +379,14 @@ export class Crank {
    *
    * Not every hand: each delegated account gets ten free commits, so a table
    * that settled after every hand would be out after ten. Play at rollup speed,
-   * settle on a slower cadence.
+   * settle on a slower cadence: whenever the base layer has fallen a batch of
+   * hands behind, between hands.
    */
   async maybeCommit(snap: CrankSnapshot, lastRecorded: number): Promise<void> {
     const { table, hand } = snap;
     if (!table || !hand || table.state !== 0) return;
-    if (hand.handNumber === 0 || hand.handNumber % COMMIT_EVERY !== 0) return;
-    if (lastRecorded >= hand.handNumber) return;
+    if (hand.handNumber === 0) return;
+    if (hand.handNumber - lastRecorded < COMMIT_EVERY) return;
 
     await this.armed(`commit:results:${hand.handNumber}`, this.sharedDelay(snap), async () => {
       const ix = await commitResultsIx(

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { handId, saveHand } from "@/lib/history-db";
+import { pruneSalts } from "@/lib/salts";
 import { useTableStore } from "@/stores/table-store";
 import { MAX_SEATS, SALT_REVEALED } from "@/lib/constants";
 
@@ -110,7 +111,11 @@ export function useHandCapture(tableId: number | null) {
       .catch(() => {
         // Storage refused. The hand is lost to history but play continues.
       })
-      .finally(() => setPendingHand(null));
+      .finally(() => {
+        setPendingHand(null);
+        // Old salts have served their purpose once the hand is stored.
+        pruneSalts(table.address, hand.handNumber);
+      });
   }, [hand, table, tableId]);
 
   /** The crank waits on this before committing a salt for the next hand. */

@@ -5,16 +5,26 @@ import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import { Crank, type CrankSnapshot } from "@/lib/crank";
 import type { SolpokerProgram } from "@/lib/anchor";
 import { useTableStore } from "@/stores/table-store";
+import { getBaseConnection } from "@/lib/connection";
+import { decodeHistory } from "@/lib/decode";
+import { historyPda } from "@/lib/pdas";
 import { friendlyError } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
 
 const TICK_MS = 500;
+/** How often to ask the base layer what it has already recorded. */
+const HISTORY_POLL_MS = 30_000;
 
 /**
  * Runs the table state machine while this page is open.
  *
  * Every seated client runs one. They step on each other harmlessly, and if all
  * of them close the tab the table simply pauses until someone opens it again.
+ *
+ * Alongside the per-hand steps, this periodically pushes results to the base
+ * layer. The cadence lives here rather than in the crank because deciding
+ * whether a commit is needed means reading the base layer, which the crank,
+ * deliberately, knows nothing about.
  */
 export function useCrank(args: {
   connection: Connection | null;
@@ -30,6 +40,8 @@ export function useCrank(args: {
 }) {
   const crank = useRef<Crank | null>(null);
   const running = useRef(false);
+  /** Highest hand number the base layer has recorded, from TableHistory. */
+  const lastRecorded = useRef(0);
 
   const {
     connection,
@@ -70,6 +82,29 @@ export function useCrank(args: {
     else crank.current = new Crank(ctx);
   }, [enabled, connection, program, table, config, session, sessionToken, wallet, mySeat, captureReady]);
 
+  // Track what the base layer has recorded, so the commit cadence has a floor
+  // that survives reloads and is shared by every client.
+  useEffect(() => {
+    if (!enabled || !table) return;
+    let cancelled = false;
+    const read = async () => {
+      try {
+        const info = await getBaseConnection().getAccountInfo(historyPda(table));
+        if (info && !cancelled) {
+          lastRecorded.current = decodeHistory(new Uint8Array(info.data)).lastHandNumber;
+        }
+      } catch {
+        // The next poll will try again.
+      }
+    };
+    void read();
+    const id = setInterval(() => void read(), HISTORY_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [enabled, table]);
+
   useEffect(() => {
     if (!enabled) return;
     const id = setInterval(async () => {
@@ -85,6 +120,7 @@ export function useCrank(args: {
           myHoleHandNumber: s.myHoleHandNumber,
         };
         await c.tick(snap);
+        await c.maybeCommit(snap, lastRecorded.current);
       } catch {
         // tick already routes real failures through onError.
       } finally {

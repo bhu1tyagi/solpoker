@@ -299,3 +299,78 @@ created in four transactions, session keys authorised, delegation paid for by a 
 key, deck and opponent cards unreadable, two independent cranks converging on a hand,
 chips conserved, the shuffle verified in the browser, a tampered salt rejected, and both
 players cashed out with every faucet chip accounted for.
+
+## Phase 7 follow-up: what running the UI found
+
+The frontend passed its module tests and still did not work. Two players sat
+down and saw an empty table, then went back to the lobby and could not find the
+table they had just created. Both were real, and neither was reachable without
+opening a browser.
+
+**The table page only ever read the rollup.** Before a game starts the accounts
+live on the base layer, and that is where seats fill up, so a freshly created
+table rendered as six empty seats to the very player sitting at one. The page
+now reads whichever layer owns the accounts: base until delegation, the rollup
+after. Hole cards still come only over the player's own authenticated rollup
+connection.
+
+**One legacy account emptied the lobby.** Seven tables on devnet predate
+`action_timeout_secs`, so their config accounts are 82 bytes where the layout
+now expects 90. Reading past the end threw, the whole listing was in one
+try/catch, and a failed listing rendered as "No tables yet", which is
+indistinguishable from an empty lobby. Decoding is now bounds checked, a field
+past the end reads as zero, one bad row is skipped instead of taking the list
+with it, and a genuine failure says so with a retry rather than lying about
+being empty.
+
+**Your own cards were face down.** The hole account is permission gated, so a
+change notification for it is not something to count on, and it was the only
+account with no polling fallback. When the notification did not arrive the
+player watched the backs of their own cards for the whole hand.
+
+### The seed was public for the whole hand
+
+The worst of it was not a UI bug. The VRF output and the shuffle seed were
+written to the `Hand` account, which is public and readable by anyone. Salts
+are public once revealed, the seed is VRF XOR salts, and the deal is a
+deterministic function of the seed, so anyone could recompute all six players'
+hole cards and the whole board before a single card was turned. Publishing that
+at settlement is the point of the verifier; publishing it during the hand
+undoes the reason the deck is private in the first place.
+
+Both now live on the deck, the one account nobody can read. The oracle callback
+writes there, `start_hand` combines VRF with the salts inside the enclave, and
+settlement copies both to the hand once they are safe. A consequence worth
+noting: clients can no longer see the callback arrive, so they knock with
+`start_hand` and let `ShuffleNotReady` pace the retries. Fulfillment being
+invisible is itself the point.
+
+**Undelegation was a forced-reveal button.** It is permissionless and it commits
+account contents to public Solana state permanently. Nothing checked what those
+contents were, so anyone could undelegate mid-hand and publish the live deck and
+every hole card. The zeroize-at-settlement rule was real but it was a habit of
+the client, not a guarantee of the program. Both undelegate instructions now
+verify, by account type and by content, that what is leaving holds no cards, no
+randomness and no seed. Mid-hand undelegation is refused for everyone.
+
+**Settling twice corrupted the record.** Settlement is permissionless and
+several clients race for it. The winner flipped the table to Waiting; a loser
+arriving late re-ran against cleared seats, wiped the revealed cards and
+recomputed the result hash over zero payouts. It now requires the table to still
+be in a hand.
+
+**Committing results was dead code.** `maybeCommit` existed, was correct, and
+had no caller, so nothing reached the base layer until someone pressed Pause.
+The cadence now lives in the hook that can read what the base layer already
+recorded, and pausing commits on the way out.
+
+**A committed salt that never revealed stalled the table forever.** The shuffle
+waited for every committed seat to open its commitment, with no timeout, so a
+player who committed and closed the tab held the table hostage. After long
+enough the shuffle goes on without them.
+
+**The browser is now part of the gate.** `npm run gate` drives two browsers with
+two wallet-standard wallets backed by real keypairs, plays a hand through the
+UI, and checks that each player sees their own cards and not the other's. The
+module-level devnet test stays, because it is faster and more precise, but it
+was passing throughout everything described above.

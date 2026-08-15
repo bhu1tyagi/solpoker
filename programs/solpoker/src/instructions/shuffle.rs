@@ -115,6 +115,13 @@ pub fn reveal_salt(ctx: Context<SaltCtx>, seat_index: u8, salt: [u8; 32]) -> Res
 ///
 /// The caller seed is a hash of the salts and hand number rather than anything
 /// the caller chooses, so re-requesting cannot produce a different draw.
+///
+/// The randomness is delivered to the deck, not the hand. The hand is a public
+/// account, the salts are public once revealed, and seed = VRF XOR salts, so
+/// VRF output on a readable account would let anyone recompute the whole deck
+/// before a card is dealt. The callback therefore touches only the private
+/// deck, which also keeps the oracle's transaction (whose arguments carry the
+/// randomness) out of anyone's reach.
 pub fn request_shuffle(ctx: Context<RequestShuffle>) -> Result<()> {
     let hand = &ctx.accounts.hand;
     require!(
@@ -135,7 +142,7 @@ pub fn request_shuffle(ctx: Context<RequestShuffle>) -> Result<()> {
         callback_discriminator: crate::instruction::ShuffleCallback::DISCRIMINATOR.to_vec(),
         caller_seed,
         accounts_metas: Some(vec![vrf_api::types::SerializableAccountMeta {
-            pubkey: ctx.accounts.hand.key(),
+            pubkey: ctx.accounts.deck.key(),
             is_signer: false,
             is_writable: true,
         }]),
@@ -144,29 +151,30 @@ pub fn request_shuffle(ctx: Context<RequestShuffle>) -> Result<()> {
     ctx.accounts
         .invoke_signed_vrf(&ctx.accounts.payer.to_account_info(), &ix)?;
 
+    ctx.accounts.deck.shuffle_state = SHUFFLE_REQUESTED;
     ctx.accounts.hand.shuffle_state = SHUFFLE_REQUESTED;
     msg!("shuffle randomness requested");
     Ok(())
 }
 
-/// Oracle callback. Combines VRF output with the salts to fix the shuffle seed.
+/// Oracle callback. Stores the raw randomness on the private deck.
+///
+/// Nothing public changes here on purpose. Clients cannot see fulfillment
+/// arrive; they try `start_hand` on a cadence and are refused with
+/// `ShuffleNotReady` until this has landed. The seed itself is combined with
+/// the salts inside `start_hand`, so it exists nowhere readable.
 pub fn shuffle_callback(ctx: Context<ShuffleCallback>, randomness: [u8; 32]) -> Result<()> {
-    let hand = &mut ctx.accounts.hand;
-    // A late callback for a superseded request must not overwrite a live seed.
+    let deck = &mut ctx.accounts.deck;
+    // A late callback for a superseded request must not overwrite a live deck.
     require!(
-        hand.shuffle_state == SHUFFLE_REQUESTED,
+        deck.shuffle_state == SHUFFLE_REQUESTED,
         PokerError::NoShuffleRequested
     );
 
-    hand.vrf_randomness = randomness;
-    let mut seed = randomness;
-    for (i, b) in hand.salt_xor.iter().enumerate() {
-        seed[i] ^= b;
-    }
-    hand.shuffle_seed = seed;
-    hand.shuffle_state = SHUFFLE_FULFILLED;
+    deck.vrf_randomness = randomness;
+    deck.shuffle_state = SHUFFLE_FULFILLED;
 
-    msg!("shuffle seed fixed for hand {}", hand.hand_number);
+    msg!("shuffle randomness delivered");
     Ok(())
 }
 
@@ -194,6 +202,8 @@ pub struct RequestShuffle<'info> {
     pub payer: Signer<'info>,
     #[account(mut)]
     pub hand: Account<'info, Hand>,
+    #[account(mut, seeds = [DECK_SEED, hand.table.as_ref()], bump = deck.bump)]
+    pub deck: Account<'info, Deck>,
     /// CHECK: the oracle queue, constrained to the known queues
     #[account(
         mut,
@@ -209,5 +219,5 @@ pub struct RequestShuffle<'info> {
 #[derive(Accounts)]
 pub struct ShuffleCallback<'info> {
     #[account(mut)]
-    pub hand: Account<'info, Hand>,
+    pub deck: Account<'info, Deck>,
 }

@@ -36,19 +36,24 @@ export function usePlayer() {
       setState(null);
       return;
     }
-    const conn = getBaseConnection();
-    const info = await conn.getAccountInfo(playerPda(publicKey));
-    if (!info) {
-      setState({ exists: false, chips: 0, lastFaucetTs: 0, handsPlayed: 0 });
-      return;
+    try {
+      const conn = getBaseConnection();
+      const info = await conn.getAccountInfo(playerPda(publicKey));
+      if (!info) {
+        setState({ exists: false, chips: 0, lastFaucetTs: 0, handsPlayed: 0 });
+        return;
+      }
+      const p = decodePlayer(new Uint8Array(info.data));
+      setState({
+        exists: true,
+        chips: p.chips,
+        lastFaucetTs: p.lastFaucetTs,
+        handsPlayed: p.handsPlayed,
+      });
+    } catch {
+      // A failed read is not "no account". Leave state as it was; the next
+      // refresh will try again.
     }
-    const p = decodePlayer(new Uint8Array(info.data));
-    setState({
-      exists: true,
-      chips: p.chips,
-      lastFaucetTs: p.lastFaucetTs,
-      handsPlayed: p.handsPlayed,
-    });
   }, [publicKey]);
 
   useEffect(() => {
@@ -68,7 +73,11 @@ export function usePlayer() {
       const conn = getBaseConnection();
       const program = makeProgram(conn);
       const ixs = [];
-      if (!state?.exists) ixs.push(await initPlayerIx(program, publicKey));
+      // Decide from the chain, right now. Hook state can be stale or null
+      // after a failed read, and init_player on an existing account fails
+      // the whole claim with a confusing error.
+      const existing = await conn.getAccountInfo(playerPda(publicKey));
+      if (!existing) ixs.push(await initPlayerIx(program, publicKey));
       ixs.push(await claimFaucetIx(program, publicKey));
 
       const tx = new Transaction().add(...ixs);

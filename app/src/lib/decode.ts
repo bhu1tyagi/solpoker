@@ -5,6 +5,11 @@
  * are fixed and simple, a websocket callback hands us a Buffer anyway, and it
  * keeps BN out of the store. Offsets match state.rs field order exactly, so any
  * change there means changing these.
+ *
+ * Every read is bounds checked, and a field past the end of the account reads
+ * as zero rather than throwing. Accounts created by older builds of the program
+ * are genuinely shorter than today's layout, and one of them throwing took down
+ * the whole lobby listing, which then looked exactly like an empty lobby.
  */
 
 import type {
@@ -22,14 +27,21 @@ const hex = (b: Uint8Array) =>
 
 /** u64 as a number. Chip counts and hand numbers never approach 2^53. */
 const u64 = (d: Uint8Array, at: number) => {
+  if (at + 8 > d.byteLength) return 0;
   const view = new DataView(d.buffer, d.byteOffset, d.byteLength);
   return Number(view.getBigUint64(at, true));
 };
 
 const i64 = (d: Uint8Array, at: number) => {
+  if (at + 8 > d.byteLength) return 0;
   const view = new DataView(d.buffer, d.byteOffset, d.byteLength);
   return Number(view.getBigInt64(at, true));
 };
+
+/** A single byte, or zero past the end. */
+const u8 = (d: Uint8Array, at: number) => (at < d.byteLength ? d[at] : 0);
+
+const ZERO_KEY = "11111111111111111111111111111111";
 
 const bs58 = (b: Uint8Array): string => {
   const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -53,8 +65,8 @@ const bs58 = (b: Uint8Array): string => {
   return out;
 };
 
-const ZERO_KEY = "11111111111111111111111111111111";
-const pubkey = (d: Uint8Array, at: number) => bs58(d.subarray(at, at + 32));
+const pubkey = (d: Uint8Array, at: number) =>
+  at + 32 <= d.byteLength ? bs58(d.subarray(at, at + 32)) : ZERO_KEY;
 const maybeKey = (d: Uint8Array, at: number) => {
   const k = pubkey(d, at);
   return k === ZERO_KEY ? null : k;
@@ -91,9 +103,9 @@ export function decodeTable(d: Uint8Array, address: string): TableView {
     address,
     config: pubkey(d, 16),
     seats,
-    button: d[240],
+    button: u8(d, 240),
     handNumber: u64(d, 241),
-    state: d[249],
+    state: u8(d, 249),
   };
 }
 
@@ -104,19 +116,19 @@ export function decodeTable(d: Uint8Array, address: string): TableView {
  */
 export function decodeSeat(d: Uint8Array): SeatView {
   return {
-    index: d[40],
+    index: u8(d, 40),
     occupant: maybeKey(d, 41),
     stack: u64(d, 73),
     committedStreet: u64(d, 81),
     committedTotal: u64(d, 89),
-    folded: d[97] === 1,
-    allIn: d[98] === 1,
-    needsAction: d[99] === 1,
-    mayRaise: d[100] === 1,
-    inHand: d[101] === 1,
+    folded: u8(d, 97) === 1,
+    allIn: u8(d, 98) === 1,
+    needsAction: u8(d, 99) === 1,
+    mayRaise: u8(d, 100) === 1,
+    inHand: u8(d, 101) === 1,
     saltCommit: hex(d.subarray(110, 142)),
     salt: hex(d.subarray(142, 174)),
-    saltState: d[174],
+    saltState: u8(d, 174),
   };
 }
 
@@ -129,26 +141,26 @@ export function decodeSeat(d: Uint8Array): SeatView {
 export function decodeHand(d: Uint8Array): HandView {
   const revealed: number[][] = [];
   for (let i = 0; i < MAX_SEATS; i++) {
-    revealed.push([d[114 + i * 2], d[115 + i * 2]]);
+    revealed.push([u8(d, 114 + i * 2), u8(d, 115 + i * 2)]);
   }
   return {
     handNumber: u64(d, 40),
-    street: d[48],
+    street: u8(d, 48),
     board: Array.from(d.subarray(49, 54)),
     currentBet: u64(d, 54),
     minRaise: u64(d, 62),
-    toAct: d[70],
-    button: d[71],
-    lastAggressor: d[72],
-    dealtIn: d[73],
+    toAct: u8(d, 70),
+    button: u8(d, 71),
+    lastAggressor: u8(d, 72),
+    dealtIn: u8(d, 73),
     deadline: i64(d, 74),
     shuffleSeed: hex(d.subarray(82, 114)),
     revealed,
-    revealedMask: d[126],
+    revealedMask: u8(d, 126),
     saltXor: hex(d.subarray(127, 159)),
-    saltMask: d[159],
+    saltMask: u8(d, 159),
     vrfRandomness: hex(d.subarray(160, 192)),
-    shuffleState: d[192],
+    shuffleState: u8(d, 192),
     resultHash: hex(d.subarray(193, 225)),
   };
 }
@@ -171,8 +183,8 @@ export function decodeHistory(d: Uint8Array) {
  */
 export function decodeHole(d: Uint8Array) {
   return {
-    seatIndex: d[40],
+    seatIndex: u8(d, 40),
     handNumber: u64(d, 41),
-    cards: [d[49], d[50]],
+    cards: [u8(d, 49), u8(d, 50)],
   };
 }

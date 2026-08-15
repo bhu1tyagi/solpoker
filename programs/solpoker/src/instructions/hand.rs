@@ -51,19 +51,27 @@ pub fn create_hole(ctx: Context<CreateHole>, seat_index: u8) -> Result<()> {
 
 /// Shuffle, post blinds, and open preflop betting.
 ///
-/// The seed comes from the VRF plus player salts fixed by
-/// [`crate::instructions::shuffle`], never from the caller. It stays on the hand
-/// so anyone can recompute the deck afterwards.
+/// The seed is `VRF XOR salts`, combined here inside the enclave: the VRF half
+/// lives on the private deck where nobody can read it, and the salts are
+/// public. It stays on the deck until settlement, which copies it to the hand
+/// so anyone can recompute the deal afterwards. Until then a readable seed
+/// would be the whole deck.
 pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
     require!(
         ctx.accounts.table.state == TableState::Waiting,
         PokerError::HandInProgress
     );
+    // Fulfillment is invisible from outside on purpose, so callers simply try
+    // this until it stops being refused.
     require!(
-        ctx.accounts.hand.shuffle_state == crate::instructions::shuffle::SHUFFLE_FULFILLED,
+        ctx.accounts.deck.shuffle_state == crate::instructions::shuffle::SHUFFLE_FULFILLED,
         PokerError::ShuffleNotReady
     );
-    let shuffle_seed = ctx.accounts.hand.shuffle_seed;
+    let mut shuffle_seed = ctx.accounts.deck.vrf_randomness;
+    for (i, b) in ctx.accounts.hand.salt_xor.iter().enumerate() {
+        shuffle_seed[i] ^= b;
+    }
+    ctx.accounts.deck.shuffle_seed = shuffle_seed;
 
     let table_key = ctx.accounts.table.key();
     {

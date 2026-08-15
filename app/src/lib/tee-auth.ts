@@ -36,6 +36,8 @@ function readCache(pubkey: PublicKey): CachedToken | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CachedToken;
     if (Date.now() - parsed.issuedAt > REFRESH_AFTER_MS) return null;
+    // Honor the server's expiry too; it may be shorter than our default.
+    if (parsed.expiresAt && parsed.expiresAt - Date.now() < 60 * 60 * 1000) return null;
     return parsed;
   } catch {
     return null;

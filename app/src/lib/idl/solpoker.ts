@@ -1994,6 +1994,28 @@ export type Solpoker = {
           "writable": true
         },
         {
+          "name": "deck",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "hand.table",
+                "account": "hand"
+              }
+            ]
+          }
+        },
+        {
           "name": "oracleQueue",
           "writable": true
         },
@@ -2439,7 +2461,7 @@ export type Solpoker = {
           "signer": true
         },
         {
-          "name": "hand",
+          "name": "deck",
           "writable": true
         }
       ],
@@ -2935,6 +2957,45 @@ export type Solpoker = {
           },
           {
             "name": "nextIndex",
+            "type": "u8"
+          },
+          {
+            "name": "vrfRandomness",
+            "docs": [
+              "Raw VRF output, delivered here rather than to the public hand.",
+              "",
+              "The deck account is the one place nobody can read, and the seed must be",
+              "secret while the hand runs: salts are public once revealed, so seed and",
+              "VRF output on a readable account would let anyone recompute the entire",
+              "deck mid-hand. Both are copied to the hand at settlement, which is when",
+              "the verifier needs them and the moment they stop being dangerous."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "shuffleSeed",
+            "docs": [
+              "`vrf_randomness XOR salt_xor`, fixed when the hand starts."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "shuffleState",
+            "docs": [
+              "The private half of the shuffle state machine. The public half on the",
+              "hand only ever says \"requested\", because fulfillment arriving is itself",
+              "information about when the deck became computable inside the enclave."
+            ],
             "type": "u8"
           },
           {

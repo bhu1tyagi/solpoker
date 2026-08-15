@@ -354,36 +354,46 @@ describe("SolPoker Phases 3-5: private cards and a verifiable shuffle", () => {
 
     // 3. Only now is VRF drawn, seeded from the salts so it cannot be shopped.
     const tx = await erProgram.methods.requestShuffle()
-      .accountsPartial({ payer: wallet.publicKey, hand: handPda, oracleQueue: ORACLE_QUEUE })
+      .accountsPartial({ payer: wallet.publicKey, hand: handPda, deck: deckPda, oracleQueue: ORACLE_QUEUE })
       .transaction();
     await sendEr(tx, [wallet], "request_shuffle");
 
-    // 4. Wait for the oracle callback.
-    let hand: any;
-    for (let i = 0; i < 60; i++) {
-      hand = await erProgram.account.hand.fetch(handPda);
-      if (hand.shuffleState === 2) break;
-      await new Promise((r) => setTimeout(r, 2000));
-    }
-    assert.equal(hand.shuffleState, 2, "VRF callback did not arrive within 120s");
-
-    // The seed must be exactly VRF XOR the salts.
-    const expected = Buffer.from(hand.vrfRandomness);
-    for (const s of salts) for (let i = 0; i < 32; i++) expected[i] ^= s[i];
-    assert.equal(hex(hand.shuffleSeed), hex(expected), "seed must be VRF XOR salts");
-    console.log(`  seed ${hex(hand.shuffleSeed).slice(0, 24)}... = VRF XOR ${SEATED} salts`);
+    // 4. Fulfillment is deliberately invisible: the randomness lands on the
+    // private deck, so the public hand only ever says "requested". If the
+    // seed or VRF output were readable here, anyone could recompute the deck
+    // before the deal. The seed assertion moves to after settlement, where
+    // publishing it is the point.
+    const hand: any = await erProgram.account.hand.fetch(handPda);
+    assert.equal(hand.shuffleState, 1, "the public state should say requested");
+    assert.isTrue(hand.vrfRandomness.every((b: number) => b === 0),
+      "MID-HAND LEAK: vrf randomness must not be public before settlement");
+    assert.isTrue(hand.shuffleSeed.every((b: number) => b === 0),
+      "MID-HAND LEAK: the shuffle seed must not be public before settlement");
+    console.log("  randomness requested; nothing derivable is public");
   });
 
   it("starts the hand and deals hidden cards", async function () {
     this.timeout(300_000);
     const wallet = (provider.wallet as anchor.Wallet).payer;
 
-    let tx = await erProgram.methods.startHand()
-      .accountsPartial({ table, config, hand: handPda, deck: deckPda, ...seatAccounts, payer: wallet.publicKey })
-      .transaction();
-    await sendEr(tx, [wallet], "start_hand");
+    // Clients cannot see the callback land, so they knock until the door
+    // opens: start_hand is refused with ShuffleNotReady until then.
+    let started = false;
+    for (let i = 0; i < 60 && !started; i++) {
+      try {
+        const tx = await erProgram.methods.startHand()
+          .accountsPartial({ table, config, hand: handPda, deck: deckPda, ...seatAccounts, payer: wallet.publicKey })
+          .transaction();
+        await sendEr(tx, [wallet], "start_hand");
+        started = true;
+      } catch (e) {
+        if (!/ShuffleNotReady/.test(String(e))) throw e;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    assert.isTrue(started, "VRF callback did not arrive within 120s");
 
-    tx = await erProgram.methods.dealHoleCards()
+    const tx = await erProgram.methods.dealHoleCards()
       .accountsPartial({ hand: handPda, deck: deckPda, hole0: holes[0], hole1: holes[1], hole2: holes[2], hole3: holes[3], hole4: holes[4], hole5: holes[5], payer: wallet.publicKey })
       .transaction();
     await sendEr(tx, [wallet], "deal_hole_cards");
@@ -391,6 +401,33 @@ describe("SolPoker Phases 3-5: private cards and a verifiable shuffle", () => {
     const hand = await erProgram.account.hand.fetch(handPda);
     assert.equal(hand.handNumber.toNumber(), 1);
     assert.notEqual(hand.toAct, 0xff);
+    // Still nothing derivable in public while the hand runs.
+    assert.isTrue(hand.shuffleSeed.every((b: number) => b === 0),
+      "MID-HAND LEAK: seed must stay private through the deal");
+
+    // Undelegating mid-hand would commit live cards to the public base layer.
+    // It must be refused for anyone, not just avoided by polite clients.
+    let refusedCore = false;
+    try {
+      const t = await erProgram.methods.undelegateCore()
+        .accountsPartial({ payer: wallet.publicKey, table, hand: handPda, deck: deckPda })
+        .transaction();
+      await sendEr(t, [wallet], "undelegate_core mid-hand");
+    } catch {
+      refusedCore = true;
+    }
+    assert.isTrue(refusedCore, "SECURITY: mid-hand undelegate_core must be refused");
+    let refusedSeat = false;
+    try {
+      const t = await erProgram.methods.undelegateSeat()
+        .accountsPartial({ payer: wallet.publicKey, seat: seats[0], hole: holes[0] })
+        .transaction();
+      await sendEr(t, [wallet], "undelegate_seat mid-hand");
+    } catch {
+      refusedSeat = true;
+    }
+    assert.isTrue(refusedSeat, "SECURITY: mid-hand undelegate_seat must be refused");
+    console.log("    mid-hand undelegation refused for deck and hole cards");
   });
 
   it("ADVERSARIAL: a player reads only their own hole cards", async function () {
@@ -461,6 +498,13 @@ describe("SolPoker Phases 3-5: private cards and a verifiable shuffle", () => {
     let total = 0;
     for (const s of seats) total += (await erProgram.account.seat.fetch(s)).stack.toNumber();
     assert.equal(total, SEATED * BUY_IN, "chips must be conserved");
+
+    // Settlement publishes the randomness and seed for the verifier, and the
+    // seed must be exactly VRF XOR the salts everyone committed to.
+    const expected = Buffer.from(hand.vrfRandomness);
+    for (const s of salts) for (let i = 0; i < 32; i++) expected[i] ^= s[i];
+    assert.equal(hex(hand.shuffleSeed), hex(expected), "seed must be VRF XOR salts");
+    console.log(`  seed ${hex(hand.shuffleSeed).slice(0, 24)}... = VRF XOR ${SEATED} salts, published at settle`);
 
     for (let i = 0; i < SEATED; i++) {
       if (hand.revealedMask & (1 << i)) {

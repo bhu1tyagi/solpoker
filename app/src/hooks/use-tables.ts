@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
+import bs58 from "bs58";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeConfig, decodeTable } from "@/lib/decode";
 import { DELEGATION_PROGRAM, PROGRAM_ID } from "@/lib/constants";
@@ -17,24 +18,6 @@ export interface LobbyTable {
   delegated: boolean;
   seated: number;
 }
-
-const bs58encode = (b: Uint8Array) => {
-  const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  const digits: number[] = [];
-  for (const byte of b) {
-    let carry = byte;
-    for (let j = 0; j < digits.length; j++) {
-      carry += digits[j] << 8;
-      digits[j] = carry % 58;
-      carry = (carry / 58) | 0;
-    }
-    while (carry > 0) {
-      digits.push(carry % 58);
-      carry = (carry / 58) | 0;
-    }
-  }
-  return digits.reverse().map((d) => ALPHABET[d]).join("");
-};
 
 /**
  * Every table on the program.
@@ -53,30 +36,53 @@ export function useTables() {
     try {
       setError(null);
       const accounts = await conn.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ memcmp: { offset: 0, bytes: bs58encode(TABLE_DISCRIMINATOR) } }],
+        filters: [{ memcmp: { offset: 0, bytes: bs58.encode(TABLE_DISCRIMINATOR) } }],
       });
 
-      const decoded = accounts.map((a) => ({
-        table: decodeTable(new Uint8Array(a.account.data), a.pubkey.toBase58()),
-        delegated: a.account.owner.equals(DELEGATION_PROGRAM),
-      }));
+      // One unreadable account must not take the lobby down with it. Older
+      // builds of the program left accounts with a different layout, and a
+      // failed listing is indistinguishable from an empty one on screen.
+      const decoded = accounts.flatMap((a) => {
+        try {
+          return [
+            {
+              table: decodeTable(new Uint8Array(a.account.data), a.pubkey.toBase58()),
+              delegated: a.account.owner.equals(DELEGATION_PROGRAM),
+            },
+          ];
+        } catch {
+          return [];
+        }
+      });
 
       // Config never changes, so one batched read covers the whole lobby.
-      const configs = await conn.getMultipleAccountsInfo(
-        decoded.map((d) => new PublicKey(d.table.config)),
-      );
+      const configs = decoded.length
+        ? await conn.getMultipleAccountsInfo(decoded.map((d) => new PublicKey(d.table.config)))
+        : [];
 
       setTables(
         decoded
-          .map((d, i) => ({
-            table: d.table,
-            delegated: d.delegated,
-            config: configs[i] ? decodeConfig(new Uint8Array(configs[i]!.data)) : null,
-            seated: d.table.seats.filter(Boolean).length,
-          }))
+          .map((d, i) => {
+            let config: ConfigView | null = null;
+            try {
+              const info = configs[i];
+              if (info) config = decodeConfig(new Uint8Array(info.data));
+            } catch {
+              // Show the table without its stakes rather than not at all.
+            }
+            return {
+              table: d.table,
+              delegated: d.delegated,
+              config,
+              seated: d.table.seats.filter(Boolean).length,
+            };
+          })
           .sort((a, b) => b.table.tableId - a.table.tableId),
       );
     } catch (e) {
+      // Loud on purpose: a failed listing looked exactly like an empty lobby,
+      // and a player who had just created a table concluded it was gone.
+      console.error("table listing failed:", e);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);

@@ -16,7 +16,7 @@ import { FAUCET_AMOUNT } from "@/lib/constants";
 export default function Lobby() {
   const { connected } = useWallet();
   const { state, claim, busy, canClaim, nextClaimIn, refresh } = usePlayer();
-  const { tables, loading, refresh: refreshTables } = useTables();
+  const { tables, loading, error, refresh: refreshTables } = useTables();
   const [creating, setCreating] = useState(false);
 
   return (
@@ -194,6 +194,25 @@ export default function Lobby() {
                 <Skeleton height={72} />
                 <Skeleton height={72} />
               </div>
+            ) : error ? (
+              <Panel style={{ textAlign: "center", padding: 32 }}>
+                <p style={{ color: "var(--lose)", margin: "0 0 6px" }}>
+                  Could not load the table list.
+                </p>
+                <p
+                  style={{
+                    color: "var(--text-faint)",
+                    fontSize: "var(--t-xs)",
+                    margin: "0 0 12px",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {error}
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => void refreshTables()}>
+                  Try again
+                </Button>
+              </Panel>
             ) : tables.length === 0 ? (
               <Panel style={{ textAlign: "center", padding: 40 }}>
                 <p style={{ color: "var(--text-dim)", margin: 0 }}>

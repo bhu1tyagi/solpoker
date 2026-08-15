@@ -300,7 +300,12 @@ export async function requestShuffleIx(
 ) {
   return program.methods
     .requestShuffle()
-    .accountsPartial({ payer, hand: handPda(table), oracleQueue: ORACLE_QUEUE })
+    .accountsPartial({
+      payer,
+      hand: handPda(table),
+      deck: deckPda(table),
+      oracleQueue: ORACLE_QUEUE,
+    })
     .instruction();
 }
 

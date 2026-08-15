@@ -24,6 +24,9 @@ Measured on devnet:
 | Published history reproduces the deal | verified |
 | 100-hand session, 6 seats, 141 forced timeouts | 0 stalls, chips conserved |
 | Two clients playing a hand through the web app | settled, verified, chips conserved |
+| Shuffle seed readable during a live hand | no, it lives on the private deck |
+| Undelegating mid-hand to expose cards | refused by the program |
+| Two browsers, two wallets, a real hand through the UI | passes |
 
 See [SPEC.md](SPEC.md) for the phase plan, [TRUST_MODEL.md](TRUST_MODEL.md) for what is
 and is not guaranteed, and [DECISIONS.md](DECISIONS.md) for the decision log.
@@ -47,6 +50,14 @@ ordinary auto-fold. That is what makes this buildable.
 ## Trust model
 
 **This is not trustless.** It trusts Intel TDX and MagicBlock's TEE validator.
+
+Two things follow from that and are enforced rather than assumed. The shuffle
+seed and the raw VRF output live on the deck, the one account nobody can read,
+until settlement publishes them for the verifier: the deal is a deterministic
+function of that seed, so a readable seed mid-hand would be every player's
+cards. And undelegation, which permanently publishes account contents and which
+anyone may call, refuses to run on a deck or a hole account that still holds
+cards.
 
 The accurate claim is "provably fair shuffle, TEE-protected hole cards". Not "provably
 fair hole cards", and not "trustless".
@@ -171,7 +182,14 @@ npm run dev                 # http://localhost:3000
 npm test                    # engine ports, verifier, salts
 npm run test:devnet         # plays a real hand on devnet through these modules
 npm run test:ui             # loads every page in a browser, fails on console errors
+npm run gate                # two browsers, two wallets, a real hand through the UI
 ```
+
+The gate is the one that matters. Everything else passed while the table page
+was rendering six empty seats to a player sitting at one, so the app is now
+tested by playing it: two browsers, each with its own wallet, sit down, start a
+table, play a hand, and check that each player sees their own cards and not the
+other's.
 
 There is no game server. Starting a hand, dealing, turning a street, settling and
 timing out are all permissionless, so every open client watches the same state and does

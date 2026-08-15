@@ -219,6 +219,7 @@ export function TableFelt({
               }
               deadline={hand?.deadline ?? 0}
               timeoutSecs={timeoutSecs}
+              handLive={handLive}
               onSit={onSit}
             />
           </div>

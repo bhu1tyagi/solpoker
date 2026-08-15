@@ -234,6 +234,20 @@ pub struct Deck {
     pub table: Pubkey,
     pub cards: [u8; 52],
     pub next_index: u8,
+    /// Raw VRF output, delivered here rather than to the public hand.
+    ///
+    /// The deck account is the one place nobody can read, and the seed must be
+    /// secret while the hand runs: salts are public once revealed, so seed and
+    /// VRF output on a readable account would let anyone recompute the entire
+    /// deck mid-hand. Both are copied to the hand at settlement, which is when
+    /// the verifier needs them and the moment they stop being dangerous.
+    pub vrf_randomness: [u8; 32],
+    /// `vrf_randomness XOR salt_xor`, fixed when the hand starts.
+    pub shuffle_seed: [u8; 32],
+    /// The private half of the shuffle state machine. The public half on the
+    /// hand only ever says "requested", because fulfillment arriving is itself
+    /// information about when the deck became computable inside the enclave.
+    pub shuffle_state: u8,
     pub bump: u8,
 }
 
@@ -248,11 +262,23 @@ impl Deck {
         Some(c)
     }
 
-    /// Overwrite every card. Called at hand end so no card data can ever ride a
-    /// commit back to the public base layer. See SPEC.md §4.
+    /// Overwrite every secret. Called at hand end so neither card data nor the
+    /// seed that generates it can ever ride a commit back to the public base
+    /// layer. See SPEC.md §4. Undelegation refuses a deck in any other state.
     pub fn zeroize(&mut self) {
         self.cards = [NO_CARD; 52];
         self.next_index = 0;
+        self.vrf_randomness = [0u8; 32];
+        self.shuffle_seed = [0u8; 32];
+        self.shuffle_state = 0;
+    }
+
+    /// Is this deck safe to publish? True only when zeroize has run (or the
+    /// deck has never held a shuffle at all).
+    pub fn holds_no_secrets(&self) -> bool {
+        self.cards.iter().all(|c| *c == NO_CARD)
+            && self.vrf_randomness.iter().all(|b| *b == 0)
+            && self.shuffle_seed.iter().all(|b| *b == 0)
     }
 }
 

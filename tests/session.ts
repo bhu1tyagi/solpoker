@@ -265,22 +265,28 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
       await step(
         async () => (await erProgram.account.hand.fetch(handPda)).shuffleState !== 0,
         async () => sendEr(await erProgram.methods.requestShuffle()
-          .accountsPartial({ payer: kp.publicKey, hand: handPda, oracleQueue: ORACLE_QUEUE }).transaction(), [kp], "request_shuffle"),
+          .accountsPartial({ payer: kp.publicKey, hand: handPda, deck: deckPda, oracleQueue: ORACLE_QUEUE }).transaction(), [kp], "request_shuffle"),
         "request_shuffle");
 
+      // Fulfillment lands on the private deck, so there is nothing public to
+      // poll. Knock with start_hand until the program stops refusing it.
       let h: any;
-      for (let t = 0; t < 60; t++) {
-        h = await net(() => erProgram.account.hand.fetch(handPda), "fetch hand");
-        if (h.shuffleState === 2) break;
-        await sleep(1000);
+      let started = false;
+      for (let t = 0; t < 90 && !started; t++) {
+        if ((await net(() => erProgram.account.hand.fetch(handPda), "fetch hand")).handNumber.toNumber() === hand) {
+          started = true;
+          break;
+        }
+        try {
+          await sendEr(await erProgram.methods.startHand()
+            .accountsPartial({ table, config, hand: handPda, deck: deckPda, ...seatAccounts, payer: kp.publicKey }).transaction(), [kp], "start_hand");
+          started = true;
+        } catch (e) {
+          if (!/ShuffleNotReady|HandInProgress/.test(String(e)) && !TRANSIENT.test(String(e))) throw e;
+          await sleep(1500);
+        }
       }
-      assert.equal(h.shuffleState, 2, `hand ${hand}: VRF never arrived`);
-
-      await step(
-        async () => (await erProgram.account.hand.fetch(handPda)).handNumber.toNumber() === hand,
-        async () => sendEr(await erProgram.methods.startHand()
-          .accountsPartial({ table, config, hand: handPda, deck: deckPda, ...seatAccounts, payer: kp.publicKey }).transaction(), [kp], "start_hand"),
-        "start_hand");
+      assert.isTrue(started, `hand ${hand}: VRF never arrived`);
       await sendEr(await erProgram.methods.dealHoleCards()
         .accountsPartial({ hand: handPda, deck: deckPda, hole0: holes[0], hole1: holes[1], hole2: holes[2], hole3: holes[3], hole4: holes[4], hole5: holes[5], payer: kp.publicKey }).transaction(), [kp], "deal");
 

@@ -27,8 +27,11 @@ import { PROGRAM_ID, SESSION_PROGRAM } from "./constants";
 
 /** How long a session lasts before the player is asked again. */
 const VALIDITY_SECS = 24 * 60 * 60;
-/** Enough lamports for a day of betting plus the crank work a client does. */
-const TOP_UP_LAMPORTS = 0.02 * 1_000_000_000;
+/**
+ * Enough lamports for a day of betting, the crank work a client does, and the
+ * delegation rent it fronts when it starts a table (refunded on undelegation).
+ */
+const TOP_UP_LAMPORTS = 0.05 * 1_000_000_000;
 /** Renew rather than start a hand on a session about to expire. */
 const RENEW_WITHIN_SECS = 60 * 60;
 

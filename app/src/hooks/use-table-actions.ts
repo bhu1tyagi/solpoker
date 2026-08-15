@@ -7,6 +7,7 @@ import BN from "bn.js";
 import { getBaseConnection } from "@/lib/connection";
 import { makeProgram, type SolpokerProgram } from "@/lib/anchor";
 import {
+  commitResultsIx,
   delegateCoreIx,
   delegateSeatIx,
   joinTableIx,
@@ -126,7 +127,15 @@ export function useTableActions(args: {
    */
   const startTable = useCallback(
     async (occupiedSeats: number[]) => {
-      if (!tableId || !table || !session || !erProgram || !erConnection || !publicKey) return;
+      if (!tableId || !table || !session || !publicKey) return;
+      // A silent return here left a button that did nothing. Say why instead.
+      if (!erProgram || !erConnection) {
+        toast(
+          "Not connected to the game validator yet. Approve the signature request, or reload and try again.",
+          "bad",
+        );
+        return;
+      }
       setBusy("start");
       try {
         const conn = getBaseConnection();
@@ -135,14 +144,14 @@ export function useTableActions(args: {
         setBusy("start:funding");
         // The session key pays for all of this, so it needs a balance.
         const bal = await conn.getBalance(session.publicKey);
-        if (bal < 0.015 * 1e9) {
+        if (bal < 0.05 * 1e9) {
           if (!signTransaction) throw new Error("connect a wallet first");
           const { SystemProgram } = await import("@solana/web3.js");
           const fund = new Transaction().add(
             SystemProgram.transfer({
               fromPubkey: publicKey,
               toPubkey: session.publicKey,
-              lamports: 0.03 * 1e9,
+              lamports: 0.08 * 1e9,
             }),
           );
           const bh = await conn.getLatestBlockhash();
@@ -150,7 +159,10 @@ export function useTableActions(args: {
           fund.recentBlockhash = bh.blockhash;
           const signed = await signTransaction(fund);
           const sig = await conn.sendRawTransaction(signed.serialize());
-          await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
+          const conf = await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
+          if (conf.value.err) {
+            throw new Error(`funding the session key failed: ${JSON.stringify(conf.value.err)}`);
+          }
         }
 
         // Delegation, one account group per transaction: these carry a buffer,
@@ -180,27 +192,43 @@ export function useTableActions(args: {
           );
         }
 
-        // Delegation takes a moment to show up on the rollup.
+        // Delegation takes a moment to reach the rollup, and the base layer
+        // cannot say when: it flips owners the moment the transaction lands.
+        // Ask the rollup itself whether it serves the last seat yet.
         setBusy("start:waiting");
-        for (let t = 0; t < 20; t++) {
-          const info = await conn.getAccountInfo(seatPda(table, MAX_SEATS - 1));
-          if (info?.owner.equals(DELEGATION_PROGRAM)) break;
-          await sleep(500);
+        for (let t = 0; t < 40; t++) {
+          try {
+            const info = await erConnection.getAccountInfo(seatPda(table, MAX_SEATS - 1));
+            if (info) break;
+          } catch {
+            // Not there yet.
+          }
+          await sleep(750);
         }
-        await sleep(1500);
 
-        // Lock the deck to nobody and each hand to its owner.
+        // Lock the deck to nobody and each hand to its owner. Retried because
+        // the rollup can serve reads a beat before it accepts writes.
         setBusy("start:securing");
         const secure = async (ix: Awaited<ReturnType<typeof secureDeckIx>>, label: string) => {
-          const tx = new Transaction().add(ix);
-          await sendEr(erConnection, tx, {
-            signers: [session],
-            feePayer: session.publicKey,
-            label,
-          });
+          let last: unknown;
+          for (let attempt = 0; attempt < 4; attempt++) {
+            try {
+              const tx = new Transaction().add(ix);
+              await sendEr(erConnection, tx, {
+                signers: [session],
+                feePayer: session.publicKey,
+                label,
+              });
+              return;
+            } catch (e) {
+              last = e;
+              await sleep(2000);
+            }
+          }
+          throw last;
         };
         await secure(await secureDeckIx(erProgram, table, session.publicKey), "secure deck");
-        for (const i of occupiedSeats) {
+        for (let i = 0; i < MAX_SEATS; i++) {
           await secure(
             await secureHoleIx(erProgram, table, i, session.publicKey),
             `secure seat ${i}`,
@@ -221,7 +249,11 @@ export function useTableActions(args: {
 
   /** Bring the table back to the base layer so people can cash out. */
   const pauseTable = useCallback(async () => {
-    if (!table || !session || !erProgram || !erConnection) return;
+    if (!table || !session) return;
+    if (!erProgram || !erConnection) {
+      toast("Not connected to the game validator. Retry the connection first.", "bad");
+      return;
+    }
     setBusy("pause");
     try {
       const send = async (ix: Awaited<ReturnType<typeof undelegateCoreIx>>, label: string) => {
@@ -232,6 +264,17 @@ export function useTableActions(args: {
           label,
         });
       };
+      // Leave a fresh digest of the last hand on the base layer on the way
+      // out. Best effort: a table with nothing new to record refuses this,
+      // and that must not block the cash-out path.
+      try {
+        await send(
+          await commitResultsIx(erProgram, table, session.publicKey),
+          "commit results",
+        );
+      } catch {
+        // Nothing new to record, or already recorded.
+      }
       await send(await undelegateCoreIx(erProgram, table, session.publicKey), "undelegate table");
       for (let i = 0; i < MAX_SEATS; i++) {
         await send(
@@ -264,7 +307,11 @@ export function useTableActions(args: {
    */
   const act = useCallback(
     async (kind: ActionKind, toTotal: number) => {
-      if (!erProgram || !erConnection || !table || !config || !session || !publicKey) return;
+      if (!table || !config || !session || !publicKey) return;
+      if (!erProgram || !erConnection) {
+        toast("Not connected to the game validator. Retry the connection first.", "bad");
+        return;
+      }
       const move: Move =
         kind === "fold"
           ? MOVES.fold

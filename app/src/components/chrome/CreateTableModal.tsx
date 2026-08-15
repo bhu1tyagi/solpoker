@@ -54,8 +54,10 @@ export function CreateTableModal({
       const conn = getBaseConnection();
       const program = makeProgram(conn);
       const s = STAKES[stake];
-      // Unique per creation, so two tables never collide on the same address.
-      const tableId = new BN(Math.floor(Date.now() / 1000));
+      // Unique per creation, so two tables never collide on the same address:
+      // milliseconds of wall clock with random low digits, still well inside
+      // what a u64 and a double can both hold exactly.
+      const tableId = new BN(Date.now()).muln(1000).addn(Math.floor(Math.random() * 1000));
       const table = tablePda(tableId);
 
       setProgress("Preparing");

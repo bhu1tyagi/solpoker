@@ -21,7 +21,7 @@ import { ERROR_MESSAGES, ERROR_NAMES, RACE_LOST } from "./constants";
 
 /** Failures worth retrying. Everything else is a real error and should surface. */
 export const TRANSIENT =
-  /fetch failed|Failed to fetch|ECONNRESET|socket hang up|ETIMEDOUT|EPIPE|Blockhash not found|block height exceeded|429|50[234]|timed out|NetworkError|Load failed/i;
+  /fetch failed|Failed to fetch|ECONNRESET|socket hang up|ETIMEDOUT|EPIPE|Blockhash not found|block height exceeded|\b429\b|\b50[234]\b|timed out|NetworkError|Load failed/i;
 
 export const isTransient = (e: unknown) => TRANSIENT.test(String(e));
 
@@ -33,6 +33,14 @@ export function errorName(e: unknown): string | null {
   const coded = s.match(/custom program error: 0x([0-9a-f]+)/i);
   if (coded) {
     const name = ERROR_NAMES[parseInt(coded[1], 16)];
+    if (name) return name;
+  }
+  // confirmTransaction reports {"InstructionError":[0,{"Custom":6030}]}, and
+  // the log fetch that would name it is best effort. Parse the code directly
+  // so a lost race is recognised even when the logs never arrive.
+  const custom = s.match(/"Custom"\s*:\s*(\d+)/);
+  if (custom) {
+    const name = ERROR_NAMES[Number(custom[1])];
     if (name) return name;
   }
   const anchorCode = (e as { error?: { errorCode?: { number?: number } } })?.error

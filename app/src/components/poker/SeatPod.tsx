@@ -23,6 +23,8 @@ interface Props {
   dimmed?: boolean;
   deadline: number;
   timeoutSecs: number;
+  /** A hand is actually running, so per-hand labels mean something. */
+  handLive?: boolean;
   onSit?: (index: number) => void;
 }
 
@@ -38,6 +40,7 @@ export function SeatPod({
   dimmed,
   deadline,
   timeoutSecs,
+  handLive = false,
   onSit,
 }: Props) {
   const empty = !seat?.occupant;
@@ -65,7 +68,7 @@ export function SeatPod({
     );
   }
 
-  const status = statusOf(seat, dealtIn);
+  const status = statusOf(seat, dealtIn, handLive);
 
   return (
     <motion.div
@@ -176,10 +179,13 @@ export function SeatPod({
   );
 }
 
-function statusOf(seat: SeatView, dealtIn: boolean) {
+function statusOf(seat: SeatView, dealtIn: boolean, handLive: boolean) {
   if (seat.folded) return { label: "folded", tone: "var(--text-faint)" };
   if (seat.allIn) return { label: "all in", tone: "var(--accent)" };
-  if (!dealtIn && seat.occupant) return { label: "sitting out", tone: "var(--text-faint)" };
+  // Out of chips is worth saying at any time; sitting out only means something
+  // once there is a hand to be sitting out of.
+  if (seat.stack === 0) return { label: "no chips", tone: "var(--lose)" };
+  if (handLive && !dealtIn) return { label: "sitting out", tone: "var(--text-faint)" };
   return null;
 }
 
