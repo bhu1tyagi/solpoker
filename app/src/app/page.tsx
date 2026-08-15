@@ -14,10 +14,15 @@ import { spring, stagger } from "@/styles/theme";
 import { FAUCET_AMOUNT } from "@/lib/constants";
 
 export default function Lobby() {
-  const { connected } = useWallet();
+  const { connected, publicKey } = useWallet();
   const { state, claim, busy, canClaim, nextClaimIn, refresh } = usePlayer();
   const { tables, loading, error, refresh: refreshTables } = useTables();
   const [creating, setCreating] = useState(false);
+
+  // Tables this wallet is sitting at, live or not. Losing track of a table you
+  // have chips on is the one navigation failure that really matters.
+  const me = publicKey?.toBase58();
+  const myTables = me ? tables.filter((t) => t.table.seats.includes(me)) : [];
 
   return (
     <>
@@ -175,6 +180,53 @@ export default function Lobby() {
               </Panel>
             </div>
 
+            {myTables.length > 0 && (
+              <Panel
+                style={{
+                  marginBottom: 22,
+                  borderLeft: "2px solid var(--accent)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 14,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontFamily: "var(--font-display)", fontSize: "var(--t-base)" }}>
+                      You are seated at {myTables.length === 1 ? "a table" : `${myTables.length} tables`}
+                    </div>
+                    <p
+                      style={{
+                        margin: "4px 0 0",
+                        fontSize: "var(--t-sm)",
+                        color: "var(--text-dim)",
+                      }}
+                    >
+                      Your chips stay on the seat until you cash out there.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {myTables.map((t) => (
+                      <Link
+                        key={t.table.address}
+                        href={`/table/${t.table.tableId}`}
+                        style={{ textDecoration: "none" }}
+                      >
+                        <Button variant="primary" size="sm">
+                          Return to table {String(t.table.tableId).slice(-4)}
+                        </Button>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </Panel>
+            )}
+
             <div
               style={{
                 display: "flex",
@@ -222,7 +274,7 @@ export default function Lobby() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {tables
-                .filter((t) => !t.outdated && !t.abandoned)
+                .filter((t) => (!t.outdated && !t.abandoned) || (me && t.table.seats.includes(me)))
                 .slice(0, 25)
                 .map((t, i) => (
                   <motion.div

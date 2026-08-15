@@ -16,7 +16,11 @@ import type { HandHistory } from "./verifier/verify-shuffle";
 
 const DB_NAME = "solpoker";
 const STORE = "hands";
-const VERSION = 1;
+// Version 2, and the upgrade checks before creating. Anything else that opens
+// this database without a version, devtools included, creates it empty at
+// version 1, and a version-1 open from here would then skip the upgrade and
+// leave every save failing quietly forever.
+const VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -24,8 +28,10 @@ function db() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, VERSION, {
       upgrade(database) {
-        const store = database.createObjectStore(STORE, { keyPath: "id" });
-        store.createIndex("byTable", "tableId");
+        if (!database.objectStoreNames.contains(STORE)) {
+          const store = database.createObjectStore(STORE, { keyPath: "id" });
+          store.createIndex("byTable", "tableId");
+        }
       },
     });
   }

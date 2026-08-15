@@ -33,11 +33,19 @@ export interface LobbyTable {
 }
 
 /**
- * Every table on the program.
+ * Every table on the program, including the ones currently playing.
  *
- * A table's base-layer account is owned by the delegation program while a game
- * is running, which is exactly the signal the lobby needs: you can only take a
- * seat while the table is back on the base layer.
+ * The subtlety that once made live tables vanish: while a game runs, the
+ * table's base-layer account is owned by the delegation program, not by ours.
+ * A query for our program's accounts therefore returns only idle tables, and a
+ * player who stepped away from a live one found a lobby that said it did not
+ * exist. So this asks both owners.
+ *
+ * The delegation program hosts frozen accounts from every app on the network,
+ * and Anchor discriminators are just a hash of the struct name, so another
+ * app's "Table" matches ours byte for byte. Each candidate is verified by
+ * re-deriving its address from its own table id; an impostor cannot sit at our
+ * program's address.
  */
 export function useTables() {
   const [tables, setTables] = useState<LobbyTable[]>([]);
@@ -48,8 +56,23 @@ export function useTables() {
     const conn = getBaseConnection();
     try {
       setError(null);
-      const accounts = await conn.getProgramAccounts(PROGRAM_ID, {
-        filters: [{ memcmp: { offset: 0, bytes: bs58.encode(TABLE_DISCRIMINATOR) } }],
+      const filters = [{ memcmp: { offset: 0, bytes: bs58.encode(TABLE_DISCRIMINATOR) } }];
+      const [ownAccounts, delegatedAccounts] = await Promise.all([
+        conn.getProgramAccounts(PROGRAM_ID, { filters }),
+        conn.getProgramAccounts(DELEGATION_PROGRAM, { filters }),
+      ]);
+      const enc = new TextEncoder();
+      const accounts = [...ownAccounts, ...delegatedAccounts].filter((a) => {
+        const d = a.account.data;
+        if (d.length < 16) return false;
+        const view = new DataView(d.buffer, d.byteOffset, d.byteLength);
+        const idBytes = new Uint8Array(8);
+        new DataView(idBytes.buffer).setBigUint64(0, view.getBigUint64(8, true), true);
+        const [expected] = PublicKey.findProgramAddressSync(
+          [enc.encode("table"), idBytes],
+          PROGRAM_ID,
+        );
+        return expected.equals(a.pubkey);
       });
 
       // One unreadable account must not take the lobby down with it. Older

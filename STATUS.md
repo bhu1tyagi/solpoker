@@ -125,6 +125,8 @@ important. See [What went wrong](#what-went-wrong-and-was-fixed).
 | Pausing a live table back to the base layer, through the UI | passed |
 | The creator deleting their table, through the UI | passed |
 | A non-creator being refused a delete | passed |
+| Two consecutive hands, both recorded, both verify | passed |
+| A live table listed in the lobby with a way back | passed |
 
 The two-browser gate is the one that matters. It drives the actual UI with two
 wallet-standard wallets backed by real keypairs and checks that each player sees
@@ -196,6 +198,31 @@ layer until someone pressed Pause.
 
 **A committed salt that never revealed stalled the table forever.**
 
+**History storage could be poisoned by whoever opened it first.** Opening an
+IndexedDB database without a version creates it, empty, if it does not exist.
+The test harness's history counter did exactly that on fresh browsers, so the
+app's own versioned open then skipped its store creation and every hand save
+failed silently. Anything can make that first blind open, devtools included.
+The store is now created defensively on a bumped version, which also heals any
+database already in that state.
+
+**A live table vanished from the lobby.** The lobby queried accounts owned by
+the program, but a delegated table is owned by the delegation program on the
+base layer, so the moment a game started its table disappeared from the list. A
+player who stepped away mid-game found a lobby insisting their table did not
+exist, with their chips on it. The lobby now asks both owners, verifies each
+candidate by re-deriving its address, and shows a "return to your table" banner
+whenever your wallet is in a seat map.
+
+**Hand records could be written with the previous hand's seed.** The capture
+fired when the table flipped to waiting, but the settlement data had not
+arrived, and the previous hand's result hash made the state look settled. Worse,
+watching for the settled moment at all turned out fragile: account notifications
+arrive in any order and grouping, and the brief settled state can be skipped
+entirely between two snapshots. Capture now fetches the hand account directly
+and retries until it sees the settled shape, which is safe because everything
+the record needs stays on the hand from settlement until the next hand starts.
+
 ## Known problems
 
 **Legacy tables.** Five tables created by earlier builds remain on chain with
@@ -217,6 +244,13 @@ The trust page says so.
 
 **Latency misses its target.** 348ms median against a sub-100ms goal. Masked
 rather than solved.
+
+**Once a shuffle is fulfilled, the table must play that hand before pausing.**
+The VRF randomness for the next hand sits on the private deck, and undelegating
+a deck that holds randomness is refused, because the salts are public and
+republishing would let the next deal be computed. So a pause request that lands
+after fulfillment waits one hand. The client retries around it; it is a corner,
+not a defect, but worth knowing.
 
 **Deleting a table is several transactions.** One per occupied seat, then one to
 close. Fine for six seats, clumsy in principle.

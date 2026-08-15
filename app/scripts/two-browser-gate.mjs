@@ -245,71 +245,114 @@ async function main() {
     check(await seesOwnCards(B), "B can see its own hole cards face up");
     await shot(A, "6b-own-cards");
 
-    log("\n9. play the hand out");
+    // History entries live in IndexedDB, which is the ground truth for
+    // "a hand finished and was recorded".
+    const historyCount = () =>
+      A.page
+        .evaluate(
+          () =>
+            new Promise((res) => {
+              // Never open the database blind: opening one that does not exist
+              // yet CREATES it, empty, and the app's own versioned open then
+              // skips its store creation. That exact accident once made every
+              // history save fail silently while this counter reported zero.
+              indexedDB
+                .databases()
+                .then((dbs) => {
+                  if (!dbs.some((d) => d.name === "solpoker")) return res(0);
+                  const req = indexedDB.open("solpoker");
+                  req.onerror = () => res(0);
+                  req.onsuccess = () => {
+                    try {
+                      if (!req.result.objectStoreNames.contains("hands")) return res(0);
+                      const c = req.result.transaction("hands").objectStore("hands").count();
+                      c.onsuccess = () => res(c.result);
+                      c.onerror = () => res(0);
+                    } catch {
+                      res(0);
+                    }
+                  };
+                })
+                .catch(() => res(0));
+            }),
+        )
+        .catch(() => 0);
+
     let acted = 0;
-    for (let round = 0; round < 60; round++) {
+    const clickThrough = async () => {
       for (const b of [A, B]) {
         for (const label of [/^check$/i, /^call/i]) {
           const btn = b.page.getByRole("button", { name: label });
           if (await btn.isVisible().catch(() => false)) {
             await btn.click().catch(() => {});
             acted++;
-            await b.page.waitForTimeout(400);
+            await b.page.waitForTimeout(350);
             break;
           }
         }
       }
-      const done = await A.page
-        .evaluate(() => /showdown|waiting|ready to start/i.test(document.body.innerText))
-        .catch(() => false);
-      if (done && acted > 3) break;
-      await sleep(1200);
-    }
+    };
+    const playUntil = async (hands, budgetMs) => {
+      const deadline = Date.now() + budgetMs;
+      while (Date.now() < deadline) {
+        await clickThrough();
+        if ((await historyCount()) >= hands) return true;
+        await sleep(1000);
+      }
+      return false;
+    };
 
-    // Showdown is not the end. Settlement lands a moment later and that is
-    // what writes the hand into history, so wait for it rather than racing it.
-    const settled = await A.page
-      .waitForFunction(
-        () => !/showdown/i.test(document.body.innerText),
-        { timeout: 120_000 },
-      )
+    log("\n9. play two hands back to back");
+    // Two hands, because the second one is where a stale capture shows up: the
+    // hand account still holds the first hand's seed until settlement lands.
+    const one = await playUntil(1, 300_000);
+    check(one, "the first hand settles and is recorded");
+    await shot(A, "7-after-play");
+    const two = await playUntil(2, 300_000);
+    check(two, "a second hand starts by itself, settles, and is recorded");
+    check(acted > 0, `players could act through the UI (${acted} actions)`);
+
+    log("\n10. the lobby still lists the live table");
+    await B.page.goto(BASE, { waitUntil: "networkidle" });
+    const lobbyListsLive = await B.page
+      .waitForFunction((id) => document.body.innerText.includes(id), tableId, {
+        timeout: 45_000,
+      })
       .then(() => true)
       .catch(() => false);
-    check(settled, "the hand settles after showdown");
-    await A.page.waitForTimeout(3000);
-    check(acted > 0, `players could act through the UI (${acted} actions)`);
-    await shot(A, "7-after-play");
+    check(lobbyListsLive, "a table mid-game appears in the lobby");
+    const returnBtn = B.page.getByRole("button", { name: /return to table/i }).first();
+    const hasReturn = await returnBtn.isVisible().catch(() => false);
+    check(hasReturn, "the lobby offers a way back to your table");
+    await shot(B, "7b-lobby-live");
+    if (hasReturn) {
+      await returnBtn.click();
+      await B.page.waitForURL(/\/table\//, { timeout: 30_000 }).catch(() => {});
+    } else {
+      await B.page.goto(`${BASE}/table/${tableId}`, { waitUntil: "networkidle" });
+    }
+    await B.page.waitForTimeout(3000);
 
-    // Once there is a board, the client should be able to name your hand.
-    const named = await A.page
-      .evaluate(() =>
-        /pair of|high card|two pair|straight|flush|three |four |full house/i.test(
-          document.body.innerText,
-        ),
-      )
-      .catch(() => false);
-    log(`  ${named ? "ok  " : "note"} hand strength shown to the player`);
-
-    log("\n10. hand history and verification");
+    log("\n11. hand history: both hands verify");
     await A.page.goto(`${BASE}/history/${tableId}`, { waitUntil: "networkidle" });
     await A.page.waitForTimeout(2500);
-    const hasHand = await A.page
-      .getByRole("button", { name: /verify this shuffle/i })
-      .first()
-      .isVisible()
-      .catch(() => false);
-    check(hasHand, "a finished hand was recorded in history");
-    if (hasHand) {
-      await A.page.getByRole("button", { name: /verify this shuffle/i }).first().click();
-      const verified = await A.page
-        .waitForFunction(() => /\bVerified\b/.test(document.body.innerText), { timeout: 30_000 })
-        .then(() => true)
-        .catch(() => false);
-      check(verified, "the shuffle verifies in the browser");
-      await shot(A, "8-verified");
+    for (let i = 0; i < 4; i++) {
+      const btn = A.page.getByRole("button", { name: /verify this shuffle/i }).first();
+      if (!(await btn.isVisible().catch(() => false))) break;
+      await btn.click().catch(() => {});
+      await A.page.waitForTimeout(1500);
     }
+    const verifiedCount = await A.page
+      .evaluate(() => (document.body.innerText.match(/\bVerified\b/g) ?? []).length)
+      .catch(() => 0);
+    const failedCount = await A.page
+      .evaluate(() => (document.body.innerText.match(/\bFailed\b/g) ?? []).length)
+      .catch(() => 0);
+    check(verifiedCount >= 2, `both hands verify in the browser (${verifiedCount} verified)`);
+    check(failedCount === 0, "no hand fails verification");
+    await shot(A, "8-verified");
 
-    log("\n11. the creator can delete the table");
+    log("\n12. the creator can delete the table");
     await A.page.goto(`${BASE}/table/${tableId}`, { waitUntil: "networkidle" });
     // The page has to restore the session key and check delegation before it
     // knows which buttons to offer.
@@ -319,22 +362,43 @@ async function main() {
       })
       .catch(() => {});
 
-    // Pause first: a live table is delegated and cannot be deleted.
-    const pauseBtn = A.page.getByRole("button", { name: /pause table/i });
-    if (await pauseBtn.isVisible().catch(() => false)) {
-      await pauseBtn.click();
-      const paused = await A.page
-        .waitForFunction(() => /on Solana/i.test(document.body.innerText), { timeout: 300_000 })
-        .then(() => true)
-        .catch(() => false);
-      check(paused, "the table pauses back to the base layer");
-      if (!paused) {
-        const shown = await A.page
-          .evaluate(() => document.body.innerText.slice(0, 700))
-          .catch(() => "");
-        log(`      on screen: ${shown.replace(/\s+/g, " ").slice(0, 400)}`);
-        (A.page.__toasts ?? []).slice(-4).forEach((t) => log(`      console: ${t}`));
+    // Pause first: a live table is delegated and cannot be deleted. If the
+    // next shuffle was already fulfilled, the table has to play that hand out
+    // before it can leave the rollup, so pausing retries around a hand.
+    let paused = false;
+    for (let attempt = 0; attempt < 3 && !paused; attempt++) {
+      const pauseBtn = A.page.getByRole("button", { name: /pause table/i });
+      if (await pauseBtn.isVisible().catch(() => false)) {
+        await pauseBtn.click().catch(() => {});
+        paused = await A.page
+          .waitForFunction(() => /on Solana/i.test(document.body.innerText), {
+            timeout: 120_000,
+          })
+          .then(() => true)
+          .catch(() => false);
       }
+      if (!paused) {
+        const deadline = Date.now() + 90_000;
+        while (Date.now() < deadline) {
+          await clickThrough();
+          if (
+            await A.page
+              .getByRole("button", { name: /pause table/i })
+              .isVisible()
+              .catch(() => false)
+          )
+            break;
+          await sleep(1500);
+        }
+      }
+    }
+    check(paused, "the table pauses back to the base layer");
+    if (!paused) {
+      const shown = await A.page
+        .evaluate(() => document.body.innerText.slice(0, 700))
+        .catch(() => "");
+      log(`      on screen: ${shown.replace(/\s+/g, " ").slice(0, 400)}`);
+      (A.page.__toasts ?? []).slice(-4).forEach((t) => log(`      console: ${t}`));
     }
     await A.page
       .waitForFunction(() => /delete table/i.test(document.body.innerText), { timeout: 90_000 })
@@ -368,7 +432,7 @@ async function main() {
       .catch(() => false);
     check(!bCanDelete, "a non-creator is not offered a delete button");
 
-    log("\n12. console errors");
+    log("\n13. console errors");
     for (const b of [A, B]) {
       const real = b.errors.filter(
         (e) => !/favicon|Download the React DevTools|preload/i.test(e),

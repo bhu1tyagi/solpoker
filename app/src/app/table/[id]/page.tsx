@@ -172,7 +172,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   }, [config]);
   const isCreator = !!me && creator === me;
 
-  const capture = useHandCapture(tableView?.tableId ?? null);
+  const capture = useHandCapture(tableView?.tableId ?? null, erConnection, table);
 
   // Read from whichever layer owns the accounts right now. Before delegation
   // the game lives on the base layer, and that is where seats fill up. Hole
