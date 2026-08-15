@@ -11,12 +11,12 @@ import { AnimatedNumber } from "./AnimatedNumber";
  */
 
 const DENOMS = [
-  { at: 1000, color: "#3b3f6b", edge: "#575c93" },
-  { at: 500, color: "#5a3a6b", edge: "#7d5493" },
-  { at: 100, color: "#2f5b45", edge: "#437d60" },
-  { at: 25, color: "#6b4a2a", edge: "#93683c" },
-  { at: 5, color: "#6b2f2f", edge: "#934343" },
-  { at: 1, color: "#4a4f52", edge: "#6d7376" },
+  { at: 1000, color: "#3d4a86", edge: "#5f6fb5" },
+  { at: 500, color: "#5a3d7a", edge: "#8262ad" },
+  { at: 100, color: "#1f5c55", edge: "#37847a" },
+  { at: 25, color: "#7a5a32", edge: "#a67f4b" },
+  { at: 5, color: "#7a3d44", edge: "#a65a63" },
+  { at: 1, color: "#44505a", edge: "#66757f" },
 ];
 
 function stackFor(amount: number) {

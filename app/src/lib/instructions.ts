@@ -192,16 +192,18 @@ export async function vacateSeatIx(
   i: number,
   occupant: PublicKey,
   config: PublicKey,
-  creator: PublicKey,
+  /** The creator at any time, or anyone once the table is game-stale. */
+  payer: PublicKey,
 ) {
   return program.methods
     .vacateSeat(i)
     .accountsPartial({
       table,
       config,
+      hand: handPda(table),
       seat: seatPda(table, i),
       player: playerPda(occupant),
-      creator,
+      payer,
     })
     .instruction();
 }

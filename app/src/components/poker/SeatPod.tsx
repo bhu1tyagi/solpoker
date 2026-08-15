@@ -121,7 +121,7 @@ export function SeatPod({
           border: `1px solid ${isTurn ? "var(--accent-deep)" : "var(--line)"}`,
           borderRadius: "var(--r-card)",
           padding: "6px 10px 6px 6px",
-          boxShadow: isTurn ? "var(--ring-gold)" : "var(--shadow-1)",
+          boxShadow: isTurn ? "var(--ring-accent)" : "var(--shadow-1)",
           minWidth: 132,
           transition: "border-color 0.2s ease, box-shadow 0.2s ease",
         }}

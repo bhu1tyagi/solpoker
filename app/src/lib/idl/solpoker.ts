@@ -2721,29 +2721,36 @@ export type Solpoker = {
       "accounts": [
         {
           "name": "table",
-          "writable": true,
+          "docs": [
+            "so seats on tables from older builds can still be cleared."
+          ],
+          "writable": true
+        },
+        {
+          "name": "config"
+        },
+        {
+          "name": "hand",
+          "docs": [
+            "The staleness clock for the non-creator path."
+          ],
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  116,
+                  104,
                   97,
-                  98,
-                  108,
-                  101
+                  110,
+                  100
                 ]
               },
               {
                 "kind": "account",
-                "path": "table.table_id",
-                "account": "table"
+                "path": "table"
               }
             ]
           }
-        },
-        {
-          "name": "config"
         },
         {
           "name": "seat",
@@ -2774,7 +2781,10 @@ export type Solpoker = {
           }
         },
         {
-          "name": "creator",
+          "name": "payer",
+          "docs": [
+            "The creator at any time, or anyone once the table is stale."
+          ],
           "signer": true
         }
       ],

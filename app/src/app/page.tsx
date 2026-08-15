@@ -86,38 +86,40 @@ export default function Lobby() {
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ ...spring.gentle, delay: 0.05 + i * 0.06 }}
+                  style={{
+                    borderTop: "1px solid var(--line)",
+                    paddingTop: 16,
+                  }}
                 >
-                  <Panel style={{ height: "100%" }}>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontSize: "var(--t-sm)",
-                        color: "var(--accent-deep)",
-                        marginBottom: 8,
-                      }}
-                    >
-                      {s.n}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontSize: "var(--t-base)",
-                        marginBottom: 6,
-                      }}
-                    >
-                      {s.t}
-                    </div>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "var(--t-sm)",
-                        color: "var(--text-dim)",
-                        lineHeight: 1.55,
-                      }}
-                    >
-                      {s.d}
-                    </p>
-                  </Panel>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: "var(--t-sm)",
+                      color: "var(--accent)",
+                      marginBottom: 8,
+                    }}
+                  >
+                    {s.n}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: "var(--t-base)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    {s.t}
+                  </div>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "var(--t-sm)",
+                      color: "var(--text-dim)",
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    {s.d}
+                  </p>
                 </motion.div>
               ))}
             </div>
@@ -126,20 +128,21 @@ export default function Lobby() {
           <>
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: 14,
-                marginBottom: 30,
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "28px 44px",
+                padding: "10px 4px 30px",
               }}
             >
-              <Panel>
+              <div>
                 <Stat
                   label="Your chips"
                   value={state ? state.chips.toLocaleString() : "..."}
                   size="lg"
                   tone="var(--accent)"
                 />
-                <div style={{ marginTop: 14 }}>
+                <div style={{ marginTop: 10 }}>
                   <Button
                     variant={canClaim ? "primary" : "ghost"}
                     size="sm"
@@ -155,29 +158,48 @@ export default function Lobby() {
                       : `Next claim in ${formatWait(nextClaimIn)}`}
                   </Button>
                 </div>
-              </Panel>
+              </div>
 
-              <Panel>
+              <div
+                style={{
+                  width: 1,
+                  alignSelf: "stretch",
+                  background:
+                    "linear-gradient(180deg, transparent, var(--line), transparent)",
+                }}
+              />
+
+              <div>
                 <Stat label="Hands played" value={state?.handsPlayed ?? 0} size="lg" />
                 <p
                   style={{
                     color: "var(--text-faint)",
                     fontSize: "var(--t-xs)",
-                    margin: "12px 0 0",
+                    margin: "10px 0 0",
+                    maxWidth: 220,
                   }}
                 >
                   One free claim a day. The faucet is the only source of chips.
                 </p>
-              </Panel>
+              </div>
 
-              <Panel>
+              <div
+                style={{
+                  width: 1,
+                  alignSelf: "stretch",
+                  background:
+                    "linear-gradient(180deg, transparent, var(--line), transparent)",
+                }}
+              />
+
+              <div>
                 <Stat label="Start something" value="New table" size="lg" />
-                <div style={{ marginTop: 14 }}>
+                <div style={{ marginTop: 10 }}>
                   <Button variant="ghost" size="sm" onClick={() => setCreating(true)}>
                     Create a table
                   </Button>
                 </div>
-              </Panel>
+              </div>
             </div>
 
             {myTables.length > 0 && (

@@ -20,11 +20,13 @@ export function TopBar({ chips }: { chips?: number }) {
         justifyContent: "space-between",
         gap: 16,
         padding: "16px 24px",
-        borderBottom: "1px solid var(--line)",
+        borderBottom: "none",
+        backgroundImage:
+          "linear-gradient(180deg, rgba(11, 15, 22, 0.92), rgba(11, 15, 22, 0.55))",
+        boxShadow: "0 1px 0 var(--line)",
         position: "sticky",
         top: 0,
-        background: "rgba(11, 18, 14, 0.86)",
-        backdropFilter: "blur(8px)",
+        backdropFilter: "blur(10px)",
         zIndex: 30,
       }}
     >

@@ -85,13 +85,13 @@ button {
   height: 38px !important;
   padding: 0 16px !important;
   border-radius: var(--r-control) !important;
-  background: var(--accent) !important;
-  color: #12180f !important;
+  background: var(--grad-accent) !important;
+  color: var(--on-accent) !important;
   font-weight: 600 !important;
-  transition: background 0.12s ease;
+  transition: filter 0.12s ease;
 }
 .wallet-adapter-button:not([disabled]):hover {
-  background: var(--accent-deep) !important;
+  filter: brightness(1.08);
 }
 .wallet-adapter-modal-wrapper {
   background: var(--surface) !important;

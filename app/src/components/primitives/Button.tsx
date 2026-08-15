@@ -9,10 +9,10 @@ type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, React.CSSProperties> = {
   primary: {
-    background: "var(--accent)",
-    color: "#12180f",
+    background: "var(--grad-accent)",
+    color: "var(--on-accent)",
     fontWeight: 600,
-    boxShadow: "0 1px 0 rgba(255,255,255,0.15) inset, var(--shadow-1)",
+    boxShadow: "0 1px 0 rgba(255,255,255,0.22) inset, var(--shadow-1)",
   },
   ghost: {
     background: "var(--surface-2)",

@@ -92,7 +92,7 @@ function Face({
         position: "absolute",
         inset: 0,
         backfaceVisibility: "hidden",
-        borderRadius: 6,
+        borderRadius: 8,
         background: "var(--card-face)",
         color: red ? "var(--card-red)" : "var(--card-black)",
         boxShadow: highlighted
@@ -139,19 +139,19 @@ function Back({ s }: { s: (typeof SIZES)[Size] }) {
         inset: 0,
         backfaceVisibility: "hidden",
         transform: "rotateY(180deg)",
-        borderRadius: 6,
+        borderRadius: 8,
         background: "var(--card-back)",
         boxShadow: "var(--shadow-1)",
-        border: "1px solid rgba(216, 179, 106, 0.22)",
+        border: "1px solid var(--card-back-line)",
         overflow: "hidden",
       }}
     >
-      {/* A gold lattice, faint enough to read as texture rather than pattern. */}
+      {/* A mint lattice, faint enough to read as texture rather than pattern. */}
       <div
         style={{
           position: "absolute",
           inset: 3,
-          borderRadius: 4,
+          borderRadius: 5,
           border: "1px solid var(--card-back-line)",
           backgroundImage: `repeating-linear-gradient(45deg, var(--card-back-line) 0 1px, transparent 1px ${Math.round(s.w / 6)}px),
                             repeating-linear-gradient(-45deg, var(--card-back-line) 0 1px, transparent 1px ${Math.round(s.w / 6)}px)`,
@@ -170,9 +170,9 @@ export function CardSlot({ size = "md" }: { size?: Size }) {
       style={{
         width: s.w,
         height: s.h,
-        borderRadius: 6,
+        borderRadius: 8,
         border: "1px dashed var(--line)",
-        background: "rgba(0,0,0,0.15)",
+        background: "rgba(0, 0, 0, 0.14)",
       }}
     />
   );

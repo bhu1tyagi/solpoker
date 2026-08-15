@@ -362,24 +362,73 @@ pub struct LeaveTable<'info> {
 
 /// Send a seated player home, with their chips.
 ///
-/// A table's creator can clear a seat so the table can be closed, without
-/// needing everyone who ever sat down to come back and cash out themselves.
-/// Chips go to the occupant's own balance, never to the creator, so this
-/// removes a player from a table but cannot take anything from them.
+/// The creator can clear a seat at any time between hands. Anyone else can
+/// too, once the table has been game-stale for an hour: tables get abandoned
+/// with players still seated, creators lose keys, and without this those
+/// seats and the chips on them would be stuck forever. Staleness is judged by
+/// the hand's action deadline, which every hand keeps fresh while anyone is
+/// actually playing.
 ///
-/// Everything the seat holds is returned, both the stack and whatever was
-/// committed to a pot, because an undelegated table in the middle of a hand is
-/// an abandoned one and those chips belong to somebody.
+/// Whoever calls it, the chips go to the seat occupant's own balance and
+/// nowhere else, so this can move a player out of a chair but can never take
+/// anything from them.
 ///
-/// Only while the table is undelegated, which is enforced by account
-/// ownership: a delegated table belongs to the delegation program and Anchor
-/// refuses it outright. So this can never reach into a running game.
+/// The table is read and written raw rather than deserialized, so seats on
+/// tables from older builds can still be cleared. Recovering people's chips is
+/// the one job that must not break when a layout changes.
 pub fn vacate_seat(ctx: Context<VacateSeat>, seat_index: u8) -> Result<()> {
     require!(
         (seat_index as usize) < MAX_SEATS,
         PokerError::SeatIndexOutOfRange
     );
-    assert_creator(&ctx.accounts.config, &ctx.accounts.table, &ctx.accounts.creator)?;
+
+    let table_info = &ctx.accounts.table;
+    require_keys_eq!(*table_info.owner, crate::ID, PokerError::SeatTableMismatch);
+
+    let now = Clock::get()?.unix_timestamp;
+    let (config_key, stored_creator) = {
+        let data = table_info.try_borrow_data()?;
+        require!(data.len() >= 250, PokerError::SeatOrderMismatch);
+
+        let table_id = u64::from_le_bytes(
+            data[8..16].try_into().map_err(|_| error!(PokerError::SeatOrderMismatch))?,
+        );
+        let (expected, _) =
+            Pubkey::find_program_address(&[TABLE_SEED, &table_id.to_le_bytes()], &crate::ID);
+        require_keys_eq!(table_info.key(), expected, PokerError::SeatOrderMismatch);
+
+        // Between hands only. Byte 249 is the state and has never moved.
+        require!(data[249] == 0, PokerError::HandInProgress);
+
+        let config_key = Pubkey::try_from(&data[16..48])
+            .map_err(|_| error!(PokerError::SeatOrderMismatch))?;
+        require_keys_eq!(*ctx.accounts.config.key, config_key, PokerError::SeatTableMismatch);
+        require_keys_eq!(*ctx.accounts.config.owner, crate::ID, PokerError::SeatTableMismatch);
+        let cfg = ctx.accounts.config.try_borrow_data()?;
+        require!(cfg.len() >= 48, PokerError::SeatOrderMismatch);
+        let stored_creator = Pubkey::try_from(&cfg[16..48])
+            .map_err(|_| error!(PokerError::SeatOrderMismatch))?;
+
+        // The table's seat map must agree with the seat account being cleared.
+        let at = 48 + (seat_index as usize) * 32;
+        let mapped = Pubkey::try_from(&data[at..at + 32])
+            .map_err(|_| error!(PokerError::SeatOrderMismatch))?;
+        require_keys_eq!(mapped, ctx.accounts.seat.occupant, PokerError::SeatTableMismatch);
+
+        (config_key, stored_creator)
+    };
+    let _ = config_key;
+
+    if ctx.accounts.payer.key() != stored_creator {
+        // Not the creator, so the table must have been dead for a while. The
+        // deadline is refreshed by every action of every hand, so an hour past
+        // it with the table idle means nobody is coming back for now.
+        let hand = &ctx.accounts.hand;
+        require!(
+            hand.hand_number > 0 && now - hand.deadline > ABANDONED_AFTER_SECS,
+            PokerError::TableNotAbandoned
+        );
+    }
 
     let seat = &mut ctx.accounts.seat;
     require!(seat.is_occupied(), PokerError::SeatEmpty);
@@ -403,9 +452,21 @@ pub fn vacate_seat(ctx: Context<VacateSeat>, seat_index: u8) -> Result<()> {
     seat.occupant = Table::EMPTY_SEAT;
     seat.stack = 0;
     seat.reset_for_new_hand(false);
-    ctx.accounts.table.seats[seat_index as usize] = Table::EMPTY_SEAT;
-    let now = Clock::get()?.unix_timestamp;
-    ctx.accounts.table.touch_vacancy(now);
+
+    // Clear the slot in the raw seat map and keep the vacancy clock honest.
+    {
+        let mut data = table_info.try_borrow_mut_data()?;
+        let at = 48 + (seat_index as usize) * 32;
+        data[at..at + 32].fill(0);
+        let vacant = (0..MAX_SEATS).all(|i| {
+            let a = 48 + i * 32;
+            data[a..a + 32].iter().all(|b| *b == 0)
+        });
+        if data.len() >= 259 {
+            let stamp: i64 = if vacant { now } else { 0 };
+            data[251..259].copy_from_slice(&stamp.to_le_bytes());
+        }
+    }
 
     msg!("seat {} vacated, {} chips returned", seat_index, returned);
     Ok(())
@@ -495,9 +556,27 @@ pub fn close_table(ctx: Context<CloseTable>) -> Result<()> {
 
     if ctx.accounts.payer.key() != stored_creator {
         let now = Clock::get()?.unix_timestamp;
-        require!(empty_since != 0, PokerError::TableNotAbandoned);
+        // Two ways a table counts as abandoned: it has sat empty for an hour,
+        // or its last game action was over an hour ago. The second matters
+        // because seats can be cleared by anyone once the game is stale, and
+        // the husk left behind should not need its own extra hour.
+        let empty_long_enough = empty_since != 0 && now - empty_since >= ABANDONED_AFTER_SECS;
+        let game_stale = {
+            let hand = ctx.accounts.hand.try_borrow_data()?;
+            if hand.len() >= 82 {
+                let hand_number = u64::from_le_bytes(
+                    hand[40..48].try_into().map_err(|_| error!(PokerError::SeatOrderMismatch))?,
+                );
+                let deadline = i64::from_le_bytes(
+                    hand[74..82].try_into().map_err(|_| error!(PokerError::SeatOrderMismatch))?,
+                );
+                hand_number > 0 && now - deadline > ABANDONED_AFTER_SECS
+            } else {
+                false
+            }
+        };
         require!(
-            now - empty_since >= ABANDONED_AFTER_SECS,
+            empty_long_enough || game_stale,
             PokerError::TableNotAbandoned
         );
     }
@@ -566,15 +645,21 @@ fn drain<'a, 'b>(account: &AccountInfo<'a>, to: &AccountInfo<'b>) -> Result<()> 
 #[derive(Accounts)]
 #[instruction(seat_index: u8)]
 pub struct VacateSeat<'info> {
-    #[account(mut, seeds = [TABLE_SEED, &table.table_id.to_le_bytes()], bump = table.bump)]
-    pub table: Account<'info, Table>,
+    /// CHECK: address, id and seat map verified raw inside, then written raw,
+    /// so seats on tables from older builds can still be cleared.
+    #[account(mut)]
+    pub table: AccountInfo<'info>,
     /// CHECK: read raw for the creator, so an older config layout still works.
     pub config: AccountInfo<'info>,
+    /// The staleness clock for the non-creator path.
+    #[account(seeds = [HAND_SEED, table.key().as_ref()], bump = hand.bump)]
+    pub hand: Account<'info, Hand>,
     #[account(mut, seeds = [SEAT_SEED, table.key().as_ref(), &[seat_index]], bump = seat.bump)]
     pub seat: Account<'info, Seat>,
     #[account(mut, seeds = [PLAYER_SEED, player.authority.as_ref()], bump = player.bump)]
     pub player: Account<'info, Player>,
-    pub creator: Signer<'info>,
+    /// The creator at any time, or anyone once the table is stale.
+    pub payer: Signer<'info>,
 }
 
 #[derive(Accounts)]

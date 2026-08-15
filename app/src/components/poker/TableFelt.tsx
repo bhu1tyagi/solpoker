@@ -5,6 +5,7 @@ import { PlayingCard, CardSlot } from "@/components/primitives/PlayingCard";
 import { ChipStack } from "@/components/primitives/Chip";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { SeatPod } from "./SeatPod";
+import { ShuffleLoop } from "./ShuffleLoop";
 import { BET_POSITIONS, POT_POSITION, SEAT_POSITIONS, spring, stagger } from "@/styles/theme";
 import { MAX_SEATS, NO_SEAT, STREET_NAMES } from "@/lib/constants";
 import { NO_CARD } from "@/lib/engine/cards";
@@ -24,6 +25,10 @@ interface Props {
   onSit?: (index: number) => void;
   /** Where a viewer sits determines the rotation, so you are always at the bottom. */
   status?: string;
+  /** The table is working on something invisible, so show it shuffling. */
+  working?: boolean;
+  /** A long operation with steps, drawn over the felt. */
+  overlay?: string;
 }
 
 export function TableFelt({
@@ -39,6 +44,8 @@ export function TableFelt({
   timeoutSecs,
   onSit,
   status,
+  working = false,
+  overlay,
 }: Props) {
   // Rotate the table so the local player sits at the bottom. Spectators get the
   // natural order.
@@ -68,10 +75,10 @@ export function TableFelt({
           position: "absolute",
           inset: "8% 4%",
           borderRadius: "50% / 50%",
-          background: "linear-gradient(180deg, #16241c 0%, #0c1712 100%)",
+          background: "linear-gradient(180deg, var(--felt-rail-hi) 0%, var(--felt-rail-lo) 100%)",
           padding: 14,
           boxShadow:
-            "0 26px 70px rgba(0,0,0,0.6), inset 0 1px 0 rgba(216,179,106,0.10)",
+            "0 26px 70px rgba(3,8,14,0.6), inset 0 1px 0 var(--accent-soft)",
         }}
       >
         <div
@@ -80,7 +87,7 @@ export function TableFelt({
             inset: 14,
             borderRadius: "50% / 50%",
             background:
-              "radial-gradient(ellipse at 50% 40%, #17492f 0%, var(--felt-hi) 42%, var(--felt-lo) 78%, #091a12 100%)",
+              "radial-gradient(ellipse at 50% 40%, var(--felt-glow) 0%, var(--felt-hi) 42%, var(--felt-lo) 78%, var(--felt-edge) 100%)",
             boxShadow:
               "inset 0 10px 40px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.5)",
           }}
@@ -90,7 +97,7 @@ export function TableFelt({
             position: "absolute",
             inset: 26,
             borderRadius: "50% / 50%",
-            border: "1px solid rgba(216,179,106,0.13)",
+            border: "1px solid var(--accent-soft)",
             pointerEvents: "none",
           }}
         />
@@ -109,27 +116,33 @@ export function TableFelt({
           gap: 12,
         }}
       >
-        <div style={{ display: "flex", gap: 6 }}>
-          {board.map((card, i) => (
-            <div key={i}>
-              {card === NO_CARD ? (
-                <CardSlot size="lg" />
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0, y: -14, rotateY: 180 }}
-                  animate={{ opacity: 1, y: 0, rotateY: 0 }}
-                  transition={{ ...spring.deal, delay: (i % 3) * stagger.board }}
-                >
-                  <PlayingCard
-                    card={card}
-                    size="lg"
-                    highlighted={winning?.has(card)}
-                  />
-                </motion.div>
-              )}
-            </div>
-          ))}
-        </div>
+        {working && !handLive ? (
+          <div style={{ padding: "6px 0 2px" }}>
+            <ShuffleLoop />
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 6 }}>
+            {board.map((card, i) => (
+              <div key={i}>
+                {card === NO_CARD ? (
+                  <CardSlot size="lg" />
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: -14, rotateY: 180 }}
+                    animate={{ opacity: 1, y: 0, rotateY: 0 }}
+                    transition={{ ...spring.deal, delay: (i % 3) * stagger.board }}
+                  >
+                    <PlayingCard
+                      card={card}
+                      size="lg"
+                      highlighted={winning?.has(card)}
+                    />
+                  </motion.div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         <AnimatePresence mode="wait">
           {pot > 0 && (
@@ -146,7 +159,7 @@ export function TableFelt({
                 background: "rgba(0,0,0,0.35)",
                 borderRadius: 999,
                 padding: "5px 14px",
-                border: "1px solid rgba(216,179,106,0.16)",
+                border: "1px solid var(--accent-soft)",
               }}
             >
               <span
@@ -225,6 +238,29 @@ export function TableFelt({
           </div>
         );
       })}
+
+      <AnimatePresence>
+        {overlay && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            style={{
+              position: "absolute",
+              inset: "8% 4%",
+              borderRadius: "50% / 50%",
+              background: "rgba(6, 10, 15, 0.72)",
+              backdropFilter: "blur(3px)",
+              display: "grid",
+              placeItems: "center",
+              zIndex: 25,
+            }}
+          >
+            <ShuffleLoop label={overlay} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Chips each seat has put in on this street, on their way to the pot. */}
       {Array.from({ length: MAX_SEATS }, (_, i) => {

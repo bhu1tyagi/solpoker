@@ -285,6 +285,29 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const fundedCount = seats.filter((s) => s?.occupant && s.stack > 0).length;
   const status = useStatusLine(delegated, tableView, hand, seats, fundedCount);
 
+  // The table is doing invisible work: salts, the enclave drawing randomness,
+  // the deal being prepared. Show it shuffling rather than showing nothing.
+  const working =
+    delegated === true && tableView?.state === 0 && fundedCount >= 2;
+
+  // Long operations narrate themselves over the felt.
+  const overlay =
+    actions.busy === "start:funding"
+      ? "funding the session key"
+      : actions.busy === "start:delegating"
+        ? "moving the table into the enclave"
+        : actions.busy === "start:waiting"
+          ? "waiting for the enclave"
+          : actions.busy === "start:securing"
+            ? "locking the cards down"
+            : actions.busy === "start"
+              ? "starting"
+              : actions.busy === "pause"
+                ? "returning to Solana"
+                : actions.busy === "delete"
+                  ? "closing the table"
+                  : undefined;
+
   return (
     <>
       <TopBar chips={player.state?.chips} />
@@ -392,6 +415,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           winners={winnerSeats}
           timeoutSecs={tableConfig?.actionTimeoutSecs ?? 30}
           status={status}
+          working={working}
+          overlay={overlay}
           onSit={
             delegated === false && mySeat < 0 && connected
               ? (i) => {

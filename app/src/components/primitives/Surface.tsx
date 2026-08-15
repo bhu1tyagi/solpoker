@@ -24,11 +24,11 @@ export function Panel({
       whileHover={hoverable ? { y: -2, background: "var(--surface-2)" } : undefined}
       transition={spring.snappy}
       style={{
-        background: "var(--surface)",
+        background: "var(--grad-surface)",
         border: "1px solid var(--line)",
-        borderRadius: "var(--r-card)",
+        borderRadius: "var(--r-panel)",
         boxShadow: "var(--shadow-1)",
-        padding: padded ? 18 : 0,
+        padding: padded ? 20 : 0,
         cursor: onClick ? "pointer" : undefined,
         ...style,
       }}

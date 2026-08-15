@@ -1,56 +1,72 @@
 /*
- * Midnight Felt.
+ * Nocturne.
  *
- * Deep green-black felt with warm gold. Chosen for long sessions: nothing is
- * pure white or pure black, so contrast is high without glare. Body text sits
- * around 7:1 on surface, dim text around 4.5:1.
+ * Deep ink navy under faint aurora washes, mint for everything that matters,
+ * petrol felt. Surfaces are glass rather than boxes: a soft gradient and a
+ * hairline, not a border and a fill, so the page reads as one space with
+ * things resting in it rather than a grid of containers.
  *
- * This is a committed dark palette. There is no light variant, because a poker
- * felt lit like a spreadsheet stops reading as a table.
+ * Nothing is pure white or pure black. Body text sits near 8:1 on the ground,
+ * dim text near 4.5:1. This is a committed dark palette; a poker room lit like
+ * a spreadsheet stops feeling like a room.
  */
 
 :root {
-  /* Surfaces, darkest to lightest */
-  --bg: #0b120e;
-  --felt-hi: #123a2a;
-  --felt-lo: #0e2c20;
-  --surface: #141b17;
-  --surface-2: #1b241f;
-  --line: #26312a;
+  /* The ground */
+  --bg: #0b0f16;
+  --bg-glow-1: rgba(76, 96, 176, 0.14);
+  --bg-glow-2: rgba(62, 201, 167, 0.06);
+
+  /* The felt */
+  --felt-hi: #14343b;
+  --felt-lo: #0c2127;
+  --felt-glow: #175b52;
+  --felt-rail-hi: #17232b;
+  --felt-rail-lo: #0d151b;
+  --felt-edge: #0a161b;
+
+  /* Surfaces: glass, not boxes */
+  --surface: rgba(255, 255, 255, 0.035);
+  --surface-2: rgba(255, 255, 255, 0.07);
+  --line: rgba(255, 255, 255, 0.07);
+  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012));
 
   /* Content */
-  --text: #ede8dc;
-  --text-dim: #9ba69b;
-  --text-faint: #5f6b60;
+  --text: #eaf0f4;
+  --text-dim: #97a6b2;
+  --text-faint: #5d6c77;
 
   /* Accent */
-  --accent: #d8b36a;
-  --accent-deep: #a8873f;
-  --accent-glow: rgba(216, 179, 106, 0.25);
-  --accent-soft: rgba(216, 179, 106, 0.12);
+  --accent: #5ee6c1;
+  --accent-deep: #2fa98c;
+  --accent-glow: rgba(94, 230, 193, 0.22);
+  --accent-soft: rgba(94, 230, 193, 0.1);
+  --grad-accent: linear-gradient(135deg, #6fefc9 0%, #3ec9a7 100%);
+  --on-accent: #06231b;
 
   /* Semantic */
-  --win: #7fc98f;
-  --lose: #c97f7f;
-  --info: #7fa6c9;
+  --win: #6fe3a5;
+  --lose: #f08a8a;
+  --info: #8fb7f0;
 
   /* Cards */
-  --card-face: #f5f1e6;
-  --card-red: #b33a3a;
-  --card-black: #1c1f1c;
-  --card-back: #12291f;
-  --card-back-line: rgba(216, 179, 106, 0.28);
+  --card-face: #f7f5ee;
+  --card-red: #c3453f;
+  --card-black: #232826;
+  --card-back: #123239;
+  --card-back-line: rgba(94, 230, 193, 0.24);
 
-  /* Radii */
-  --r-control: 6px;
-  --r-card: 10px;
-  --r-modal: 16px;
+  /* Radii: soft everywhere */
+  --r-control: 10px;
+  --r-card: 14px;
+  --r-panel: 18px;
+  --r-modal: 22px;
 
-  /* Elevation. Colored and soft, never gray. */
-  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 8px 30px rgba(0, 0, 0, 0.45);
-  --shadow-3: 0 20px 60px rgba(0, 0, 0, 0.55);
-  --ring-gold: 0 0 0 1px var(--accent-deep), 0 0 24px var(--accent-glow);
+  /* Elevation, colored and soft */
+  --shadow-1: 0 2px 10px rgba(3, 8, 14, 0.35);
+  --shadow-2: 0 10px 34px rgba(3, 8, 14, 0.5);
+  --shadow-3: 0 24px 70px rgba(3, 8, 14, 0.6);
+  --ring-accent: 0 0 0 1px var(--accent-deep), 0 0 26px var(--accent-glow);
 
   /* Type scale */
   --t-xs: 0.75rem;
@@ -66,8 +82,17 @@
 
 html,
 body {
-  background: var(--bg);
   color: var(--text);
+  background-color: var(--bg);
+}
+
+/* The aurora: two faint washes that give the ink some depth. Fixed, so it
+   stays put while content scrolls over it. */
+body {
+  background-image:
+    radial-gradient(90rem 42rem at 12% -8%, var(--bg-glow-1), transparent 60%),
+    radial-gradient(70rem 36rem at 95% 108%, var(--bg-glow-2), transparent 65%);
+  background-attachment: fixed;
 }
 
 /* Chip counts must not jitter as they tick. */

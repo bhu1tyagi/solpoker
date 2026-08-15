@@ -374,3 +374,38 @@ two wallet-standard wallets backed by real keypairs, plays a hand through the
 UI, and checks that each player sees their own cards and not the other's. The
 module-level devnet test stays, because it is faster and more precise, but it
 was passing throughout everything described above.
+
+## Phase 7, third pass: the wipe, the sweep rules, and Nocturne
+
+**Anyone may send a stale table's players home.** Tables get abandoned with
+players still seated, and creators lose keys, so creator-only seat clearing
+meant those seats and their chips were stuck forever. Now the creator can clear
+a seat any time between hands, and anyone can once the table has been game
+stale for an hour, judged by the hand's action deadline, which every real
+action refreshes. The chips go to the seat occupant's own balance whoever
+calls it, so the permission can move a player out of a chair but can never
+take anything. Closing accepts the same staleness, so a freshly cleared husk
+does not need a second hour. Vacating reads and writes the table raw, because
+recovering people's chips is the one job that must not break when a layout
+changes.
+
+**The wipe is a script, and it leans on permissionlessness.** A stuck hand is
+driven to settlement with the clock alone, then undelegated, then everyone is
+sent home, then the table is closed. Nine tables went in one pass, including
+one mid-hand with lost session keys. The safety hour means a freshly driven
+table refuses to be swept for another hour, which is the rule working.
+
+**The theme is now Nocturne.** The green and gold felt read heavy, so: ink
+navy under two faint aurora washes, mint accent, petrol felt, glass surfaces
+with hairlines instead of bordered boxes, radii up across the board. The
+lobby's stat cards became one open strip and the explainer cards became open
+columns, because a page of boxes reads as a form and a page of things resting
+on a surface reads as a place.
+
+**Waiting states show a shuffle, not a void.** Salt exchange, the enclave
+drawing randomness, and the deal being prepared are all invisible by design,
+which previously rendered as nothing happening. A looping riffle of card backs
+now plays between hands, and long operations, delegation, securing,
+undelegating, closing, dim the felt and narrate their step over it. Chain work
+has no progress bar, but a table that visibly shuffles reads as busy rather
+than broken.

@@ -69,7 +69,7 @@ for (const page of PAGES) {
   const text = await tab.innerText("body");
   const banned = BANNED.filter((re) => re.test(text)).map(String);
 
-  const shot = `${shotDir}${page.path.replace(/\//g, "_") || "_root"}.png`;
+  const shot = `${shotDir}/${page.path.replace(/\//g, "_") || "_root"}.png`;
   await tab.screenshot({ path: shot });
   await ctx.close();
 
