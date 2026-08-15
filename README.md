@@ -8,9 +8,9 @@ or back.
 
 ## Status
 
-Phases 0 to 6 are done. Hands play end to end on a devnet rollup with **hidden hole
-cards**, a **verifiable shuffle**, a **turn clock that survives disconnects**, and betting
-actions signed by session keys instead of a wallet prompt per action.
+All seven phases are done. Hands play end to end on a devnet rollup with **hidden hole
+cards**, a **verifiable shuffle**, a **turn clock that survives disconnects**, and a web
+client where a whole hand runs without a single wallet prompt.
 
 Measured on devnet:
 
@@ -23,8 +23,7 @@ Measured on devnet:
 | Base layer after the hand | no unrevealed cards |
 | Published history reproduces the deal | verified |
 | 100-hand session, 6 seats, 141 forced timeouts | 0 stalls, chips conserved |
-
-Still to do: the frontend (Phase 7).
+| Two clients playing a hand through the web app | settled, verified, chips conserved |
 
 See [SPEC.md](SPEC.md) for the phase plan, [TRUST_MODEL.md](TRUST_MODEL.md) for what is
 and is not guaranteed, and [DECISIONS.md](DECISIONS.md) for the decision log.
@@ -132,9 +131,9 @@ while the table is undelegated. So during a hand chips move between seats but th
 total cannot change, and no rollup transaction can reach a player's balance or mint a
 chip. Account ownership enforces this, not a flag that could go stale.
 
-Betting actions accept a session key, so a player authorises once and then folds, calls
-and raises with no prompt. Join, leave and faucet stay wallet-only, so a leaked session
-key can play badly at one table and do nothing worse.
+Betting and the per-hand salt exchange accept a session key, so a player authorises once
+and then plays a whole hand with no prompt. Join, leave and faucet stay wallet-only, so a
+leaked session key can play badly at one table and do nothing worse.
 
 Measured over a full hand, 12 session-key actions:
 
@@ -143,8 +142,9 @@ Measured over a full hand, 12 session-key actions:
 | 300ms | 362ms | 397ms | 689ms |
 
 That is above the sub-100ms target. The limit is network distance, not rollup block time,
-since devnet's only TEE region is in Asia. Closing it is client-side work (optimistic
-updates, `processed` commitment) rather than a program change.
+since devnet's only TEE region is in Asia. The client closes it by reading at `processed`
+and rendering your action the moment you press, so the confirmation lands inside the chip
+animation rather than after it.
 
 Every hand carries a deadline, and once it passes anyone may call `force_timeout` for the
 seat that owes an action. It is permissionless so the table does not depend on a
@@ -162,9 +162,34 @@ npm run test:er             # one hand, privacy and shuffle verification
 HANDS=100 npm run test:session   # long session with random disconnects
 ```
 
+## The client
+
+```bash
+cd app
+npm install
+npm run dev                 # http://localhost:3000
+npm test                    # engine ports, verifier, salts
+npm run test:devnet         # plays a real hand on devnet through these modules
+npm run test:ui             # loads every page in a browser, fails on console errors
+```
+
+There is no game server. Starting a hand, dealing, turning a street, settling and
+timing out are all permissionless, so every open client watches the same state and does
+whatever is next. Clients wait a moment based on where they sit, so the lowest seat
+usually acts and the others step in only if it did not. Two clients that try the same
+thing at once are harmless: the loser gets a specific error back and treats it as done.
+
+Hand history is recorded by the client as it plays, because the chain does not keep it.
+The accounts holding a hand's salts and seed are reused by the next hand, and only a
+digest of each result reaches Solana. That digest is what ties a stored hand to something
+the player did not write themselves.
+
 ## Layout
 
 ```
+app/                      Next.js client
+  src/lib/                connections, instructions, crank, engine ports, verifier
+  src/components/         design system primitives and the table
 programs/solpoker/        The game program
   src/state.rs            Account layouts
   src/bridge.rs           Accounts <-> poker-engine

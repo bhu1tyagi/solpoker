@@ -61,25 +61,37 @@ export function TableFelt({
         margin: "0 auto",
       }}
     >
-      {/* The felt: an oval rail with a radial gradient inside. */}
+      {/* The felt: a padded rail around a lit oval. The light sits slightly
+          above centre so the board reads as the brightest thing on the table. */}
       <div
         style={{
           position: "absolute",
           inset: "8% 4%",
           borderRadius: "50% / 50%",
-          background:
-            "radial-gradient(ellipse at 50% 42%, var(--felt-hi) 0%, var(--felt-lo) 72%)",
-          border: "10px solid #0a1710",
+          background: "linear-gradient(180deg, #16241c 0%, #0c1712 100%)",
+          padding: 14,
           boxShadow:
-            "inset 0 6px 34px rgba(0,0,0,0.5), 0 20px 60px rgba(0,0,0,0.55)",
+            "0 26px 70px rgba(0,0,0,0.6), inset 0 1px 0 rgba(216,179,106,0.10)",
         }}
       >
         <div
           style={{
             position: "absolute",
-            inset: 12,
+            inset: 14,
             borderRadius: "50% / 50%",
-            border: "1px solid rgba(216,179,106,0.10)",
+            background:
+              "radial-gradient(ellipse at 50% 40%, #17492f 0%, var(--felt-hi) 42%, var(--felt-lo) 78%, #091a12 100%)",
+            boxShadow:
+              "inset 0 10px 40px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.5)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 26,
+            borderRadius: "50% / 50%",
+            border: "1px solid rgba(216,179,106,0.13)",
+            pointerEvents: "none",
           }}
         />
       </div>

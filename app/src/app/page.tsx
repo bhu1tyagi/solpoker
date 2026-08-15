@@ -40,15 +40,83 @@ export default function Lobby() {
         </section>
 
         {!connected ? (
-          <Panel style={{ textAlign: "center", padding: 46 }}>
-            <p style={{ color: "var(--text-dim)", margin: "0 0 6px" }}>
-              Connect a wallet to get chips and take a seat.
-            </p>
-            <p style={{ color: "var(--text-faint)", fontSize: "var(--t-sm)", margin: 0 }}>
-              Devnet only. Chips are play money, not purchasable and not
-              redeemable.
-            </p>
-          </Panel>
+          <>
+            <Panel style={{ textAlign: "center", padding: 46 }}>
+              <p style={{ color: "var(--text-dim)", margin: "0 0 6px" }}>
+                Connect a wallet to get chips and take a seat.
+              </p>
+              <p style={{ color: "var(--text-faint)", fontSize: "var(--t-sm)", margin: 0 }}>
+                Devnet only. Chips are play money, not purchasable and not
+                redeemable.
+              </p>
+            </Panel>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+                gap: 14,
+                marginTop: 30,
+              }}
+            >
+              {[
+                {
+                  n: "01",
+                  t: "Everyone salts the deck",
+                  d: "Each player commits to random bytes before anyone reveals. One honest player is enough to keep the shuffle fair.",
+                },
+                {
+                  n: "02",
+                  t: "The hand runs in an enclave",
+                  d: "Cards are dealt inside secure hardware. Your opponents cannot read your hand, and neither can anyone watching Solana.",
+                },
+                {
+                  n: "03",
+                  t: "Check it afterwards",
+                  d: "Every finished hand publishes what it was dealt from. Recompute the deck yourself and see that it matches.",
+                },
+              ].map((s, i) => (
+                <motion.div
+                  key={s.n}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ ...spring.gentle, delay: 0.05 + i * 0.06 }}
+                >
+                  <Panel style={{ height: "100%" }}>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        fontSize: "var(--t-sm)",
+                        color: "var(--accent-deep)",
+                        marginBottom: 8,
+                      }}
+                    >
+                      {s.n}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        fontSize: "var(--t-base)",
+                        marginBottom: 6,
+                      }}
+                    >
+                      {s.t}
+                    </div>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: "var(--t-sm)",
+                        color: "var(--text-dim)",
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      {s.d}
+                    </p>
+                  </Panel>
+                </motion.div>
+              ))}
+            </div>
+          </>
         ) : (
           <>
             <div

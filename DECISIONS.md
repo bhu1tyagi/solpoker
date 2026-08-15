@@ -242,3 +242,60 @@ treated it as fatal. Blindly resending is unsafe, because the dropped attempt ma
 have landed. So each step now declares how to tell whether it is already done, and a retry
 skips it rather than double-applying. The play loop simply re-reads state and decides
 again, which is naturally correct.
+
+## Phase 7: Frontend
+
+**Session keys now sign the salt exchange too.** Betting already avoided a wallet prompt,
+but committing and revealing a salt happen twice per hand, so a hand still cost two
+prompts. Both instructions now take the same `session_auth_or` path as `player_action`,
+with the occupant check unchanged. The salt is still generated on the player's own
+machine, so the fairness argument is untouched: a session key signs the same bytes its
+owner chose. What a session key can reach is still bounded by the instructions that refuse
+it, and joining, leaving and the faucet all still refuse it.
+
+**No game server, so every client runs the same crank.** Starting a hand, dealing,
+advancing a street, settling and timing out are all permissionless. Rather than elect a
+leader, each open client watches the same state and does whatever is next. Two things keep
+that from thrashing: the steps are idempotent on chain, and a client waits a moment before
+acting based on where it sits among the occupied seats, so the lowest seat usually acts
+and the rest are a fallback chain. Losing the race returns a specific error, which is
+treated as success rather than surfaced.
+
+**The client reads at `processed` and renders your action immediately.** The measured round
+trip is 362ms at the median, which is network distance to the Asia-only TEE region rather
+than block time. Rendering the press instantly puts the confirmation inside the chip
+animation. Only the amounts that are exactly known are predicted, which is all of them for
+your own seat: legal actions give the call amount and the raise target outright. Whose
+turn is next and whether the street closed are left to the chain, because guessing those
+is where optimistic UIs start lying to people.
+
+**Attestation runs server-side.** `verifyTeeRpcIntegrity` pulls a CommonJS verifier that
+stubs node built-ins for browsers. Rather than fight the bundler, it runs in a route
+handler and the client never imports the MagicBlock SDK at all. The auth handshake it
+would also have provided is three HTTP calls, so that is reimplemented locally. Rejected:
+shipping the verifier to the browser, which bloats the bundle to prove something the user
+still has to take on trust from our own page.
+
+**Salts live in memory first, storage second.** They were persisted only to
+`localStorage`, so when storage was unavailable every call generated a fresh salt and a
+player committed to one and revealed another. That is a stall on every hand for anyone
+with storage blocked or full, and it showed up immediately when the flow ran outside a
+browser. Found by running it, not by reading it.
+
+**Hand history is captured while the hand is live.** Settlement clears the salt state and
+the dealt-in mask, and the next hand's commit overwrites the salt bytes. A capture taken
+after settlement therefore recorded a hand nobody was dealt into, which put the board at
+the top of the deck and failed to verify for reasons that had nothing to do with the deal.
+Both are now collected during the hand and combined with the result at the end.
+
+**The browser is part of the test loop.** A clean build and a clean typecheck both passed
+a table page that crashed on load with an infinite render loop, caused by subscribing to
+the whole store and writing back into it from an effect. `npm run test:ui` loads every
+page in a real browser and fails on any console error. It also greps the rendered text for
+the copy we have promised not to use.
+
+**Result.** A hand plays end to end through the client's own modules on devnet: table
+created in four transactions, session keys authorised, delegation paid for by a session
+key, deck and opponent cards unreadable, two independent cranks converging on a hand,
+chips conserved, the shuffle verified in the browser, a tampered salt rejected, and both
+players cashed out with every faucet chip accounted for.

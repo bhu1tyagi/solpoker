@@ -17,6 +17,14 @@ const nextConfig: NextConfig = {
       os: false,
       crypto: false,
     };
+    // The websocket library asks for two optional native speedups. They are not
+    // installed, and it works fine without them, but the bundler still tries to
+    // resolve the require and fails on the empty package directories.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      bufferutil: false,
+      "utf-8-validate": false,
+    };
     return config;
   },
 };

@@ -31,26 +31,45 @@ export const stagger = {
 /**
  * Seat positions around the felt, as percentages of the table box.
  *
- * Seat 0 is bottom center because the local player is rotated into it, so the
- * person you are always sits closest to the action bar. The rest run clockwise.
+ * Six seats spaced evenly on the rail. Seat 0 is bottom center because the
+ * local player is rotated into it, so the person you are always sits nearest
+ * the action bar, and the rest run clockwise from there.
+ *
+ * The felt is an ellipse inset 4 percent horizontally and 8 percent
+ * vertically, so these come from that ellipse rather than being nudged by eye.
+ * Keeping them symmetric matters: an uneven ring reads as a mistake even when
+ * nobody can say why.
  */
+const RAIL_X = 44;
+const RAIL_Y = 43;
+const point = (deg: number) => ({
+  x: Math.round((50 + RAIL_X * Math.cos((deg * Math.PI) / 180)) * 10) / 10,
+  y: Math.round((50 + RAIL_Y * Math.sin((deg * Math.PI) / 180)) * 10) / 10,
+});
+
 export const SEAT_POSITIONS: { x: number; y: number }[] = [
-  { x: 50, y: 96 },
-  { x: 12, y: 76 },
-  { x: 6, y: 32 },
-  { x: 50, y: 6 },
-  { x: 94, y: 32 },
-  { x: 88, y: 76 },
+  point(90),
+  point(145),
+  point(215),
+  point(270),
+  point(325),
+  point(35),
 ];
 
-/** Where a seat's bet chips sit: pulled in toward the pot. */
+/** Where a seat's bet chips sit: the same ring, pulled in toward the pot. */
+const BET_PULL = 0.52;
+const betPoint = (deg: number) => ({
+  x: Math.round((50 + RAIL_X * BET_PULL * Math.cos((deg * Math.PI) / 180)) * 10) / 10,
+  y: Math.round((50 + RAIL_Y * BET_PULL * Math.sin((deg * Math.PI) / 180)) * 10) / 10,
+});
+
 export const BET_POSITIONS: { x: number; y: number }[] = [
-  { x: 50, y: 74 },
-  { x: 27, y: 65 },
-  { x: 23, y: 40 },
-  { x: 50, y: 26 },
-  { x: 77, y: 40 },
-  { x: 73, y: 65 },
+  betPoint(90),
+  betPoint(145),
+  betPoint(215),
+  betPoint(270),
+  betPoint(325),
+  betPoint(35),
 ];
 
 export const POT_POSITION = { x: 50, y: 58 };

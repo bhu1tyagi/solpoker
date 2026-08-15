@@ -46,8 +46,20 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const { connection: erConnection, program: erProgram } = useTee();
   const player = usePlayer();
 
-  const store = useTableStore();
-  const { table: tableView, hand, seats, myHole, myHoleHandNumber, link } = store;
+  // Selectors, not the whole store. Subscribing to everything makes the store
+  // object a new identity on every change, which re-fires the effects that
+  // write back into it, which loops forever. Actions are stable by
+  // construction, so they can be pulled out once.
+  const tableView = useTableStore((s) => s.table);
+  const hand = useTableStore((s) => s.hand);
+  const seats = useTableStore((s) => s.seats);
+  const myHole = useTableStore((s) => s.myHole);
+  const myHoleHandNumber = useTableStore((s) => s.myHoleHandNumber);
+  const link = useTableStore((s) => s.link);
+  const tableConfig = useTableStore((s) => s.config);
+  const setConfig = useTableStore((s) => s.setConfig);
+  const setMySeat = useTableStore((s) => s.setMySeat);
+  const setPending = useTableStore((s) => s.setPending);
 
   const [session, setSession] = useState<Keypair | null>(null);
   const [sessionToken, setSessionToken] = useState<PublicKey | null>(null);
@@ -66,13 +78,13 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   useEffect(() => {
     void (async () => {
       const info = await getBaseConnection().getAccountInfo(config);
-      if (info) store.setConfig(decodeConfig(new Uint8Array(info.data)));
+      if (info) setConfig(decodeConfig(new Uint8Array(info.data)));
     })();
-  }, [config, store]);
+  }, [config, setConfig]);
 
   useEffect(() => {
-    store.setMySeat(mySeat);
-  }, [mySeat, store]);
+    setMySeat(mySeat);
+  }, [mySeat, setMySeat]);
 
   // Delegation decides whether this is a lobby view or a live game.
   const refreshDelegation = useCallback(async () => {
@@ -147,7 +159,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
       setActing(true);
       // Show the result immediately. The chain confirms it about a third of a
       // second later, inside the chip animation.
-      store.setPending({
+      setPending({
         seat: mySeat,
         kind,
         toTotal,
@@ -159,11 +171,11 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
       } catch (e) {
         toast(friendlyError(e), "bad");
       } finally {
-        store.setPending(null);
+        setPending(null);
         setActing(false);
       }
     },
-    [actions, hand, mySeat, store],
+    [actions, hand, mySeat, setPending],
   );
 
   const status = useStatusLine(delegated, tableView, hand, seatedCount);
@@ -185,8 +197,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
             <h1 style={{ fontSize: "var(--t-md)" }}>
-              {store.config
-                ? `${store.config.smallBlind} / ${store.config.bigBlind}`
+              {tableConfig
+                ? `${tableConfig.smallBlind} / ${tableConfig.bigBlind}`
                 : "Table"}
             </h1>
             <span style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>
@@ -252,13 +264,13 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           pot={pot}
           winning={winningCards}
           winners={winnerSeats}
-          timeoutSecs={store.config?.actionTimeoutSecs ?? 30}
+          timeoutSecs={tableConfig?.actionTimeoutSecs ?? 30}
           status={status}
           onSit={
             delegated === false && mySeat < 0 && connected
               ? (i) => {
                   setSitting(i);
-                  setBuyIn(store.config?.maxBuyIn ?? 2000);
+                  setBuyIn(tableConfig?.maxBuyIn ?? 2000);
                 }
               : undefined
           }
@@ -338,8 +350,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0" }}>
           <input
             type="range"
-            min={store.config?.minBuyIn ?? 200}
-            max={Math.min(store.config?.maxBuyIn ?? 2000, player.state?.chips ?? 0)}
+            min={tableConfig?.minBuyIn ?? 200}
+            max={Math.min(tableConfig?.maxBuyIn ?? 2000, player.state?.chips ?? 0)}
             step={10}
             value={buyIn}
             onChange={(e) => setBuyIn(Number(e.target.value))}
