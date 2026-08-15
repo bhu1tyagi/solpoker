@@ -16,6 +16,16 @@ import { sha256 } from "@noble/hashes/sha2";
 const key = (table: string, handNumber: number) =>
   `solpoker:salt:${table}:${handNumber}`;
 
+/**
+ * Salts held in memory, which is the authority while the page is open.
+ *
+ * Storage is the durable copy, not the only one. If localStorage is
+ * unavailable, full, or blocked, falling back to generating a fresh salt each
+ * call would mean committing to one salt and revealing another, and the
+ * mismatch would stall the hand on that player every single time.
+ */
+const memory = new Map<string, Uint8Array>();
+
 const hex = (b: Uint8Array) =>
   Array.from(b)
     .map((x) => x.toString(16).padStart(2, "0"))
@@ -29,9 +39,18 @@ const fromHex = (s: string) => {
 
 /** Read back the salt for a hand, or null if we never made one. */
 export function loadSalt(table: string, handNumber: number): Uint8Array | null {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(key(table, handNumber));
-  return raw ? fromHex(raw) : null;
+  const k = key(table, handNumber);
+  const held = memory.get(k);
+  if (held) return held;
+  try {
+    const raw = window?.localStorage?.getItem(k);
+    if (!raw) return null;
+    const salt = fromHex(raw);
+    memory.set(k, salt);
+    return salt;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -46,8 +65,13 @@ export function getOrCreateSalt(table: string, handNumber: number): Uint8Array {
 
   const salt = new Uint8Array(32);
   crypto.getRandomValues(salt);
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(key(table, handNumber), hex(salt));
+  const k = key(table, handNumber);
+  // Memory first, so the salt is stable even if storage refuses us.
+  memory.set(k, salt);
+  try {
+    window?.localStorage?.setItem(k, hex(salt));
+  } catch {
+    // Storage full or blocked. The hand still works, a reload would lose it.
   }
   return salt;
 }
@@ -56,14 +80,26 @@ export const commitmentFor = (salt: Uint8Array) => sha256(salt);
 
 /** Drop salts from hands long finished. */
 export function pruneSalts(table: string, currentHand: number, keep = 10) {
-  if (typeof window === "undefined") return;
   const prefix = `solpoker:salt:${table}:`;
-  const doomed: string[] = [];
-  for (let i = 0; i < window.localStorage.length; i++) {
-    const k = window.localStorage.key(i);
-    if (!k?.startsWith(prefix)) continue;
+  const old = (k: string) => {
     const n = Number(k.slice(prefix.length));
-    if (Number.isFinite(n) && n < currentHand - keep) doomed.push(k);
+    return Number.isFinite(n) && n < currentHand - keep;
+  };
+
+  for (const k of Array.from(memory.keys())) {
+    if (k.startsWith(prefix) && old(k)) memory.delete(k);
   }
-  for (const k of doomed) window.localStorage.removeItem(k);
+
+  try {
+    const store = window?.localStorage;
+    if (!store) return;
+    const doomed: string[] = [];
+    for (let i = 0; i < store.length; i++) {
+      const k = store.key(i);
+      if (k?.startsWith(prefix) && old(k)) doomed.push(k);
+    }
+    for (const k of doomed) store.removeItem(k);
+  } catch {
+    // Nothing to prune if storage is unavailable.
+  }
 }
