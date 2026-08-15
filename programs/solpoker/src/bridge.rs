@@ -4,7 +4,7 @@
 //! instruction that touches betting loads the accounts into a
 //! [`poker_engine::betting::Betting`], lets the engine decide what is legal and
 //! what happens, then writes the result straight back. No poker rule is
-//! reimplemented here — that is the whole point of the engine being a separate,
+//! reimplemented here. That is the point of keeping the engine a separate,
 //! property-tested crate.
 //!
 //! `Seat::in_hand` maps to the engine's `occupied`, not `Seat::occupant`. A player
@@ -102,7 +102,11 @@ pub fn store_betting(b: &Betting, hand: &mut Hand, seats: &mut [&mut Seat; MAX_S
 /// the engine act on the wrong stacks.
 pub fn check_seat_order(seats: &[&Seat; MAX_SEATS], table: &Pubkey) -> Result<()> {
     for (i, seat) in seats.iter().enumerate() {
-        require_keys_eq!(seat.table, *table, crate::errors::PokerError::SeatTableMismatch);
+        require_keys_eq!(
+            seat.table,
+            *table,
+            crate::errors::PokerError::SeatTableMismatch
+        );
         require!(
             seat.seat_index as usize == i,
             crate::errors::PokerError::SeatOrderMismatch

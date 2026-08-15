@@ -1,4 +1,4 @@
-//! The betting action — the one instruction that runs on every keystroke.
+//! The betting action, the one instruction that runs on every keystroke.
 //!
 //! This is the hot path, so it is the one that gets session keys. A player
 //! authorises a short-lived key once, and every fold/call/raise after that is
@@ -87,11 +87,7 @@ pub fn player_action(ctx: Context<PlayerAction>, action: PlayerMove) -> Result<(
         // Application authorisation: the wallet this action is for must actually
         // hold the seat that is to act. A valid session token for some other
         // player does not get past this.
-        require_keys_eq!(
-            seats[seat_index].occupant,
-            authority,
-            PokerError::OutOfTurn
-        );
+        require_keys_eq!(seats[seat_index].occupant, authority, PokerError::OutOfTurn);
         load_betting(hand, &seats, &ctx.accounts.config)
     };
 

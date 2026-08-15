@@ -7,15 +7,15 @@
 //! implementations usually go wrong.
 //!
 //! **Action order.** Preflop, action starts left of the big blind. Postflop it
-//! starts left of the button. Heads-up looks like a special case — the button
-//! posts the small blind and acts first preflop, then acts *last* postflop — but
+//! starts left of the button. Heads-up looks like a special case, the button
+//! posts the small blind and acts first preflop, then acts *last* postflop, but
 //! it falls out of the same two rules with no special casing, because with two
 //! players "left of the big blind" *is* the button.
 //!
 //! **An all-in for less than a full raise does not reopen the betting.** If a
 //! player shoves for more than the current bet but less than a full raise
 //! increment, opponents who have already acted owe the difference but may only
-//! call or fold — they cannot re-raise. Players who had not yet acted keep full
+//! call or fold, they cannot re-raise. Players who had not yet acted keep full
 //! rights. This is tracked per seat with [`SeatState::may_raise`], which is why a
 //! single "has acted" flag is not enough.
 
@@ -74,7 +74,7 @@ pub enum BettingError {
     SeatNotActive,
     /// Cannot check while facing a bet.
     CannotCheck,
-    /// Cannot call with nothing to call — check instead.
+    /// Cannot call with nothing to call, check instead.
     NothingToCall,
     /// Raising is not allowed here, either because the seat is capped after an
     /// under-raise all-in or because it has no chips behind.
@@ -205,7 +205,7 @@ impl Betting {
         b.post_blind(sb_seat, small_blind);
         b.post_blind(bb_seat, big_blind);
 
-        // First to act is left of the big blind — which is the button heads-up.
+        // First to act is left of the big blind, which is the button heads-up.
         b.to_act = b.find_next_actor(bb_seat);
         b.settle_if_no_action();
         Ok(b)
@@ -251,7 +251,7 @@ impl Betting {
         None
     }
 
-    /// Only one player left holding cards — everyone else folded.
+    /// Only one player left holding cards, everyone else folded.
     pub fn hand_is_over(&self) -> bool {
         self.seats.iter().filter(|s| s.is_in_hand()).count() <= 1
     }
@@ -523,8 +523,14 @@ mod tests {
     #[test]
     fn blinds_are_posted_and_utg_acts_first() {
         let b = six_handed();
-        assert_eq!(b.seats[1].street_committed, 5, "seat 1 posts the small blind");
-        assert_eq!(b.seats[2].street_committed, 10, "seat 2 posts the big blind");
+        assert_eq!(
+            b.seats[1].street_committed, 5,
+            "seat 1 posts the small blind"
+        );
+        assert_eq!(
+            b.seats[2].street_committed, 10,
+            "seat 2 posts the big blind"
+        );
         assert_eq!(b.to_act, Some(3), "action starts left of the big blind");
         assert_eq!(b.current_bet, 10);
         assert_eq!(b.min_raise, 10);
@@ -537,7 +543,10 @@ mod tests {
         s[0] = 1000;
         s[1] = 1000;
         let b = Betting::begin_hand(s, 0, 5, 10).unwrap();
-        assert_eq!(b.seats[0].street_committed, 5, "button posts the small blind");
+        assert_eq!(
+            b.seats[0].street_committed, 5,
+            "button posts the small blind"
+        );
         assert_eq!(b.seats[1].street_committed, 10);
         assert_eq!(b.to_act, Some(0), "button acts first preflop heads-up");
     }
@@ -586,8 +595,14 @@ mod tests {
     fn min_raise_is_enforced() {
         let mut b = six_handed();
         // Current bet 10, min raise 10, so the smallest legal raise is to 20.
-        assert_eq!(b.apply(3, Action::RaiseTo(15)), Err(BettingError::BelowMinRaise));
-        assert_eq!(b.apply(3, Action::RaiseTo(10)), Err(BettingError::RaiseTooSmall));
+        assert_eq!(
+            b.apply(3, Action::RaiseTo(15)),
+            Err(BettingError::BelowMinRaise)
+        );
+        assert_eq!(
+            b.apply(3, Action::RaiseTo(10)),
+            Err(BettingError::RaiseTooSmall)
+        );
         assert_eq!(b.legal_actions(3).min_raise_to, 20);
         b.apply(3, Action::RaiseTo(20)).unwrap();
         assert_eq!(b.current_bet, 20);
@@ -607,7 +622,10 @@ mod tests {
         b.apply(4, Action::AllIn).unwrap(); // shove to 25, only +5
         assert_eq!(b.current_bet, 25);
         assert!(b.seats[4].all_in);
-        assert_eq!(b.min_raise, 10, "an under-raise must not change the minimum");
+        assert_eq!(
+            b.min_raise, 10,
+            "an under-raise must not change the minimum"
+        );
 
         assert!(b.seats[3].needs_action, "seat 3 still owes the extra 5");
         assert!(
@@ -625,7 +643,10 @@ mod tests {
             let seat = b.to_act.unwrap();
             b.apply(seat, Action::Fold).unwrap();
         }
-        assert_eq!(b.apply(3, Action::RaiseTo(60)), Err(BettingError::CannotRaise));
+        assert_eq!(
+            b.apply(3, Action::RaiseTo(60)),
+            Err(BettingError::CannotRaise)
+        );
         assert!(b.legal_actions(3).can_call);
         assert_eq!(b.legal_actions(3).call_amount, 5);
     }
@@ -704,7 +725,11 @@ mod tests {
         assert_eq!(pot_after_preflop, 60, "six players at 10 each");
         b.advance_street();
         assert!(b.seats.iter().all(|s| s.street_committed == 0));
-        assert_eq!(b.pot_total(), pot_after_preflop, "totals survive the street");
+        assert_eq!(
+            b.pot_total(),
+            pot_after_preflop,
+            "totals survive the street"
+        );
     }
 
     #[test]

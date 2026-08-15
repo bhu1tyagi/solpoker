@@ -1,5 +1,5 @@
 /**
- * Phase 2 gate — base layer only, no ephemeral rollup.
+ * Phase 2 gate, base layer only, no ephemeral rollup.
  *
  * Creates a table, seats three funded players, then has them leave, asserting
  * throughout that chips are conserved. Chips only ever move between a player's
@@ -19,7 +19,7 @@ const BIG_BLIND = new BN(10);
 const MIN_BUY_IN = new BN(200);
 const MAX_BUY_IN = new BN(2_000);
 
-describe("SolPoker Phase 2 — base layer", () => {
+describe("SolPoker Phase 2, base layer", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
   const program = anchor.workspace.Solpoker as Program<Solpoker>;
@@ -62,7 +62,7 @@ describe("SolPoker Phase 2 — base layer", () => {
       program.programId,
     )[0];
 
-  /** Chips in balances plus chips in seat stacks — the system-wide total. */
+  /** Chips in balances plus chips in seat stacks, the system-wide total. */
   async function totalChips(): Promise<number> {
     let total = 0;
     for (const p of players) {

@@ -1,4 +1,4 @@
-//! SolPoker — real-time on-chain Texas Hold'em.
+//! SolPoker, real-time on-chain Texas Hold'em.
 //!
 //! Play money only. Chips enter through a rate-limited faucet and there is no
 //! instruction in this program that converts them to SOL, a token, or anything
@@ -8,7 +8,7 @@
 //!
 //! - **Base layer** holds chip custody ([`state::Player`]) and immutable table
 //!   parameters. Never delegated.
-//! - **Ephemeral Rollup** runs the game itself — table, seats, hand, deck — where
+//! - **Ephemeral Rollup** runs the game itself, table, seats, hand, deck, where
 //!   actions need to land in tens of milliseconds rather than hundreds.
 //!
 //! Custody transitions only ever happen on the base layer while the table is

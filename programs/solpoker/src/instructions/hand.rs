@@ -4,8 +4,8 @@
 //! accounts into the engine, ask it what happens, and write the answer back.
 //!
 //! Cards are dealt straight off the shuffled deck with no burn cards. Burning is
-//! traditional but protects against nothing here — the shuffle is committed to a
-//! published seed — and skipping it keeps the deal exactly reproducible by the
+//! traditional but protects against nothing here, the shuffle is committed to a
+//! published seed, and skipping it keeps the deal exactly reproducible by the
 //! Phase 5 verifier.
 
 use anchor_lang::prelude::*;
@@ -66,10 +66,7 @@ pub fn start_hand(ctx: Context<StartHand>, shuffle_seed: [u8; 32]) -> Result<()>
             }
         }
     }
-    require!(
-        dealt_in.count_ones() >= 2,
-        PokerError::NotEnoughPlayers
-    );
+    require!(dealt_in.count_ones() >= 2, PokerError::NotEnoughPlayers);
 
     // Move the button to the next seat that is actually in this hand.
     let mut button = ctx.accounts.table.button as usize;

@@ -70,7 +70,7 @@ pub fn card_from_string(s: &str) -> Option<u8> {
     Some(make_card(rank, suit))
 }
 
-/// A card that knows how to print itself. Purely a display convenience — the
+/// A card that knows how to print itself. Purely a display convenience, the
 /// engine passes plain `u8` around.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Card(pub u8);
@@ -130,7 +130,7 @@ impl Deck {
 
     /// A deck shuffled deterministically from a 32-byte seed.
     ///
-    /// Same seed always yields the same deck, in this or any other language —
+    /// Same seed always yields the same deck, in this or any other language,
     /// see [`shuffle_in_place`] for the exact construction. Phase 5 supplies the
     /// seed as `VRF_output XOR salt_1 XOR ... XOR salt_n`; the shuffle itself is
     /// fixed here so the public verifier can be written against it.

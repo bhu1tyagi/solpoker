@@ -40,11 +40,7 @@ pub fn claim_faucet(ctx: Context<ClaimFaucet>) -> Result<()> {
         .ok_or(PokerError::InsufficientChips)?;
     player.last_faucet_ts = now;
 
-    msg!(
-        "faucet: +{} chips, balance {}",
-        FAUCET_AMOUNT,
-        player.chips
-    );
+    msg!("faucet: +{} chips, balance {}", FAUCET_AMOUNT, player.chips);
     Ok(())
 }
 

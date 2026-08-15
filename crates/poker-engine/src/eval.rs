@@ -2,15 +2,11 @@
 //!
 //! # Why there are no lookup tables here
 //!
-//! The fast evaluators in the literature (Cactus Kev, Two Plus Two) trade memory
-//! for speed: the 2+2 evaluator is a ~130 MB table. That is a non-starter inside a
-//! Solana program, where the table would have to live in the binary and be walked
-//! through expensive memory reads.
+//! The fast evaluators in the literature trade memory for speed. The Two Plus Two
+//! table is around 130 MB, which is a non-starter in a Solana program.
 //!
-//! This evaluator is instead **fully table-free**. It derives everything from two
-//! cheap summaries of the hand — a 13-bit rank-occupancy mask and a per-rank count
-//! array — and finds each category with bit tricks. Straight detection is a
-//! four-shift AND rather than any kind of search:
+//! This one is table-free. Everything comes from a 13-bit rank mask and a per-rank
+//! count array. Straight detection is a four-shift AND rather than a search:
 //!
 //! ```text
 //! s = m & (m>>1) & (m>>2) & (m>>3) & (m>>4)
@@ -34,7 +30,7 @@
 //!
 //! Because the category occupies the high bits and every tiebreak is a 4-bit rank
 //! in descending significance, plain integer comparison *is* poker comparison.
-//! Equal scores mean a genuine tie that splits the pot — two hands tie exactly
+//! Equal scores mean a genuine tie that splits the pot, two hands tie exactly
 //! when they have the same category and identical five-card ranks, which is the
 //! correct rule (suits never break ties in Hold'em).
 

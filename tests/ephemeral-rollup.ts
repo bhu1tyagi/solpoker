@@ -1,5 +1,5 @@
 /**
- * Phase 3 gate — a full hand played on the devnet Ephemeral Rollup.
+ * Phase 3 gate, a full hand played on the devnet Ephemeral Rollup.
  *
  * Cards are FACE UP here. The deck and hole cards live in ordinary public PDAs,
  * so anyone can read them. That is the honest state of the project at this phase:
@@ -43,7 +43,7 @@ const SUITS = "cdhs";
 const card = (b: number) =>
   b === 0xff ? "--" : `${RANKS[Math.floor(b / 4)]}${SUITS[b % 4]}`;
 
-describe("SolPoker Phase 3 — full hand on the ephemeral rollup", () => {
+describe("SolPoker Phase 3, full hand on the ephemeral rollup", () => {
   const baseUrl =
     process.env.ANCHOR_PROVIDER_URL || "https://rpc.magicblock.app/devnet";
   const erUrl =
@@ -56,7 +56,7 @@ describe("SolPoker Phase 3 — full hand on the ephemeral rollup", () => {
   const connection = provider.connection;
 
   // The table is pinned to the TEE validator, so the ER endpoint is the TEE one
-  // and every RPC call needs a signed auth token. Phase 3 still plays face up —
+  // and every RPC call needs a signed auth token. Phase 3 still plays face up, 
   // no EphemeralPermission is created, so the accounts are readable by anyone who
   // authenticates. Phase 4 is what actually makes cards secret.
   let erConnection: anchor.web3.Connection;
@@ -115,7 +115,7 @@ describe("SolPoker Phase 3 — full hand on the ephemeral rollup", () => {
     // confirmTransaction resolves for FAILED transactions too, so the error has
     // to be checked explicitly or a broken instruction looks like a success.
     const conf = await erConnection.confirmTransaction(
-      { signature: sig, ...bh },
+      { signature: sig...bh },
       "confirmed",
     );
     if (conf.value.err) {
@@ -175,7 +175,7 @@ describe("SolPoker Phase 3 — full hand on the ephemeral rollup", () => {
     console.log("Program:   ", program.programId.toBase58());
     console.log("Table id:  ", tableId.toString());
 
-    for (const p of [...players, ...sessionKeys]) {
+    for (const p of [...players...sessionKeys]) {
       const sig = await connection.requestAirdrop(
         p.publicKey,
         0.05 * LAMPORTS_PER_SOL,
@@ -352,8 +352,7 @@ describe("SolPoker Phase 3 — full hand on the ephemeral rollup", () => {
         table,
         config,
         hand: handPda,
-        deck: deckPda,
-        ...seatAccounts,
+        deck: deckPda...seatAccounts,
         payer: provider.wallet.publicKey,
       })
       .transaction();
@@ -405,8 +404,7 @@ describe("SolPoker Phase 3 — full hand on the ephemeral rollup", () => {
           .accountsPartial({
             hand: handPda,
             config,
-            deck: deckPda,
-            ...seatAccounts,
+            deck: deckPda...seatAccounts,
             payer: provider.wallet.publicKey,
           })
           .transaction();
@@ -436,13 +434,12 @@ describe("SolPoker Phase 3 — full hand on the ephemeral rollup", () => {
           payer: sessionKeys[seatIndex].publicKey,
           authority: players[seatIndex].publicKey,
           hand: handPda,
-          config,
-          ...seatAccounts,
+          config...seatAccounts,
           sessionToken: sessionTokens[seatIndex],
         })
         .transaction();
 
-      // Signed only by the session key — the player's wallet is not involved.
+      // Signed only by the session key, the player's wallet is not involved.
       await sendEr(
         tx,
         [sessionKeys[seatIndex]],
@@ -469,8 +466,7 @@ describe("SolPoker Phase 3 — full hand on the ephemeral rollup", () => {
         table,
         config,
         hand: handPda,
-        deck: deckPda,
-        ...seatAccounts,
+        deck: deckPda...seatAccounts,
         payer: provider.wallet.publicKey,
       })
       .remainingAccounts(

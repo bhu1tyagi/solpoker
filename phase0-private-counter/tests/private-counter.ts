@@ -1,11 +1,11 @@
 /**
- * SolPoker Phase 0 — prove the MagicBlock Private ER (TEE) pipe.
+ * SolPoker Phase 0, prove the MagicBlock Private ER (TEE) pipe.
  *
  * Beyond reproducing the upstream `private-counter` flow, this test answers the
  * one question the whole SolPoker architecture rests on:
  *
  *   Does `is_private = true` with an EMPTY member list actually block EVERY
- *   wallet — including the account's own authority — from reading ER state?
+ *   wallet, including the account's own authority, from reading ER state?
  *
  * That is the `Deck` model. If the authority can still read, the shuffled deck
  * would be readable by the table creator and the design must change.
@@ -60,7 +60,7 @@ async function tryRead(
   }
 }
 
-describe("SolPoker Phase 0 — private counter on devnet TEE", () => {
+describe("SolPoker Phase 0, private counter on devnet TEE", () => {
   const baseEndpoint =
     process.env.PROVIDER_ENDPOINT || "https://rpc.magicblock.app/devnet";
   const teeUrl =
@@ -78,7 +78,7 @@ describe("SolPoker Phase 0 — private counter on devnet TEE", () => {
   const program = anchor.workspace.PrivateCounter as Program<PrivateCounter>;
   const owner = (provider.wallet as anchor.Wallet).payer;
 
-  // Second, unrelated wallet — the "opponent" trying to read our hole cards.
+  // Second, unrelated wallet, the "opponent" trying to read our hole cards.
   // Generated fresh per run: it only ever signs an auth-token challenge, so it
   // needs no funding and no persistence.
   const eavesdropper = Keypair.generate();
@@ -184,7 +184,7 @@ describe("SolPoker Phase 0 — private counter on devnet TEE", () => {
       .accountsPartial({
         authority: provider.wallet.publicKey,
         counter: counterPDA,
-        validator: TEE_VALIDATOR, // pinned — never let the validator float
+        validator: TEE_VALIDATOR, // pinned, never let the validator float
       })
       .transaction();
     const sig = await provider.sendAndConfirm(tx, [owner], {
@@ -231,8 +231,8 @@ describe("SolPoker Phase 0 — private counter on devnet TEE", () => {
   it("BASELINE (public): both owner and eavesdropper can read", async () => {
     const o = await tryRead(ownerEr.connection, counterPDA);
     const e = await tryRead(eavesdropperEr, counterPDA);
-    console.log(`  owner:       ${o.allowed ? "ALLOW" : "DENY"} — ${o.detail}`);
-    console.log(`  eavesdropper:${e.allowed ? "ALLOW" : "DENY"} — ${e.detail}`);
+    console.log(`  owner:       ${o.allowed ? "ALLOW" : "DENY"}, ${o.detail}`);
+    console.log(`  eavesdropper:${e.allowed ? "ALLOW" : "DENY"}, ${e.detail}`);
     assert.isTrue(o.allowed, "owner should read a public account");
     assert.isTrue(e.allowed, "eavesdropper should read a public account");
   });
@@ -254,8 +254,8 @@ describe("SolPoker Phase 0 — private counter on devnet TEE", () => {
 
     const o = await tryRead(ownerEr.connection, counterPDA);
     const e = await tryRead(eavesdropperEr, counterPDA);
-    console.log(`  owner:       ${o.allowed ? "ALLOW" : "DENY"} — ${o.detail}`);
-    console.log(`  eavesdropper:${e.allowed ? "ALLOW" : "DENY"} — ${e.detail}`);
+    console.log(`  owner:       ${o.allowed ? "ALLOW" : "DENY"}, ${o.detail}`);
+    console.log(`  eavesdropper:${e.allowed ? "ALLOW" : "DENY"}, ${e.detail}`);
 
     assert.isTrue(o.allowed, "member (card owner) must still read their cards");
     assert.isFalse(e.allowed, "OPPONENT MUST NOT READ HOLE CARDS");
@@ -278,13 +278,13 @@ describe("SolPoker Phase 0 — private counter on devnet TEE", () => {
 
     const o = await tryRead(ownerEr.connection, counterPDA);
     const e = await tryRead(eavesdropperEr, counterPDA);
-    console.log(`  owner:       ${o.allowed ? "ALLOW" : "DENY"} — ${o.detail}`);
-    console.log(`  eavesdropper:${e.allowed ? "ALLOW" : "DENY"} — ${e.detail}`);
+    console.log(`  owner:       ${o.allowed ? "ALLOW" : "DENY"}, ${o.detail}`);
+    console.log(`  eavesdropper:${e.allowed ? "ALLOW" : "DENY"}, ${e.detail}`);
 
     assert.isFalse(e.allowed, "nobody may read the deck");
     assert.isFalse(
       o.allowed,
-      "EMPTY MEMBER LIST MUST LOCK OUT EVEN THE AUTHORITY — " +
+      "EMPTY MEMBER LIST MUST LOCK OUT EVEN THE AUTHORITY, " +
         "if this fails, the Deck design must change (see SPEC.md §4)",
     );
   });
@@ -308,8 +308,8 @@ describe("SolPoker Phase 0 — private counter on devnet TEE", () => {
 
     const o = await tryRead(ownerEr.connection, counterPDA);
     const e = await tryRead(eavesdropperEr, counterPDA);
-    console.log(`  owner:       ${o.allowed ? "ALLOW" : "DENY"} — ${o.detail}`);
-    console.log(`  eavesdropper:${e.allowed ? "ALLOW" : "DENY"} — ${e.detail}`);
+    console.log(`  owner:       ${o.allowed ? "ALLOW" : "DENY"}, ${o.detail}`);
+    console.log(`  eavesdropper:${e.allowed ? "ALLOW" : "DENY"}, ${e.detail}`);
     assert.isTrue(o.allowed, "reads must be restorable after full lockdown");
     assert.isTrue(e.allowed, "public again means public for everyone");
   });

@@ -2,7 +2,7 @@
 //!
 //! 1. **Chips are conserved** across any legal sequence of actions, and through
 //!    pot construction and distribution.
-//! 2. **Hand ranking is a total order** — and the fast evaluator agrees with
+//! 2. **Hand ranking is a total order**: and the fast evaluator agrees with
 //!    brute force over all five-card subsets.
 //! 3. **Side pots sum to total contributions**, whatever the all-in pattern.
 //!
@@ -194,7 +194,7 @@ proptest! {
     }
 
     /// A hand's rank never changes if every card keeps its rank but swaps suit
-    /// consistently — except where that creates or destroys a flush.
+    /// consistently, except where that creates or destroys a flush.
     #[test]
     fn suits_only_matter_through_flushes(seed in any::<[u8; 32]>()) {
         let cards = seven_cards(&seed);

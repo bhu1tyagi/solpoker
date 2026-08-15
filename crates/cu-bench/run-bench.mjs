@@ -35,9 +35,9 @@ const connection = new Connection(RPC, "confirmed");
 
 const WORKLOADS = [
   { mode: 0, label: "baseline (instrumentation only)" },
-  { mode: 1, label: "evaluate() — one 7-card hand" },
-  { mode: 2, label: "showdown — 6 evaluates + side pots + payout" },
-  { mode: 3, label: "shuffle — 52-card deterministic Fisher-Yates" },
+  { mode: 1, label: "evaluate(), one 7-card hand" },
+  { mode: 2, label: "showdown, 6 evaluates + side pots + payout" },
+  { mode: 3, label: "shuffle, 52-card deterministic Fisher-Yates" },
 ];
 
 /** Pull the ordered "units remaining" readings out of the program logs. */

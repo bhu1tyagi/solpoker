@@ -8,8 +8,7 @@
 //! distinct contribution amount as a boundary, then for each band between
 //! consecutive boundaries take what each seat put into that band. A seat is
 //! eligible for a band if it reached that band and did not fold. Folded players'
-//! chips still fill the pots — that is dead money — they are simply never
-//! eligible to win it back.
+//! chips still fill the pots as dead money. They just cannot win it back.
 //!
 //! Worked three-way example. A is all-in for 100, B is all-in for 300, C calls 300:
 //!
@@ -22,7 +21,7 @@
 //!                                    700
 //! ```
 //!
-//! If A has the best hand, A wins 300 and cannot touch the 400 — that is settled
+//! If A has the best hand, A wins 300 and cannot touch the 400. That is settled
 //! between B and C alone.
 
 // Seat indices double as bitmask positions throughout this module, so
@@ -110,8 +109,8 @@ impl Pots {
 /// `folded[i]` marks seats that gave up their claim. Chips from folded seats stay
 /// in the pots as dead money.
 ///
-/// The returned pots always sum to the total contributed — no chip is created or
-/// lost — and adjacent layers with identical eligibility are merged so the result
+/// The returned pots always sum to the total contributed, no chip is created or
+/// lost, and adjacent layers with identical eligibility are merged so the result
 /// is the minimal correct list.
 pub fn build_pots(contributions: &[u64; MAX_SEATS], folded: &[bool; MAX_SEATS]) -> Pots {
     // Distinct non-zero contribution amounts become the band boundaries.
@@ -178,7 +177,7 @@ pub struct Distribution {
     /// This is always zero in a real hand, because a hand always ends with at
     /// least one player who has not folded. It can only be non-zero if every
     /// single contributor to a layer folded. It is reported rather than silently
-    /// dropped so callers can assert on it — an on-chain settle instruction
+    /// dropped so callers can assert on it, an on-chain settle instruction
     /// should treat a non-zero value as a bug and refuse to proceed.
     pub unclaimed: u64,
 }
@@ -283,10 +282,7 @@ pub fn distribute(
 
 /// Give the whole pot to the last player standing, for hands that end without a
 /// showdown because everyone else folded.
-pub fn award_uncontested(
-    contributions: &[u64; MAX_SEATS],
-    winner: usize,
-) -> [u64; MAX_SEATS] {
+pub fn award_uncontested(contributions: &[u64; MAX_SEATS], winner: usize) -> [u64; MAX_SEATS] {
     let mut payouts = [0u64; MAX_SEATS];
     payouts[winner] = contributions.iter().sum();
     payouts
@@ -328,9 +324,9 @@ mod tests {
 
         // A has the best hand, C the second best.
         let ranks = [
-            Some(HandRank(900)), // A — best
-            Some(HandRank(500)), // B — worst
-            Some(HandRank(700)), // C — middle
+            Some(HandRank(900)), // A, best
+            Some(HandRank(500)), // B, worst
+            Some(HandRank(700)), // C, middle
             None,
             None,
             None,
@@ -470,7 +466,10 @@ mod tests {
         let pots = build_pots(&contributions, &no_folds());
         assert_eq!(pots.len(), 1);
         assert_eq!(pots.total(), 1200);
-        assert_eq!(pots.as_slice()[0].eligible_seats(), (0..6).collect::<Vec<_>>());
+        assert_eq!(
+            pots.as_slice()[0].eligible_seats(),
+            (0..6).collect::<Vec<_>>()
+        );
     }
 
     #[test]

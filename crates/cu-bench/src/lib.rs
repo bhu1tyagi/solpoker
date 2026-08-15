@@ -2,7 +2,7 @@
 //!
 //! Native benchmarks say nothing about compute units, so this program runs the
 //! engine inside the SBF VM and reports the actual CU each operation costs. It
-//! exists only to produce a number for the Phase 1 gate — it is not part of the
+//! exists only to produce a number for the Phase 1 gate, it is not part of the
 //! game and never gets deployed to mainnet.
 //!
 //! Measurement works by bracketing the work with `sol_log_compute_units()`,
@@ -10,8 +10,8 @@
 //! consecutive readings. Two back-to-back calls at the start measure the cost of
 //! the instrumentation itself so it can be subtracted out.
 //!
-//! (`sol_remaining_compute_units()` would be tidier — it returns the value
-//! directly — but that syscall fails to link on the devnet runtime, so the log
+//! (`sol_remaining_compute_units()` would be tidier, it returns the value
+//! directly, but that syscall fails to link on the devnet runtime, so the log
 //! form is used instead.)
 //!
 //! Instruction data selects the workload:

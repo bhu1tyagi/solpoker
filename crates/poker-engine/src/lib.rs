@@ -1,4 +1,4 @@
-//! SolPoker rules engine — chain-agnostic Texas Hold'em.
+//! SolPoker rules engine, chain-agnostic Texas Hold'em.
 //!
 //! This crate is deliberately free of Solana dependencies. Everything here is
 //! plain deterministic Rust so it can be unit-tested, property-tested, and
@@ -8,10 +8,10 @@
 //!
 //! The three pieces:
 //!
-//! - [`card`] — card encoding, deck, deterministic shuffle
-//! - [`eval`] — table-free 7-card hand evaluation
-//! - [`betting`] — betting round state machine and legal-action rules
-//! - [`pots`] — main and side pot construction and distribution
+//! - [`card`], card encoding, deck, deterministic shuffle
+//! - [`eval`], table-free 7-card hand evaluation
+//! - [`betting`], betting round state machine and legal-action rules
+//! - [`pots`], main and side pot construction and distribution
 //!
 //! Chips are play-money throughout. Nothing in this crate touches tokens,
 //! lamports, or any transfer path.

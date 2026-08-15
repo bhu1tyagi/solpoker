@@ -25,7 +25,7 @@ use crate::{seats_mut, seats_ref};
 
 /// Settle the hand: award the pots, then wipe all card data.
 ///
-/// Permissionless — anyone may call it once the hand is over, so a disconnected
+/// Permissionless, anyone may call it once the hand is over, so a disconnected
 /// winner cannot leave the table stuck.
 pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
     let table_key = ctx.accounts.table.key();
@@ -65,10 +65,8 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
 
     for i in 0..MAX_SEATS {
         let info = &ctx.remaining_accounts[i];
-        let (expected, _) = Pubkey::find_program_address(
-            &[HOLE_SEED, table_key.as_ref(), &[i as u8]],
-            &crate::ID,
-        );
+        let (expected, _) =
+            Pubkey::find_program_address(&[HOLE_SEED, table_key.as_ref(), &[i as u8]], &crate::ID);
         require_keys_eq!(info.key(), expected, PokerError::SeatOrderMismatch);
 
         let in_hand = betting.seats[i].occupied && !betting.seats[i].folded;
@@ -87,7 +85,10 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
                 board.iter().all(|c| *c != NO_CARD),
                 PokerError::StreetNotComplete
             );
-            require!(hole.hand_number == hand_number, PokerError::HandNumberMismatch);
+            require!(
+                hole.hand_number == hand_number,
+                PokerError::HandNumberMismatch
+            );
             let seven = [
                 hole.cards[0],
                 hole.cards[1],

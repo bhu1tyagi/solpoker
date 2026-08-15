@@ -126,9 +126,6 @@ fn main() {
     println!("\n  unclaimed:      {}", dist.unclaimed);
     println!("  chips at start: {starting_chips}");
     println!("  chips at end:   {ending_chips}");
-    assert_eq!(
-        starting_chips, ending_chips,
-        "chip conservation must hold"
-    );
+    assert_eq!(starting_chips, ending_chips, "chip conservation must hold");
     println!("  conserved:      yes");
 }

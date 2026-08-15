@@ -1,100 +1,91 @@
 # SolPoker
 
-Real-time, fully on-chain Texas Hold'em on Solana — built on MagicBlock Ephemeral
-Rollups for sub-second gameplay and **Private** Ephemeral Rollups (Intel TDX TEE) for
-hole-card secrecy.
+Real-time on-chain Texas Hold'em on Solana. Built on MagicBlock Ephemeral Rollups for
+sub-second play, with Private Ephemeral Rollups (Intel TDX) for hole-card secrecy.
 
-> **Status: Phases 0–3 complete.** A full hand of Texas Hold'em plays end to end on a
-> devnet Ephemeral Rollup, with betting actions signed by session keys rather than a
-> wallet prompt per action.
->
-> **Cards are face up.** The deck and hole cards currently live in ordinary public PDAs,
-> readable by anyone. Making them secret is Phase 4 — the TEE mechanism is already proven
-> (see below), but it is not yet wired into the game. Nothing here should be described as
-> hidden-information poker yet.
->
-> See [SPEC.md](SPEC.md) for the phase plan and [DECISIONS.md](DECISIONS.md) for the
-> running decision log.
+Play money only. Chips come from a faucet and there is no path from real value to chips
+or back.
 
-## Why this architecture
+## Status
 
-On-chain poker has three hard problems. All Solana account data is world-readable, so
-hole cards can't just live in a PDA. Poker needs sub-second actions and turn clocks,
-which base-layer Solana can't give you without a wallet popup per action. And the
-shuffle must be verifiable, so no clock- or slot-derived seed will do.
+Phases 0 to 3 are done. A full hand plays end to end on a devnet rollup, with betting
+actions signed by session keys instead of a wallet prompt per action.
 
-The answers here are, respectively: card accounts delegated to a TEE validator and gated
-by per-player `EphemeralPermission`; an Ephemeral Rollup with session keys; and
-MagicBlock VRF combined with per-player commit-reveal salts.
+**Cards are still face up.** The deck and hole cards live in ordinary public PDAs that
+anyone can read. Hiding them is Phase 4. The TEE mechanism is proven (see below) but is
+not yet wired into the game, so do not call this hidden-information poker yet.
 
-### Why a TEE instead of mental poker
+See [SPEC.md](SPEC.md) for the phase plan and [DECISIONS.md](DECISIONS.md) for the
+decision log.
 
-Mental poker (threshold ElGamal with ZK shuffle proofs) is the cryptographically pure
-answer, and it's also why no on-chain poker product has shipped at scale. Every card
-reveal needs a multi-party decryption round-trip, and if a player disconnects mid-hand
-their key share is needed to continue — so the hand **stalls**.
+## Why this design
 
-Making the enclave the dealer turns a disconnect into an ordinary auto-fold. That single
-property is what makes this buildable.
+On-chain poker has three hard problems:
 
-## Trust model — read this before believing anything
+| Problem | Why it is hard | What we do |
+| --- | --- | --- |
+| Hidden cards | All Solana account data is world-readable | Card PDAs delegated to a TEE validator, gated by `EphemeralPermission` |
+| Real-time play | 400ms blocks and a wallet popup per action | Ephemeral Rollup plus session keys |
+| Fair shuffle | Clock and slot seeds are trivially biased | VRF combined with per-player commit-reveal salts |
+
+Mental poker is the cryptographically pure answer to the first problem, and it is why no
+on-chain poker product has shipped at scale. Every card reveal needs a multi-party
+decryption round trip, and a player who disconnects mid-hand takes their key share with
+them, so the hand stalls. Making the enclave the dealer turns a disconnect into an
+ordinary auto-fold. That is what makes this buildable.
+
+## Trust model
 
 **This is not trustless.** It trusts Intel TDX and MagicBlock's TEE validator.
 
-The accurate claim is *"provably fair shuffle, TEE-protected hole cards"* — not
-"provably fair hole cards", and not "trustless". One nuance already surfaced in Phase 0:
-`verifyTeeRpcIntegrity` proves you are talking to genuine TDX hardware over a fresh
-challenge, but it does **not** verify which code is running inside the enclave. A full
-`TRUST_MODEL.md` lands in Phase 4.
+The accurate claim is "provably fair shuffle, TEE-protected hole cards". Not "provably
+fair hole cards", and not "trustless".
 
-**Chips are play-money only** — non-purchasable and non-redeemable, with no path between
-real value and chips in either direction.
+One nuance already surfaced in Phase 0: `verifyTeeRpcIntegrity` proves you are talking to
+genuine TDX hardware over a fresh challenge, but it does not check what code is running
+inside the enclave. A full `TRUST_MODEL.md` lands with Phase 4.
 
 ## Phase 0 result
 
 The whole design rests on one assumption: that an `EphemeralPermission` with
-`is_private = true` and an **empty** member list makes an account readable by nobody,
-so the shuffled deck is known only to program logic inside the enclave.
+`is_private = true` and an empty member list makes an account readable by nobody, so the
+deck is known only to program logic inside the enclave.
 
-That is now measured, not assumed. Against two independently authenticated wallets on
-devnet TEE:
+That is now measured rather than assumed, against two independently authenticated wallets
+on devnet:
 
 | Permission state | Account owner | Unrelated wallet |
 | --- | --- | --- |
 | public | reads | reads |
-| private, members `[owner]` — the **HoleCards** model | reads | **denied** |
-| private, members `[]` — the **Deck** model | **denied** | **denied** |
+| private, members `[owner]` (the HoleCards shape) | reads | denied |
+| private, members `[]` (the Deck shape) | denied | denied |
 
-Denied reads return `null` over the authenticated TEE RPC. Crucially, the program's
-PDA-signed CPI can still update a fully-locked permission, so a table can never be
-bricked — verified by flipping privacy back off after total lockdown.
+Denied reads come back as `null` over the authenticated TEE RPC. A fully locked account
+can still be updated by the program's PDA-signed CPI, so a table can never be bricked.
 
 ## The rules engine
 
-`crates/poker-engine` is plain deterministic Rust with **no Solana dependencies**, so
-it can be property-tested and fuzzed off-chain at full speed and then linked into the
-program unchanged. Its types mirror the on-chain account layouts, so no conversion
-layer is needed.
+`crates/poker-engine` is plain deterministic Rust with no Solana dependencies, so it can
+be property-tested off-chain at full speed and linked into the program unchanged.
 
-The hand evaluator uses **no lookup tables**. The usual fast evaluators buy speed with
-memory — the Two Plus Two table is ~130 MB — which is a non-starter on chain. This one
-derives every category from a 13-bit rank mask and a count array using bit tricks;
-straight detection is a single four-shift AND.
+The evaluator uses no lookup tables. The usual fast evaluators buy speed with memory (the
+Two Plus Two table is around 130 MB), which does not survive a Solana compute budget. This
+one works from a 13-bit rank mask and a count array; straight detection is a single
+four-shift AND.
 
-Measured on devnet inside the SBF VM:
+Measured inside the SBF VM on devnet:
 
-| Operation | CU | Share of the 200,000 default budget |
+| Operation | CU | Share of the 200k budget |
 | --- | ---: | ---: |
 | Evaluate one 7-card hand | 865 | 0.43% |
-| Six-player showdown, side pots and payout included | 7,075 | 3.54% |
+| Six-player showdown with side pots and payout | 7,075 | 3.54% |
 | 52-card deterministic shuffle | 18,289 | 9.14% |
 
-Showdown settlement fits about 28 times over, so no compute budget increase is needed.
+Showdown fits about 28 times over, so no compute budget increase is needed.
 
-Three invariants are enforced by property tests rather than examples: chips are
-conserved across any legal action sequence, hand ranking is a total order that agrees
-with brute-force search over all 21 five-card subsets, and side pots always sum to
-total contributions.
+Three invariants are covered by property tests rather than examples: chips are conserved
+across any legal action sequence, hand ranking is a total order matching brute-force
+search over all 21 five-card subsets, and side pots always sum to contributions.
 
 ```bash
 cd crates/poker-engine
@@ -104,87 +95,57 @@ cargo run --example three_way_side_pot      # worked multi-way all-in
 
 ## The game on-chain
 
-Execution splits across two layers, and where each account lives is the security model:
+Where each account lives is the security model, not a detail:
 
-| Account | Layer | Why |
-| --- | --- | --- |
-| `Player` (chip balance) | base layer, never delegated | Chip custody stays settled on Solana |
-| `TableConfig` | base layer, never delegated | Immutable params |
-| `Table`, `Seat`, `Hand`, `Deck`, `HoleCards` | delegated to the ER | Change on every action |
+| Account | Layer |
+| --- | --- |
+| `Player` (chip balance), `TableConfig` | base layer, never delegated |
+| `Table`, `Seat`, `Hand`, `Deck`, `HoleCards` | delegated to the rollup |
 
-Chips move between a player's balance and a seat stack **only on the base layer, only
-while the table is undelegated**. So while a hand runs on the rollup, chips move between
-seats but the table total is invariant, and no rollup transaction can reach a player's
-balance or mint a chip. This is enforced by account ownership rather than a flag.
+Chips move between a player's balance and a seat stack only on the base layer, and only
+while the table is undelegated. So during a hand chips move between seats but the table
+total cannot change, and no rollup transaction can reach a player's balance or mint a
+chip. Account ownership enforces this, not a flag that could go stale.
 
-Betting actions accept a **session key**, so a player authorises once and then folds,
-calls, and raises with no wallet prompt. Everything that touches custody — join, leave,
-faucet — stays wallet-only, so a leaked session key can play badly at one table and
-nothing worse.
+Betting actions accept a session key, so a player authorises once and then folds, calls
+and raises with no prompt. Join, leave and faucet stay wallet-only, so a leaked session
+key can play badly at one table and do nothing worse.
 
-Measured on the devnet TEE rollup over a full hand, 12 session-key actions:
+Measured over a full hand, 12 session-key actions:
 
 | min | p50 | avg | max |
 | ---: | ---: | ---: | ---: |
 | 249ms | 324ms | 484ms | 1133ms |
 
-That is above the sub-100ms target. The constraint is network distance rather than rollup
-block time — devnet's only TEE region is in Asia — and closing it is a client-side problem
-(optimistic updates, `processed` commitment) rather than a program change.
+That is above the sub-100ms target. The limit is network distance, not rollup block time,
+since devnet's only TEE region is in Asia. Closing it is client-side work (optimistic
+updates, `processed` commitment) rather than a program change.
 
 ```bash
 npm install
 anchor build && npm run deploy
-npm run test:base   # Phase 2: base layer, chip conservation
-npm run test:er     # Phase 3: full hand on the ER
+npm run test:base   # base layer, chip conservation
+npm run test:er     # full hand on the rollup
 ```
 
-## Repo layout
+## Layout
 
 ```
-programs/solpoker/        The game program (Phases 2-3)
-  src/state.rs            Account layouts for every phase
-  src/bridge.rs           Accounts <-> poker-engine state machine
+programs/solpoker/        The game program
+  src/state.rs            Account layouts
+  src/bridge.rs           Accounts <-> poker-engine
   src/instructions/       player, table, delegation, hand, action, settle
-crates/poker-engine/      Chain-agnostic rules engine (Phase 1)
-  src/card.rs             Card encoding, deck, deterministic shuffle
-  src/eval.rs             Table-free 7-card evaluator
-  src/betting.rs          Betting state machine and legal-action rules
-  src/pots.rs             Main and side pot construction and payout
-crates/cu-bench/          Throwaway SBF program that measures on-chain CU
-phase0-private-counter/   Phase 0 TEE proof (deployed on devnet)
-  programs/               Anchor program: delegation + permission lifecycle
-  tests/                  Adversarial two-wallet privacy tests
-SPEC.md                   Full build spec and phase gates
-DECISIONS.md              Every non-obvious choice, with rejected alternatives
+crates/poker-engine/      Rules engine, no Solana deps
+crates/cu-bench/          Throwaway SBF program for measuring compute cost
+phase0-private-counter/   TEE privacy proof, deployed on devnet
 ```
-
-## Running the Phase 0 proof
-
-Requires Rust 1.89.0, Solana CLI 3.1.9, Anchor CLI 1.0.2, and a funded devnet wallet at
-`~/.config/solana/id.json`.
-
-```bash
-cd phase0-private-counter
-npm install
-anchor build
-npm run deploy
-npm test
-```
-
-The test suite is idempotent — re-running it reuses the existing delegation.
 
 ## Stack
 
-| Component | Version |
-| --- | --- |
-| Rust | 1.89.0 |
-| Solana CLI | 3.1.9 |
-| Anchor CLI | 1.0.2 |
-| `ephemeral-rollups-sdk` (Rust) | 0.16.2 — features `anchor`, `access-control` |
-| `@magicblock-labs/ephemeral-rollups-sdk` (npm) | 0.14.3 |
+Rust 1.89.0, Solana CLI 3.1.9, Anchor CLI 1.0.2, `ephemeral-rollups-sdk` 0.16.2
+(features `anchor`, `access-control`), npm SDK 0.14.3.
 
-Devnet TEE endpoint `https://devnet-tee.magicblock.app`, validator identity
+Devnet TEE endpoint `https://devnet-tee.magicblock.app`, validator
 `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo`.
 
 ## License

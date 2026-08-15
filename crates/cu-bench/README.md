@@ -2,7 +2,7 @@
 
 Measures the real on-chain compute-unit cost of `poker-engine` by running it
 inside the SBF VM on devnet. It exists purely to produce a number for the Phase 1
-gate — it is not part of the game.
+gate, it is not part of the game.
 
 Native benchmarks cannot answer the question that matters here ("does showdown
 evaluation fit in a Solana compute budget?"), so this deploys a throwaway program
@@ -29,9 +29,9 @@ Devnet, program `4PpPbp3Y6G1wQqYAPys8iJE3QS8nNEKSJEnDMBVWuuGi`:
 
 | Workload | CU | Share of the 200,000 default budget |
 | --- | ---: | ---: |
-| `evaluate()` — one 7-card hand | 865 | 0.43% |
-| Showdown — 6 evaluates + side pots + payout | 7,075 | 3.54% |
-| Shuffle — 52-card deterministic Fisher-Yates | 18,289 | 9.14% |
+| `evaluate()`: one 7-card hand | 865 | 0.43% |
+| Showdown, 6 evaluates + side pots + payout | 7,075 | 3.54% |
+| Shuffle, 52-card deterministic Fisher-Yates | 18,289 | 9.14% |
 
 Showdown settlement fits the default budget roughly 28 times over, so **no compute
 budget increase is needed** for the path the spec was worried about.
@@ -49,7 +49,7 @@ instrumentation itself (101 CU), which is subtracted from every reported figure,
 so the numbers above are engine work alone.
 
 `sol_remaining_compute_units()` would be tidier since it returns the value
-directly, but that syscall fails to link on the devnet runtime — deploying a
+directly, but that syscall fails to link on the devnet runtime, deploying a
 program that calls it is rejected with `Unresolved symbol
 (sol_remaining_compute_units)`. The log form is used instead.
 

@@ -8,7 +8,7 @@
 //! are delegated.
 //!
 //! That restriction is not incidental. [`Player`] is never delegated, so a single
-//! instruction cannot write both a player's balance and a delegated seat — they
+//! instruction cannot write both a player's balance and a delegated seat, they
 //! live on different layers. Forcing custody transitions through the base layer
 //! gives a clean invariant: while a hand runs on the ER, chips may move *between*
 //! seats but the total at the table cannot change, and player balances are

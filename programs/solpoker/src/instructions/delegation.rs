@@ -3,7 +3,7 @@
 //! Delegation is split across several small instructions rather than one large
 //! one. A single context holding the table, hand, deck, six seats, and six
 //! hole-card accounts overflows the 4KB BPF stack frame in Anchor's generated
-//! account resolution — which surfaces at runtime as a null-pointer access
+//! account resolution, which surfaces at runtime as a null-pointer access
 //! violation, not a clean error. Small contexts also keep each transaction well
 //! inside its compute budget.
 //!
@@ -83,7 +83,7 @@ pub fn delegate_seat(ctx: Context<DelegateSeat>, seat_index: u8) -> Result<()> {
 /// The deck is only safe to commit because [`crate::instructions::settle`]
 /// zeroizes it at hand end, before any undelegation path can run. Committing a
 /// live deck would publish every card to Solana permanently. From Phase 4 the
-/// deck is TEE-private and must be zeroized here as well — see SPEC.md §4.
+/// deck is TEE-private and must be zeroized here as well, see SPEC.md §4.
 pub fn undelegate_core(ctx: Context<UndelegateCore>) -> Result<()> {
     MagicIntentBundleBuilder::new(
         ctx.accounts.payer.to_account_info(),

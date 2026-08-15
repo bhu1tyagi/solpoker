@@ -1,9 +1,9 @@
-//! Phase 0 — prove the MagicBlock Private Ephemeral Rollup (TEE) pipe end to end.
+//! Phase 0, prove the MagicBlock Private Ephemeral Rollup (TEE) pipe end to end.
 //!
 //! This reproduces the upstream `private-counter` example and adds one extra
 //! instruction (`set_deck_privacy`) that exercises the exact permission shape
 //! SolPoker's `Deck` account will need: `is_private = true` with an EMPTY member
-//! list, i.e. readable by no wallet at all — only by program logic inside the
+//! list, i.e. readable by no wallet at all, only by program logic inside the
 //! enclave. The upstream example never tests that combination (it always keeps
 //! the authority as a member), so we validate it here before committing the
 //! poker architecture to it.
@@ -84,7 +84,7 @@ pub mod private_counter {
                 &[COUNTER_SEED, ctx.accounts.authority.key().as_ref()],
                 DelegateConfig {
                     validator: validator.map(|v| v.key()),
-                    ..Default::default()
+            ..Default::default()
                 },
             )?;
         } else {
@@ -95,7 +95,7 @@ pub mod private_counter {
 
     /// Create the ephemeral permission directly on the ER. Payer is the counter
     /// PDA itself (delegated, carries its prefunded lamports onto the ER).
-    /// Idempotent per the docs — skip if it already exists. Starts public.
+    /// Idempotent per the docs, skip if it already exists. Starts public.
     pub fn init_permission(ctx: Context<PermissionContext>) -> Result<()> {
         if ctx.accounts.permission.lamports() > 0 {
             msg!("Permission already exists, skipping creation");
@@ -122,7 +122,7 @@ pub mod private_counter {
         Ok(())
     }
 
-    /// Toggle privacy with the AUTHORITY retained as sole member — the
+    /// Toggle privacy with the AUTHORITY retained as sole member, the
     /// `HoleCards` model (owner can read, everyone else is blocked).
     /// The member list is rebuilt on every call so the authority can never
     /// lock itself out.
@@ -156,7 +156,7 @@ pub mod private_counter {
         Ok(())
     }
 
-    /// THE DECK MODEL — `is_private = true` with an EMPTY member list.
+    /// THE DECK MODEL, `is_private = true` with an EMPTY member list.
     ///
     /// Per the PER access-control docs: "If members field is set to empty list,
     /// the permissioned account is fully restricted and private. Only the owner
@@ -216,7 +216,7 @@ pub mod private_counter {
     }
 
     /// Manual commit of counter state from the ER to the base layer.
-    /// COMMIT AUDIT: commits `counter` only — a public u64 + authority pubkey.
+    /// COMMIT AUDIT: commits `counter` only, a public u64 + authority pubkey.
     /// Contains no hidden information. (In SolPoker, Deck/HoleCards must never
     /// appear at a call site like this.)
     pub fn commit(ctx: Context<IncrementAndCommit>) -> Result<()> {
@@ -231,7 +231,7 @@ pub mod private_counter {
     }
 
     /// Commit and undelegate in one atomic ER transaction.
-    /// COMMIT AUDIT: same as `commit` — public counter state only.
+    /// COMMIT AUDIT: same as `commit`: public counter state only.
     pub fn undelegate(ctx: Context<UndelegateCounter>) -> Result<()> {
         MagicIntentBundleBuilder::new(
             ctx.accounts.payer.to_account_info(),
@@ -277,7 +277,7 @@ pub struct Increment<'info> {
 }
 
 /// Shared context for init_permission / set_privacy / set_deck_privacy /
-/// close_permission — all run on the ER against the ephemeral permission.
+/// close_permission, all run on the ER against the ephemeral permission.
 #[derive(Accounts)]
 pub struct PermissionContext<'info> {
     #[account(mut)]
