@@ -19,9 +19,16 @@
 //!
 //! Everything needed to recheck this is published on chain: each seat keeps its
 //! salt, and the hand keeps the raw VRF output and the final seed.
+//!
+//! Committing and revealing happen twice per hand, so like the betting action
+//! they accept a session key. Two wallet prompts per hand would make the game
+//! unplayable for the same reason one prompt per bet would. The salt is still
+//! generated on the player's own machine, so the fairness argument above is
+//! unchanged: a session key signs the same salt its owner chose.
 
 use anchor_lang::prelude::*;
 use sha2::{Digest, Sha256};
+use session_keys::{session_auth_or, Session, SessionError, SessionTokenV2};
 use ephemeral_rollups_sdk::{
     anchor::{vrf, vrf_callback},
     vrf::{
@@ -42,6 +49,10 @@ pub const SHUFFLE_REQUESTED: u8 = 1;
 pub const SHUFFLE_FULFILLED: u8 = 2;
 
 /// Submit `sha256(salt)` for a seat, before any salt is public.
+#[session_auth_or(
+    ctx.accounts.authority.key() == ctx.accounts.payer.key(),
+    SessionError::InvalidToken
+)]
 pub fn commit_salt(ctx: Context<SaltCtx>, seat_index: u8, commitment: [u8; 32]) -> Result<()> {
     require!(
         ctx.accounts.hand.shuffle_state == SHUFFLE_IDLE,
@@ -62,6 +73,10 @@ pub fn commit_salt(ctx: Context<SaltCtx>, seat_index: u8, commitment: [u8; 32]) 
 }
 
 /// Reveal a salt and fold it into the hand's running XOR.
+#[session_auth_or(
+    ctx.accounts.authority.key() == ctx.accounts.payer.key(),
+    SessionError::InvalidToken
+)]
 pub fn reveal_salt(ctx: Context<SaltCtx>, seat_index: u8, salt: [u8; 32]) -> Result<()> {
     require!(
         ctx.accounts.hand.shuffle_state == SHUFFLE_IDLE,
@@ -155,14 +170,21 @@ pub fn shuffle_callback(ctx: Context<ShuffleCallback>, randomness: [u8; 32]) -> 
     Ok(())
 }
 
-#[derive(Accounts)]
+#[derive(Accounts, Session)]
 #[instruction(seat_index: u8)]
 pub struct SaltCtx<'info> {
+    /// Whoever pays for and signs this transaction: either the player's wallet or
+    /// their session key.
+    pub payer: Signer<'info>,
+    /// CHECK: the player this salt is for. Verified against the seat occupant,
+    /// and bound to `payer` by the session token when a session is used.
+    pub authority: UncheckedAccount<'info>,
     #[account(mut)]
     pub hand: Account<'info, Hand>,
     #[account(mut, seeds = [SEAT_SEED, hand.table.as_ref(), &[seat_index]], bump = seat.bump)]
     pub seat: Account<'info, Seat>,
-    pub authority: Signer<'info>,
+    #[session(signer = payer, authority = authority.key())]
+    pub session_token: Option<Account<'info, SessionTokenV2>>,
 }
 
 #[vrf]

@@ -238,7 +238,13 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
         salts.push(salt);
         await step(async () => false, async () =>
           sendEr(await erProgram.methods.commitSalt(i, [...createHash("sha256").update(salt).digest()])
-            .accountsPartial({ hand: handPda, seat: seats[i], authority: players[i].publicKey }).transaction(), [players[i]], `commit ${i}`),
+            .accountsPartial({
+              payer: players[i].publicKey,
+              authority: players[i].publicKey,
+              hand: handPda,
+              seat: seats[i],
+              sessionToken: null,
+            }).transaction(), [players[i]], `commit ${i}`),
           `commit salt ${i}`);
       }
       for (let i = 0; i < SEATED; i++) {
@@ -246,7 +252,13 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
         await step(
           async () => (await erProgram.account.seat.fetch(seats[i])).saltState === 2,
           async () => sendEr(await erProgram.methods.revealSalt(i, [...salts[i]!])
-            .accountsPartial({ hand: handPda, seat: seats[i], authority: players[i].publicKey }).transaction(), [players[i]], `reveal ${i}`),
+            .accountsPartial({
+              payer: players[i].publicKey,
+              authority: players[i].publicKey,
+              hand: handPda,
+              seat: seats[i],
+              sessionToken: null,
+            }).transaction(), [players[i]], `reveal ${i}`),
           `reveal salt ${i}`);
       }
 
@@ -362,9 +374,12 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
       await sendEr(await erProgram.methods.undelegateSeat()
         .accountsPartial({ payer: kp.publicKey, seat: seats[i], hole: holes[i] }).transaction(), [kp], `undelegate_seat ${i}`);
     }
+    // Each seat undelegates in its own transaction, so they land at different
+    // times. Waiting only on the table would read a seat whose base-layer copy
+    // is still frozen at its delegation-time stack.
     for (let t = 0; t < 60; t++) {
-      const info = await connection.getAccountInfo(table);
-      if (info?.owner.equals(program.programId)) break;
+      const infos = await connection.getMultipleAccountsInfo([table, ...seats]);
+      if (infos.every((i) => i?.owner.equals(program.programId))) break;
       await sleep(1000);
     }
 

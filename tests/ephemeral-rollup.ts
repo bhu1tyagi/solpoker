@@ -280,29 +280,70 @@ describe("SolPoker Phases 3-5: private cards and a verifiable shuffle", () => {
     this.timeout(600_000);
     const wallet = (provider.wallet as anchor.Wallet).payer;
 
-    // 1. Everyone commits to a salt nobody else has seen.
+    // 1. Everyone commits to a salt nobody else has seen. Signed by the session
+    // key, which is what a client actually does: two wallet prompts per hand
+    // would be as unplayable as one per bet.
     for (let i = 0; i < SEATED; i++) {
       const commitment = createHash("sha256").update(salts[i]).digest();
       const tx = await erProgram.methods.commitSalt(i, [...commitment])
-        .accountsPartial({ hand: handPda, seat: seats[i], authority: players[i].publicKey })
+        .accountsPartial({
+          payer: sessionKeys[i].publicKey,
+          authority: players[i].publicKey,
+          hand: handPda,
+          seat: seats[i],
+          sessionToken: sessionTokens[i],
+        })
         .transaction();
-      await sendEr(tx, [players[i]], `commit_salt ${i}`);
+      await sendEr(tx, [sessionKeys[i]], `commit_salt ${i}`);
     }
 
     // 2. Everyone reveals. Commitments bind them, so no late switching.
     for (let i = 0; i < SEATED; i++) {
       const tx = await erProgram.methods.revealSalt(i, [...salts[i]])
-        .accountsPartial({ hand: handPda, seat: seats[i], authority: players[i].publicKey })
+        .accountsPartial({
+          payer: sessionKeys[i].publicKey,
+          authority: players[i].publicKey,
+          hand: handPda,
+          seat: seats[i],
+          sessionToken: sessionTokens[i],
+        })
         .transaction();
-      await sendEr(tx, [players[i]], `reveal_salt ${i}`);
+      await sendEr(tx, [sessionKeys[i]], `reveal_salt ${i}`);
     }
 
-    // A salt that does not match its commitment must be rejected.
+    // A session key is scoped to its own player. Seat 1's key must not be able
+    // to speak for seat 0, or a session would be a licence to grief the table.
+    let wrongSeat = false;
+    try {
+      const tx = await erProgram.methods.commitSalt(0, [...randomBytes(32)])
+        .accountsPartial({
+          payer: sessionKeys[1].publicKey,
+          authority: players[0].publicKey,
+          hand: handPda,
+          seat: seats[0],
+          sessionToken: sessionTokens[1],
+        })
+        .transaction();
+      await sendEr(tx, [sessionKeys[1]], "commit_salt for someone else's seat");
+    } catch {
+      wrongSeat = true;
+    }
+    assert.isTrue(wrongSeat, "a session key must not act for another player");
+    console.log("    a session key could not act for another player");
+
+    // A salt that does not match its commitment must be rejected. Signed by the
+    // wallet directly, so this also covers the no-session path.
     let rejected = false;
     try {
       const bogus = randomBytes(32);
       const tx = await erProgram.methods.revealSalt(0, [...bogus])
-        .accountsPartial({ hand: handPda, seat: seats[0], authority: players[0].publicKey })
+        .accountsPartial({
+          payer: players[0].publicKey,
+          authority: players[0].publicKey,
+          hand: handPda,
+          seat: seats[0],
+          sessionToken: null,
+        })
         .transaction();
       await sendEr(tx, [players[0]], "reveal wrong salt");
     } catch {

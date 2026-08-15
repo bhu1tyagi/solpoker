@@ -13,3 +13,10 @@ keys/
 # Rust build artifacts and local bench state
 program-id.json
 hand-history.json
+
+# Next.js app
+app/.next/
+app/out/
+app/next-env.d.ts
+*.tsbuildinfo
+app/.env.local
