@@ -545,8 +545,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         title={`Take seat ${(sitting ?? 0) + 1}`}
       >
         <p style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)", marginTop: 0 }}>
-          Chips move from your balance to the seat. You get them back when you
-          cash out.
+          Chips move from your balance to the seat, and back when you cash
+          out. They keep their SOL backing the whole time.
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0" }}>
           <input
@@ -574,7 +574,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         {!canAfford && (
           <p style={{ color: "var(--lose)", fontSize: "var(--t-sm)", marginTop: 0 }}>
             You need at least {minBuyIn.toLocaleString()} chips to sit here.
-            Claim from the faucet in the lobby.
+            Buy some in the lobby first.
           </p>
         )}
         <Button

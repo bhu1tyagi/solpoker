@@ -29,16 +29,16 @@ pub const NO_SEAT: u8 = 0xFF;
 /// Sentinel for an undealt board slot.
 pub const NO_CARD: u8 = poker_engine::card::NO_CARD;
 
-/// Play-money chips handed out per faucet claim.
-pub const FAUCET_AMOUNT: u64 = 10_000;
-
-/// Minimum wait between faucet claims, in seconds.
-pub const FAUCET_COOLDOWN_SECS: i64 = 24 * 60 * 60;
+// The faucet is retired: chips are bought with SOL and sold back for SOL, and
+// nothing may mint an unbacked one. The Player field `last_faucet_ts` remains
+// in the layout so existing accounts keep their shape.
 
 /// How long a player has to act before anyone may time them out.
 pub const ACTION_TIMEOUT_SECS: i64 = 30;
 
 pub const PLAYER_SEED: &[u8] = b"player";
+/// The SOL that backs every outstanding chip lives here.
+pub const VAULT_SEED: &[u8] = b"vault";
 pub const CONFIG_SEED: &[u8] = b"config";
 pub const TABLE_SEED: &[u8] = b"table";
 pub const SEAT_SEED: &[u8] = b"seat";

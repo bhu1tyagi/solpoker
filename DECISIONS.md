@@ -409,3 +409,33 @@ now plays between hands, and long operations, delegation, securing,
 undelegating, closing, dim the felt and narrate their step over it. Chain work
 has no progress bar, but a table that visibly shuffles reads as busy rather
 than broken.
+
+## The economy: SOL in, SOL out
+
+The owner reversed the play-money constraint on 16 August 2026: the point of
+on-chain poker is that the buy-in is real. The spec now says so, and the
+program now does.
+
+**Every chip is backed by lamports in a program vault.** `buy_chips` moves SOL
+from the wallet into a vault PDA and mints exactly what was paid for;
+`sell_chips` burns chips and pays the same rate back out. The rate is a
+constant in the program, 1,000 lamports per chip, so the price is not a market
+and not a knob. The faucet is gone, because an unbacked chip is a claim on
+someone else's deposit. Chips minted by the retired faucet were grandfathered
+by seeding the vault with operator devnet SOL.
+
+**The chip stays an internal ledger entry, not an SPL token.** Custody moving
+between balance and seat only on the base layer while undelegated is the
+security model, and it is property-tested. A token mint would widen the custody
+surface for composability nobody asked for.
+
+**Both sides of the trade are wallet-only.** Session keys still cannot touch
+join, leave, buy or sell, so the blast radius of a leaked session key is
+unchanged: bad bets at one table, nothing more.
+
+**The honesty pass moved, not shrank.** The trust model no longer says risk is
+bounded by play money, because it is not. It says the stakes are devnet test
+currency today, and states plainly what becomes true if that ever changes: the
+attestation gap becomes custodial risk, and real-stakes poker is regulated.
+The error enum kept its dead FaucetOnCooldown variant so every existing error
+code keeps its number.

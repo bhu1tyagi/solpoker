@@ -65,9 +65,26 @@ export async function initPlayerIx(program: SolpokerProgram, authority: PublicKe
   return program.methods.initPlayer().accounts({ authority }).instruction();
 }
 
-export async function claimFaucetIx(program: SolpokerProgram, authority: PublicKey) {
+/** Wallet only: SOL leaves the wallet and chips appear, fully backed. */
+export async function buyChipsIx(
+  program: SolpokerProgram,
+  authority: PublicKey,
+  chips: number,
+) {
   return program.methods
-    .claimFaucet()
+    .buyChips(new BN(chips))
+    .accountsPartial({ player: playerPda(authority), authority })
+    .instruction();
+}
+
+/** Wallet only: chips leave the balance and the vault pays SOL back. */
+export async function sellChipsIx(
+  program: SolpokerProgram,
+  authority: PublicKey,
+  chips: number,
+) {
+  return program.methods
+    .sellChips(new BN(chips))
     .accountsPartial({ player: playerPda(authority), authority })
     .instruction();
 }

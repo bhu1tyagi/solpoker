@@ -119,14 +119,17 @@ async function main() {
     await connectWallet(A);
     await connectWallet(B);
 
-    log("\n2. claim chips");
+    log("\n2. buy chips with SOL");
     for (const b of [A, B]) {
-      await b.page.getByRole("button", { name: /claim 10,000/i }).click();
+      await b.page.getByRole("button", { name: /^buy chips$/i }).click();
+      await b.page.waitForTimeout(1200);
+      await b.page.getByRole("button", { name: /^10,000$/ }).click();
+      await b.page.getByRole("button", { name: /^buy$/i }).click();
       await b.page.waitForFunction(
-        () => /10,000|8,000/.test(document.body.innerText),
+        () => /Bought 10,000 chips|10,000\s*chips/i.test(document.body.innerText),
         { timeout: 90_000 },
       );
-      log(`  ${b.name}: claimed`);
+      log(`  ${b.name}: bought 10,000 chips for 0.01 SOL`);
     }
     await shot(A, "1-lobby");
 
@@ -432,7 +435,35 @@ async function main() {
       .catch(() => false);
     check(!bCanDelete, "a non-creator is not offered a delete button");
 
-    log("\n13. console errors");
+    log("\n13. cashing out: chips become SOL again");
+    await A.page.goto(BASE, { waitUntil: "networkidle" });
+    await A.page.waitForTimeout(2500);
+    const solBefore = await conn.getBalance(players[0].publicKey);
+    const cashOutBtn = A.page.getByRole("button", { name: /^cash out$/i }).first();
+    const canSell = await cashOutBtn.isVisible().catch(() => false);
+    check(canSell, "the lobby offers cash out when chips are held");
+    if (canSell) {
+      await cashOutBtn.click();
+      await A.page.waitForTimeout(1200);
+      await A.page.getByRole("button", { name: /^max$/i }).click();
+      await A.page.getByRole("button", { name: /^cash out$/i }).last().click();
+      const sold = await A.page
+        .waitForFunction(() => /Sold [\d,]+ chips/i.test(document.body.innerText), {
+          timeout: 90_000,
+        })
+        .then(() => true)
+        .catch(() => false);
+      check(sold, "chips sell back to the wallet");
+      await sleep(3000);
+      const solAfter = await conn.getBalance(players[0].publicKey);
+      check(
+        solAfter > solBefore,
+        `the wallet's SOL went up (${((solAfter - solBefore) / 1e9).toFixed(4)} SOL received)`,
+      );
+      await shot(A, "10-cashed-out");
+    }
+
+    log("\n14. console errors");
     for (const b of [A, B]) {
       const real = b.errors.filter(
         (e) => !/favicon|Download the React DevTools|preload/i.test(e),

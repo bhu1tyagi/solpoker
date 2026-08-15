@@ -178,7 +178,7 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
 
     for (const p of players) {
       await retry(() => program.methods.initPlayer().accounts({ authority: p.publicKey }).signers([p]).rpc({ commitment: "confirmed" }), "initPlayer");
-      await retry(() => program.methods.claimFaucet().accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey }).signers([p]).rpc({ commitment: "confirmed" }), "faucet");
+      await retry(() => program.methods.buyChips(new anchor.BN(10_000)).accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey }).signers([p]).rpc({ commitment: "confirmed" }), "buy chips");
     }
     await retry(() => program.methods.createTable(tableId, new BN(5), new BN(10), new BN(200), new BN(5_000), new BN(TIMEOUT_SECS))
       .accountsPartial({ config, table, hand: handPda, deck: deckPda, creator: wallet }).rpc({ commitment: "confirmed" }), "createTable");

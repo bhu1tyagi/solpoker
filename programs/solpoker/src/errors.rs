@@ -76,4 +76,6 @@ pub enum PokerError {
     TableNotEmpty,
     #[msg("Only the creator can delete a table until it has sat empty for an hour")]
     TableNotAbandoned,
+    #[msg("The vault cannot cover that sale")]
+    InsufficientVault,
 }

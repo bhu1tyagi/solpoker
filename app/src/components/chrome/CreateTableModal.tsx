@@ -146,8 +146,8 @@ export function CreateTableModal({
   return (
     <Modal open={open} onClose={busy ? () => {} : onClose} title="New table">
       <p style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)", marginTop: 0 }}>
-        Six seats, no limit. Chips are play money, so nothing here is worth
-        anything outside the game.
+        Six seats, no limit. Chips are bought with SOL and sell back at the
+        same fixed rate, so the stakes here are the stakes.
       </p>
 
       <Field label="Stakes">

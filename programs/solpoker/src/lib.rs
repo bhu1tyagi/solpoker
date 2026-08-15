@@ -40,8 +40,12 @@ pub mod solpoker {
         instructions::player::init_player(ctx)
     }
 
-    pub fn claim_faucet(ctx: Context<ClaimFaucet>) -> Result<()> {
-        instructions::player::claim_faucet(ctx)
+    pub fn buy_chips(ctx: Context<BuyChips>, chips: u64) -> Result<()> {
+        instructions::player::buy_chips(ctx, chips)
+    }
+
+    pub fn sell_chips(ctx: Context<SellChips>, chips: u64) -> Result<()> {
+        instructions::player::sell_chips(ctx, chips)
     }
 
     // --- base layer: tables and seats --------------------------------------

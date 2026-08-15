@@ -25,7 +25,7 @@ import BN from "bn.js";
 import { makeProgram, type SolpokerProgram } from "./anchor";
 import { decodeConfig, decodeHand, decodeHole, decodeSeat, decodeTable } from "./decode";
 import {
-  claimFaucetIx,
+  buyChipsIx,
   createHistoryIx,
   createHoleIx,
   createSeatIx,
@@ -137,9 +137,9 @@ describe("a real hand, through the app's modules", () => {
     for (const p of players) {
       await sendBase(
         base,
-        [await initPlayerIx(program, p.publicKey), await claimFaucetIx(program, p.publicKey)],
+        [await initPlayerIx(program, p.publicKey), await buyChipsIx(program, p.publicKey, 10_000)],
         [p],
-        "init and claim",
+        "init and buy",
       );
     }
 
@@ -453,7 +453,7 @@ describe("a real hand, through the app's modules", () => {
       const info = await base.getAccountInfo(playerPda(players[i].publicKey));
       cashedOut += (await import("./decode")).decodePlayer(new Uint8Array(info!.data)).chips;
     }
-    expect(cashedOut, "every faucet chip is still accounted for").toBe(SEATED * 10_000);
+    expect(cashedOut, "every purchased chip is still accounted for").toBe(SEATED * 10_000);
     console.log(`  both players cashed out, ${cashedOut} chips across balances`);
   }, 900_000);
 });

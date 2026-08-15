@@ -51,11 +51,36 @@ The TEE approach makes the enclave the dealer. A disconnect becomes just an auto
 
 **Be honest about the trust model.** This is *not* trustless. We trust Intel TDX and MagicBlock's TEE validator. You must write `TRUST_MODEL.md` (Phase 4) stating this plainly, including what an enclave compromise would expose. No UI copy may claim "trustless" or "provably fair hole cards." It's "provably fair shuffle, TEE-protected hole cards." That distinction matters.
 
-### Hard constraint: play-money chips
+### The chip economy: SOL in, SOL out
 
-**Chips are non-purchasable and non-redeemable.** No SOL/USDC buy-ins, no path from real money to chips or from chips to anything of value. Implement chips as a `u64` balance in a program-owned account with a faucet granting a fixed daily allowance.
+Revised by owner decision on 16 August 2026. The original spec made chips
+play money with a faucet; the point of on-chain poker is that the buy-in is
+real, so chips are now backed by SOL.
 
-Structure the code so a real-money variant would be a *separate, clearly-gated module*, but don't build it. If you find yourself adding a token transfer into the chip path, stop and ask me.
+**Every chip is backed one to one by lamports in a program vault.** Chips
+enter the system only through `buy_chips`, which moves SOL from the buyer's
+wallet into a program-owned vault PDA, and leave only through `sell_chips`,
+which pays SOL back out of that vault. Fixed rate, set in the program: 1 chip
+= 1,000 lamports, so 10,000 chips cost 0.01 SOL. There is no faucet; an
+unbacked chip is a claim on someone else's deposit, so nothing may mint one.
+
+The chip itself stays a `u64` on the Player account rather than an SPL token.
+Custody already moves between balance and seat only on the base layer while
+undelegated, and that invariant is the security model; a token mint would add
+composability and nothing for gameplay while widening the custody surface.
+
+**Solvency is structural.** The vault's lamports minus a small rent floor must
+always cover every outstanding chip at the fixed rate. Buys add exactly what
+they mint, sells burn exactly what they pay, and no other instruction touches
+either side. Chips minted by the retired faucet were grandfathered by seeding
+the vault with operator devnet SOL.
+
+**Devnet only, and say so.** Devnet SOL is valueless test currency, so today
+this is real-money architecture without real money. Running it on mainnet is
+out of scope for this spec and must not be done casually: the enclave
+attestation gap (hardware proven, code not) becomes a custodial risk, and
+real-money poker is a licensed, regulated activity in most jurisdictions.
+`TRUST_MODEL.md` must state all of this in plain language.
 
 ---
 

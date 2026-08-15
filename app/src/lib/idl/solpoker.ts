@@ -87,16 +87,16 @@ export type Solpoker = {
       "args": []
     },
     {
-      "name": "claimFaucet",
+      "name": "buyChips",
       "discriminator": [
-        80,
-        7,
-        251,
-        108,
-        55,
-        145,
-        135,
-        68
+        220,
+        21,
+        249,
+        76,
+        148,
+        60,
+        83,
+        192
       ],
       "accounts": [
         {
@@ -123,14 +123,42 @@ export type Solpoker = {
           }
         },
         {
+          "name": "vault",
+          "docs": [
+            "the guarantee; it has no data to check."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "authority",
-          "signer": true,
-          "relations": [
-            "player"
-          ]
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "chips",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "closeTable",
@@ -2403,6 +2431,77 @@ export type Solpoker = {
       ]
     },
     {
+      "name": "sellChips",
+      "discriminator": [
+        147,
+        50,
+        20,
+        82,
+        168,
+        167,
+        109,
+        110
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "chips",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "settleHand",
       "discriminator": [
         226,
@@ -3087,6 +3186,11 @@ export type Solpoker = {
       "code": 6036,
       "name": "tableNotAbandoned",
       "msg": "Only the creator can delete a table until it has sat empty for an hour"
+    },
+    {
+      "code": 6037,
+      "name": "insufficientVault",
+      "msg": "The vault cannot cover that sale"
     }
   ],
   "types": [

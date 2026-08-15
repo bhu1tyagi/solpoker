@@ -145,15 +145,23 @@ The same session also exercises the part that mental poker cannot do: a player w
 vanishes takes nothing with them, because they never held a key share. Nothing in
 the hand is waiting on them.
 
-## Play money
+## Chips and SOL
 
-Chips are non-purchasable and non-redeemable. The faucet is the only source and
-no instruction converts them to SOL, a token, or anything of value.
+Chips are bought with SOL and sold back for SOL at a rate fixed in the
+program: 1 chip is 1,000 lamports. The SOL sits in a program vault PDA, chips
+exist only because someone paid that rate, and buys and sells need the wallet,
+never a session key. Solvency is structural: nothing in the program can mint
+an unbacked chip, so the vault always covers the outstanding supply.
 
-This is not incidental. It bounds every risk on this page: if the enclave is
-compromised tomorrow, the cost is a spoiled game rather than stolen money. A
-real-money variant would need a materially stronger story than this document
-describes, starting with the attestation gap above.
+Today this runs on devnet, where SOL is valueless test currency. Read that
+precisely: the architecture is real-money custody, the stakes are not. If this
+ever ran on a network where SOL has value, every trust assumption above stops
+bounding a spoiled game and starts bounding funds. The attestation gap in
+particular, hardware proven but code unproven, becomes a custodial risk: an
+operator running modified enclave code could see every card and win every pot.
+And real-stakes poker is a licensed, regulated activity in most jurisdictions.
+None of that is solved by this document, and running this on mainnet without
+solving it would be wrong.
 
 ## Summary
 
@@ -165,4 +173,4 @@ describes, starting with the attestation gap above.
 | Cards hidden from opponents | Trusts Intel TDX plus the validator operator |
 | Cards hidden from the operator | Trusts TDX isolation, and attestation does not check the code |
 | Hand completes if you disconnect | Yes, auto-fold, unlike mental poker |
-| Funds at risk | None, play money only |
+| Funds at risk | Devnet SOL, which is valueless test currency |

@@ -3,8 +3,9 @@
 Real-time on-chain Texas Hold'em on Solana. Built on MagicBlock Ephemeral Rollups for
 sub-second play, with Private Ephemeral Rollups (Intel TDX) for hole-card secrecy.
 
-Play money only. Chips come from a faucet and there is no path from real value to chips
-or back.
+Chips are bought with SOL and sold back for SOL at a fixed rate, backed one to one by a
+program vault. Devnet only, so the SOL involved is test currency; see TRUST_MODEL.md for
+what would have to change before that could ever be otherwise.
 
 ## Status
 
@@ -143,8 +144,8 @@ total cannot change, and no rollup transaction can reach a player's balance or m
 chip. Account ownership enforces this, not a flag that could go stale.
 
 Betting and the per-hand salt exchange accept a session key, so a player authorises once
-and then plays a whole hand with no prompt. Join, leave and faucet stay wallet-only, so a
-leaked session key can play badly at one table and do nothing worse.
+and then plays a whole hand with no prompt. Join, leave, buy and sell stay wallet-only,
+so a leaked session key can play badly at one table and do nothing worse.
 
 Measured over a full hand, 12 session-key actions:
 

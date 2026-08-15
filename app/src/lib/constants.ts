@@ -42,8 +42,13 @@ export const MAX_SEATS = 6;
 export const NO_SEAT = 0xff;
 export const NO_CARD = 0xff;
 
-export const FAUCET_AMOUNT = 10_000;
-export const FAUCET_COOLDOWN_SECS = 24 * 60 * 60;
+/**
+ * The fixed price of one chip, matching the program. 10,000 chips cost
+ * 0.01 SOL. Chips are backed one to one by lamports in the program vault:
+ * they exist only because someone paid this rate, and selling pays it back.
+ */
+export const LAMPORTS_PER_CHIP = 1_000;
+export const CHIPS_PER_SOL = 1_000_000_000 / LAMPORTS_PER_CHIP;
 
 /** Salt protocol states, on Seat. */
 export const SALT_NONE = 0;
@@ -144,6 +149,7 @@ export const ERROR_NAMES: Record<number, string> = {
   6034: "NotTableCreator",
   6035: "TableNotEmpty",
   6036: "TableNotAbandoned",
+  6037: "InsufficientVault",
 };
 
 /** What to show a player when one of these comes back. */
@@ -159,7 +165,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   TableNotEmpty: "Everyone has to leave the table before it can be deleted.",
   TableNotAbandoned:
     "Only the creator can delete this table until it has sat empty for an hour.",
-  FaucetOnCooldown: "You already claimed chips today. Try again tomorrow.",
+  InsufficientVault:
+    "The vault cannot cover that sale right now. This should not happen, please report it.",
   InsufficientChips: "Not enough chips for that.",
   BuyInOutOfRange: "That buy-in is outside the table limits.",
   SeatOccupied: "Someone took that seat first.",

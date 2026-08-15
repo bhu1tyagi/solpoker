@@ -6,9 +6,9 @@
  * is unplayable.
  *
  * What a session key can do is deliberately narrow. It can act for its owner at
- * the table. It cannot join, leave, claim from the faucet, or move a chip
- * between a seat and a balance, because those instructions only accept the
- * wallet. A leaked session key can lose you a pot. It cannot take your chips.
+ * the table. It cannot join, leave, buy, sell, or move a chip between a seat
+ * and a balance, because those instructions only accept the wallet. A leaked
+ * session key can lose you a pot. It cannot take your chips or your SOL.
  */
 
 import {

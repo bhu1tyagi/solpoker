@@ -12,7 +12,7 @@ import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { assert } from "chai";
 
 const MAX_SEATS = 6;
-const FAUCET_AMOUNT = 10_000;
+const STARTING_CHIPS = 10_000;
 
 const SMALL_BLIND = new BN(5);
 const BIG_BLIND = new BN(10);
@@ -100,7 +100,7 @@ describe("SolPoker Phase 2, base layer", () => {
         .rpc({ commitment: "confirmed" });
 
       await program.methods
-        .claimFaucet()
+        .buyChips(new BN(STARTING_CHIPS))
         .accountsPartial({
           player: playerPda(p.publicKey),
           authority: p.publicKey,
@@ -109,25 +109,59 @@ describe("SolPoker Phase 2, base layer", () => {
         .rpc({ commitment: "confirmed" });
 
       const acct = await program.account.player.fetch(playerPda(p.publicKey));
-      assert.equal(acct.chips.toNumber(), FAUCET_AMOUNT);
-      assert.isAbove(acct.lastFaucetTs.toNumber(), 0);
+      assert.equal(acct.chips.toNumber(), STARTING_CHIPS);
     }
-    console.log(`  three players funded with ${FAUCET_AMOUNT} chips each`);
+    console.log(`  three players bought ${STARTING_CHIPS} chips each`);
   });
 
-  it("refuses a second faucet claim inside the cooldown", async () => {
+  it("backs every purchase with lamports in the vault", async () => {
+    const [vault] = PublicKey.findProgramAddressSync(
+      [Buffer.from("vault")],
+      program.programId,
+    );
+    const balance = await connection.getBalance(vault);
+    // Three purchases of 10,000 chips at 1,000 lamports each.
+    assert.isAtLeast(balance, 3 * STARTING_CHIPS * 1_000,
+      "the vault must hold the SOL that backs the chips");
+    console.log(`  vault holds ${balance} lamports`);
+  });
+
+  it("sells chips back for exactly what they cost", async () => {
+    const p = players[0];
+    const before = await connection.getBalance(p.publicKey);
+    await program.methods
+      .sellChips(new BN(1_000))
+      .accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey })
+      .signers([p])
+      .rpc({ commitment: "confirmed" });
+    const after = await connection.getBalance(p.publicKey);
+    const acct = await program.account.player.fetch(playerPda(p.publicKey));
+    assert.equal(acct.chips.toNumber(), STARTING_CHIPS - 1_000);
+    // 1,000 chips at 1,000 lamports, minus the transaction fee.
+    assert.isAtLeast(after - before, 1_000 * 1_000 - 10_000,
+      "selling must pay the fixed rate back");
+
+    // Round-trip: buy them back so the rest of the suite sees a full stack.
+    await program.methods
+      .buyChips(new BN(1_000))
+      .accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey })
+      .signers([p])
+      .rpc({ commitment: "confirmed" });
+  });
+
+  it("refuses to sell chips the player does not hold", async () => {
     try {
       await program.methods
-        .claimFaucet()
+        .sellChips(new BN(999_999_999))
         .accountsPartial({
           player: playerPda(players[0].publicKey),
           authority: players[0].publicKey,
         })
         .signers([players[0]])
         .rpc({ commitment: "confirmed" });
-      assert.fail("second claim should have been rejected");
+      assert.fail("overselling should have been rejected");
     } catch (e: any) {
-      assert.include(e.toString(), "FaucetOnCooldown");
+      assert.include(e.toString(), "InsufficientChips");
     }
   });
 
@@ -163,7 +197,8 @@ describe("SolPoker Phase 2, base layer", () => {
 
     const t = await program.account.table.fetch(table);
     assert.equal(t.handNumber.toNumber(), 0);
-    assert.isFalse(t.delegated);
+    // Delegation is account ownership now, not a flag: an undelegated table is
+    // simply owned by the program.
     assert.deepEqual(Object.keys(t.state)[0], "waiting");
 
     for (let i = 0; i < MAX_SEATS; i++) {
@@ -199,7 +234,7 @@ describe("SolPoker Phase 2, base layer", () => {
       assert.equal(seat.occupant.toBase58(), players[i].publicKey.toBase58());
       assert.equal(
         player.chips.toNumber(),
-        FAUCET_AMOUNT - buyIns[i].toNumber(),
+        STARTING_CHIPS - buyIns[i].toNumber(),
         "buy-in must come out of the balance",
       );
       console.log(
@@ -227,7 +262,7 @@ describe("SolPoker Phase 2, base layer", () => {
       .signers([p])
       .rpc({ commitment: "confirmed" });
     await program.methods
-      .claimFaucet()
+      .buyChips(new BN(STARTING_CHIPS))
       .accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey })
       .signers([p])
       .rpc({ commitment: "confirmed" });
@@ -264,7 +299,7 @@ describe("SolPoker Phase 2, base layer", () => {
       .signers([p])
       .rpc({ commitment: "confirmed" });
     await program.methods
-      .claimFaucet()
+      .buyChips(new BN(STARTING_CHIPS))
       .accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey })
       .signers([p])
       .rpc({ commitment: "confirmed" });
@@ -329,7 +364,7 @@ describe("SolPoker Phase 2, base layer", () => {
       assert.equal(seat.occupant.toBase58(), PublicKey.default.toBase58());
       assert.equal(
         player.chips.toNumber(),
-        FAUCET_AMOUNT,
+        STARTING_CHIPS,
         "leaving must restore the original balance exactly",
       );
     }
@@ -345,7 +380,7 @@ describe("SolPoker Phase 2, base layer", () => {
     assert.equal(after, before, "chips must be conserved");
     console.log(
       `  all three left; chip total unchanged at ${after} ` +
-        `(3 x ${FAUCET_AMOUNT})`,
+        `(3 x ${STARTING_CHIPS})`,
     );
   });
 
@@ -357,7 +392,7 @@ describe("SolPoker Phase 2, base layer", () => {
     }
     assert.equal(
       sum,
-      players.length * FAUCET_AMOUNT,
+      players.length * STARTING_CHIPS,
       "every chip minted by the faucet is still accounted for",
     );
     console.log(`  final: ${sum} chips across ${players.length} players`);

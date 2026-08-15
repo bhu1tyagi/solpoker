@@ -190,7 +190,7 @@ describe("SolPoker Phases 3-5: private cards and a verifiable shuffle", () => {
     this.timeout(400_000);
     for (const p of players) {
       await retry(() => program.methods.initPlayer().accounts({ authority: p.publicKey }).signers([p]).rpc({ commitment: "confirmed" }), "initPlayer");
-      await retry(() => program.methods.claimFaucet().accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey }).signers([p]).rpc({ commitment: "confirmed" }), "faucet");
+      await retry(() => program.methods.buyChips(new anchor.BN(10_000)).accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey }).signers([p]).rpc({ commitment: "confirmed" }), "buy chips");
     }
     await retry(() => program.methods.createTable(tableId, SB, BB, new BN(200), new BN(2_000), new BN(30))
       .accountsPartial({ config, table, hand: handPda, deck: deckPda, creator: provider.wallet.publicKey })

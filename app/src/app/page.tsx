@@ -7,15 +7,16 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { TopBar } from "@/components/chrome/TopBar";
 import { CreateTableModal } from "@/components/chrome/CreateTableModal";
 import { Button } from "@/components/primitives/Button";
-import { Panel, Skeleton, Stat } from "@/components/primitives/Surface";
+import { Modal, Panel, Skeleton, Stat } from "@/components/primitives/Surface";
 import { usePlayer } from "@/hooks/use-player";
 import { isJoinable, useTables, type LobbyTable } from "@/hooks/use-tables";
 import { spring, stagger } from "@/styles/theme";
-import { FAUCET_AMOUNT } from "@/lib/constants";
+import { LAMPORTS_PER_CHIP } from "@/lib/constants";
 
 export default function Lobby() {
   const { connected, publicKey } = useWallet();
-  const { state, claim, busy, canClaim, nextClaimIn, refresh } = usePlayer();
+  const { state, buy, sell, busy, affordable, refresh } = usePlayer();
+  const [exchange, setExchange] = useState<"buy" | "sell" | null>(null);
   const { tables, loading, error, refresh: refreshTables } = useTables();
   const [creating, setCreating] = useState(false);
 
@@ -34,9 +35,10 @@ export default function Lobby() {
             Real-time Hold&apos;em, on chain
           </h1>
           <p style={{ color: "var(--text-dim)", margin: 0, maxWidth: 620 }}>
-            Every hand runs inside a secure enclave, so nobody sees your cards,
-            and every shuffle can be checked afterwards by anyone. Provably fair
-            shuffle, TEE-protected hole cards.{" "}
+            Buy chips with SOL, play, sell them back. Every hand runs inside a
+            secure enclave, so nobody sees your cards, and every shuffle can be
+            checked afterwards by anyone. Provably fair shuffle, TEE-protected
+            hole cards.{" "}
             <Link href="/trust" style={{ color: "var(--accent)" }}>
               What that means
             </Link>
@@ -51,8 +53,8 @@ export default function Lobby() {
                 Connect a wallet to get chips and take a seat.
               </p>
               <p style={{ color: "var(--text-faint)", fontSize: "var(--t-sm)", margin: 0 }}>
-                Devnet only. Chips are play money, not purchasable and not
-                redeemable.
+                Devnet only for now, so the SOL involved is test currency.
+                Chips are backed one to one by SOL in the program vault.
               </p>
             </Panel>
 
@@ -142,20 +144,17 @@ export default function Lobby() {
                   size="lg"
                   tone="var(--accent)"
                 />
-                <div style={{ marginTop: 10 }}>
+                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                  <Button variant="primary" size="sm" onClick={() => setExchange("buy")}>
+                    Buy chips
+                  </Button>
                   <Button
-                    variant={canClaim ? "primary" : "ghost"}
+                    variant="ghost"
                     size="sm"
-                    disabled={!canClaim}
-                    loading={busy}
-                    onClick={async () => {
-                      await claim();
-                      await refresh();
-                    }}
+                    disabled={!state || state.chips === 0}
+                    onClick={() => setExchange("sell")}
                   >
-                    {canClaim
-                      ? `Claim ${FAUCET_AMOUNT.toLocaleString()}`
-                      : `Next claim in ${formatWait(nextClaimIn)}`}
+                    Cash out
                   </Button>
                 </div>
               </div>
@@ -170,16 +169,21 @@ export default function Lobby() {
               />
 
               <div>
-                <Stat label="Hands played" value={state?.handsPlayed ?? 0} size="lg" />
+                <Stat
+                  label="Wallet"
+                  value={state ? `${(state.lamports / 1e9).toFixed(3)} SOL` : "..."}
+                  size="lg"
+                />
                 <p
                   style={{
                     color: "var(--text-faint)",
                     fontSize: "var(--t-xs)",
                     margin: "10px 0 0",
-                    maxWidth: 220,
+                    maxWidth: 230,
                   }}
                 >
-                  One free claim a day. The faucet is the only source of chips.
+                  10,000 chips cost 0.01 SOL, and sell back for exactly the
+                  same. The vault holds the difference.
                 </p>
               </div>
 
@@ -314,6 +318,16 @@ export default function Lobby() {
         )}
       </main>
 
+      <ExchangeModal
+        mode={exchange}
+        onClose={() => setExchange(null)}
+        chips={state?.chips ?? 0}
+        affordable={affordable}
+        busy={busy}
+        onBuy={buy}
+        onSell={sell}
+      />
+
       <CreateTableModal
         open={creating}
         onClose={() => setCreating(false)}
@@ -401,8 +415,103 @@ function Badge({ tone, label }: { tone: string; label: string }) {
   );
 }
 
-function formatWait(secs: number) {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+function ExchangeModal({
+  mode,
+  onClose,
+  chips,
+  affordable,
+  busy,
+  onBuy,
+  onSell,
+}: {
+  mode: "buy" | "sell" | null;
+  onClose: () => void;
+  chips: number;
+  affordable: number;
+  busy: "buy" | "sell" | null;
+  onBuy: (chips: number) => Promise<void>;
+  onSell: (chips: number) => Promise<void>;
+}) {
+  const [amount, setAmount] = useState(10_000);
+  const buying = mode === "buy";
+  const max = buying ? affordable : chips;
+  const clamped = Math.min(Math.max(amount, 0), max);
+  const sol = (clamped * LAMPORTS_PER_CHIP) / 1e9;
+
+  return (
+    <Modal
+      open={mode !== null}
+      onClose={onClose}
+      title={buying ? "Buy chips" : "Cash out to SOL"}
+    >
+      <p style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)", marginTop: 0 }}>
+        {buying
+          ? "SOL moves from your wallet into the program vault and chips appear in your balance. The rate is fixed in the program."
+          : "Chips leave your balance and the vault pays SOL back to your wallet, at the same fixed rate they were bought at."}
+      </p>
+
+      <div style={{ display: "flex", gap: 8, margin: "16px 0 10px" }}>
+        {[1_000, 10_000, 50_000].map((v) => (
+          <Button
+            key={v}
+            size="sm"
+            variant={clamped === Math.min(v, max) ? "primary" : "ghost"}
+            disabled={max === 0}
+            onClick={() => setAmount(Math.min(v, max))}
+          >
+            {v.toLocaleString()}
+          </Button>
+        ))}
+        <Button size="sm" variant="ghost" disabled={max === 0} onClick={() => setAmount(max)}>
+          Max
+        </Button>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "6px 0 18px" }}>
+        <input
+          type="range"
+          min={0}
+          max={Math.max(max, 1)}
+          step={100}
+          value={clamped}
+          onChange={(e) => setAmount(Number(e.target.value))}
+          style={{ flex: 1, accentColor: "var(--accent)" }}
+        />
+        <span
+          className="tnum"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "var(--t-md)",
+            color: "var(--accent)",
+            minWidth: 90,
+            textAlign: "right",
+          }}
+        >
+          {clamped.toLocaleString()}
+        </span>
+      </div>
+
+      <p style={{ color: "var(--text-faint)", fontSize: "var(--t-sm)", margin: "0 0 16px" }}>
+        {buying ? `Costs ${sol} SOL` : `Pays ${sol} SOL`}
+      </p>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <Button
+          variant="primary"
+          disabled={clamped === 0}
+          loading={busy !== null}
+          onClick={async () => {
+            if (buying) await onBuy(clamped);
+            else await onSell(clamped);
+            onClose();
+          }}
+        >
+          {buying ? "Buy" : "Cash out"}
+        </Button>
+        <Button variant="quiet" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </Modal>
+  );
 }

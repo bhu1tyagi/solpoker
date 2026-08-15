@@ -19,7 +19,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "SolPoker",
   description:
-    "Real-time Texas Hold'em on Solana. Provably fair shuffle, TEE-protected hole cards, play money only.",
+    "Real-time Texas Hold'em on Solana. Buy chips with SOL, play, sell back. Provably fair shuffle, TEE-protected hole cards.",
 };
 
 export default function RootLayout({

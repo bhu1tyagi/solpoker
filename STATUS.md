@@ -14,9 +14,10 @@ Ephemeral Rollup so play is sub-second, and the rollup's validator runs inside
 an Intel TDX enclave so hole cards are unreadable by opponents and by anyone
 watching Solana. The shuffle is a VRF draw combined with a salt from every
 player, and anyone can recompute a finished deal in their browser to check it
-was not rigged. Chips are play money from a faucet, with no path to or from
-anything of value. There is a working web client. Both players in a two-browser
-test can play a real hand without a single wallet prompt after setup.
+was not rigged. Chips are bought with SOL and sold back at a fixed program
+rate, backed one to one by a program vault; on devnet that SOL is test
+currency. There is a working web client. Both players in a two-browser test
+can play a real hand without a single wallet prompt after setup.
 
 ## The stack
 

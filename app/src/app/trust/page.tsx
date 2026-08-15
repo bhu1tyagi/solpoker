@@ -153,13 +153,23 @@ export default function TrustPage() {
         unattended player only loses a pot they had already put money into.
       </P>
 
-      <H2>Play money</H2>
+      <H2>Chips and SOL</H2>
       <P>
-        Chips are not purchasable and not redeemable. The faucet is the only
-        source, and no instruction converts them into SOL, a token, or anything
-        of value. This is not incidental: it bounds every risk on this page. If
-        the enclave were compromised tomorrow, the cost is a spoiled game rather
-        than stolen money.
+        Chips are bought with SOL and sold back for SOL, at a rate fixed in the
+        program: 1 chip is 1,000 lamports. The SOL sits in a program vault, and
+        chips only exist because someone paid that rate, so every chip is
+        backed the moment it is minted. Buying and selling need your wallet;
+        session keys cannot touch either.
+      </P>
+      <P>
+        Today this runs on devnet, where SOL is valueless test currency, so the
+        architecture is real money and the stakes are not. Be clear-eyed about
+        what changes if that ever stops being true: the enclave assumptions on
+        this page stop bounding a spoiled game and start bounding custody of
+        funds, the attestation gap above becomes financially material, and
+        real-stakes poker is a licensed, regulated activity in most places.
+        None of that is solved here, and this page will say so for as long as
+        it is true.
       </P>
 
       <H2>Summary</H2>
@@ -179,7 +189,7 @@ export default function TrustPage() {
             ["Cards hidden from opponents", "Trusts Intel TDX and the validator operator"],
             ["Cards hidden from the operator", "Trusts TDX isolation, and attestation does not check the code"],
             ["Hand completes if you disconnect", "Yes, auto-fold"],
-            ["Funds at risk", "None, play money only"],
+            ["Funds at risk", "Devnet SOL, which is valueless test currency"],
           ].map(([k, v]) => (
             <tr key={k} style={{ borderTop: "1px solid var(--line)" }}>
               <td style={{ padding: "9px 12px 9px 0", color: "var(--text)" }}>{k}</td>
