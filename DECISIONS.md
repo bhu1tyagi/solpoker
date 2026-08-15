@@ -192,3 +192,53 @@ the one the shuffle and the verifier use.
 **Measured latency improved to 300ms min, 362ms p50, 397ms avg, 689ms max** over 12
 session-key actions, with privacy enabled. Still above the sub-100ms target for the same
 network-distance reason.
+
+## Phase 6: clocks, disconnects, settlement
+
+**The turn clock is permissionless.** `force_timeout` can be called by anyone once a
+hand's deadline passes. A crank can run it on a timer, but the table must not depend on
+one, so nothing breaks if the crank is down and another player calls it instead.
+
+**Timing out checks rather than folds when nothing is owed.** A player facing no bet is
+checked down, which is what a real dealer does. Folding them would cost a pot they could
+have stayed in for free.
+
+**The clock is per table, not a constant.** `TableConfig.action_timeout_secs` lets a fast
+game and a slow game coexist, and lets the session test use a 2 second clock instead of
+waiting 30 seconds per dropped player.
+
+**Settlement resets the shuffle.** Without clearing `shuffle_state`, the salt XOR and each
+seat's salt state, a table would reuse one deck order for every hand. Easy to miss because
+the first hand looks perfect.
+
+**Results reach the base layer through a post-commit Magic Action.** `commit_results`
+commits the table and hand, then schedules `record_hand_result` on Solana to write a digest
+of the hand into `TableHistory`. No separate user transaction and no relayer.
+
+Scheduling is not execution. A failing action is stripped from its transaction strategy and
+the commit retries without it, so a commit signature does not prove the action ran. The
+handler is therefore idempotent (it ignores replays and out-of-order hand numbers rather
+than failing) and `hands_recorded` is a counter the test reads back from the base layer.
+
+**Committing every hand would blow the commit budget.** Each delegated account gets 10 free
+commits, so a hundred-hand session that settled after every hand would run out in ten. The
+session commits every 25 hands instead, which is also what a real table wants: play at
+rollup speed, settle to Solana on a slower cadence. Lifting the cap properly needs the
+validator-scoped fee vault and a delegated fee payer, which is not implemented.
+
+**The board survives settlement but cards do not.** Zeroizing the board destroyed the hand
+history the verifier needs, and the board is public by definition. Only the deck and hole
+cards are wiped.
+
+**Result: 100 hands, six seats, 44 minutes.** 93 player-hands dropped and 141 forced
+timeouts, with nobody covering for the absent players. Zero stalls. Chip totals were
+checked after every hand and never moved from 12,000. Four Magic Actions reached the base
+layer, the last recording hand 100. All six players then cashed out with every faucet chip
+accounted for.
+
+**A long session on a public endpoint will lose its socket.** The first attempt died at
+hand 80 with `ECONNRESET`, which is infrastructure rather than a poker bug, but the harness
+treated it as fatal. Blindly resending is unsafe, because the dropped attempt may already
+have landed. So each step now declares how to tell whether it is already done, and a retry
+skips it rather than double-applying. The play loop simply re-reads state and decides
+again, which is naturally correct.

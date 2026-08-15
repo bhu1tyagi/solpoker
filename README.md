@@ -8,9 +8,9 @@ or back.
 
 ## Status
 
-Phases 0 to 5 are done. A full hand plays end to end on a devnet rollup with **hidden
-hole cards**, a **verifiable shuffle**, and betting actions signed by session keys
-instead of a wallet prompt per action.
+Phases 0 to 6 are done. Hands play end to end on a devnet rollup with **hidden hole
+cards**, a **verifiable shuffle**, a **turn clock that survives disconnects**, and betting
+actions signed by session keys instead of a wallet prompt per action.
 
 Measured on devnet:
 
@@ -22,8 +22,9 @@ Measured on devnet:
 | Base layer during a live hand | no card data |
 | Base layer after the hand | no unrevealed cards |
 | Published history reproduces the deal | verified |
+| 100-hand session, 6 seats, 141 forced timeouts | 0 stalls, chips conserved |
 
-Still to do: turn clocks and disconnect handling (Phase 6) and the frontend (Phase 7).
+Still to do: the frontend (Phase 7).
 
 See [SPEC.md](SPEC.md) for the phase plan, [TRUST_MODEL.md](TRUST_MODEL.md) for what is
 and is not guaranteed, and [DECISIONS.md](DECISIONS.md) for the decision log.
@@ -145,11 +146,20 @@ That is above the sub-100ms target. The limit is network distance, not rollup bl
 since devnet's only TEE region is in Asia. Closing it is client-side work (optimistic
 updates, `processed` commitment) rather than a program change.
 
+Every hand carries a deadline, and once it passes anyone may call `force_timeout` for the
+seat that owes an action. It is permissionless so the table does not depend on a
+particular client or a crank staying up. A player facing no bet is checked down rather
+than folded, so going absent only costs a pot they had already paid into.
+
+That is the concrete thing mental poker cannot do. A player who vanishes takes nothing
+with them, because they never held a key share.
+
 ```bash
 npm install
 anchor build && npm run deploy
-npm run test:base   # base layer, chip conservation
-npm run test:er     # full hand on the rollup
+npm run test:base           # base layer, chip conservation
+npm run test:er             # one hand, privacy and shuffle verification
+HANDS=100 npm run test:session   # long session with random disconnects
 ```
 
 ## Layout

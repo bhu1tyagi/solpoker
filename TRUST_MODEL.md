@@ -90,6 +90,8 @@ software.
 If the TEE validator goes down mid-hand, the table stops. State commits back to
 Solana and chips are safe, but the hand does not finish until the rollup returns.
 
+Individual players dropping is a different matter, and it is handled. See below.
+
 ## What an attacker cannot do
 
 - **Another player** cannot read your hole cards. Each hole-card account carries
@@ -121,6 +123,27 @@ shipped at scale.
 
 The trade is explicit: we swapped a cryptographic assumption for a hardware and
 operator assumption, and got liveness in return.
+
+## Disconnects in practice
+
+Every hand carries a deadline. Once it passes, **anyone** may call `force_timeout`
+for the seat that owes an action. It is permissionless on purpose, so the table
+does not depend on a particular client, a server, or the absent player's goodwill.
+A crank can run it on a timer, and nothing breaks if the crank is down and another
+player calls it instead.
+
+Timing out is gentler than folding. A player facing no bet is checked down rather
+than folded, so an unattended player only ever loses a pot they had already put
+money into.
+
+This is tested rather than asserted. A session runs many hands with six seats and a
+random slice of players going silent each hand, nobody covering for them. The table
+has to keep moving on the clock alone, and chip totals are checked after every
+single hand.
+
+The same session also exercises the part that mental poker cannot do: a player who
+vanishes takes nothing with them, because they never held a key share. Nothing in
+the hand is waiting on them.
 
 ## Play money
 
