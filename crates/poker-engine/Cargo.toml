@@ -15,6 +15,3 @@ proptest = "1"
 
 [features]
 default = []
-
-[profile.release]
-overflow-checks = true
