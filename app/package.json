@@ -1,0 +1,38 @@
+{
+  "name": "solpoker-app",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
+    "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
+    "@magicblock-labs/gum-sdk": "3.0.10",
+    "@noble/hashes": "^1.8.0",
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@solana/wallet-adapter-react-ui": "^0.9.39",
+    "@solana/web3.js": "1.98.4",
+    "bs58": "^6.0.0",
+    "buffer": "^6.0.3",
+    "idb": "^8.0.3",
+    "motion": "^12.23.12",
+    "next": "^15.4.6",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zustand": "^5.0.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.11",
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.1.7",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

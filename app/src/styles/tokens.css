@@ -1,0 +1,77 @@
+/*
+ * Midnight Felt.
+ *
+ * Deep green-black felt with warm gold. Chosen for long sessions: nothing is
+ * pure white or pure black, so contrast is high without glare. Body text sits
+ * around 7:1 on surface, dim text around 4.5:1.
+ *
+ * This is a committed dark palette. There is no light variant, because a poker
+ * felt lit like a spreadsheet stops reading as a table.
+ */
+
+:root {
+  /* Surfaces, darkest to lightest */
+  --bg: #0b120e;
+  --felt-hi: #123a2a;
+  --felt-lo: #0e2c20;
+  --surface: #141b17;
+  --surface-2: #1b241f;
+  --line: #26312a;
+
+  /* Content */
+  --text: #ede8dc;
+  --text-dim: #9ba69b;
+  --text-faint: #5f6b60;
+
+  /* Accent */
+  --accent: #d8b36a;
+  --accent-deep: #a8873f;
+  --accent-glow: rgba(216, 179, 106, 0.25);
+  --accent-soft: rgba(216, 179, 106, 0.12);
+
+  /* Semantic */
+  --win: #7fc98f;
+  --lose: #c97f7f;
+  --info: #7fa6c9;
+
+  /* Cards */
+  --card-face: #f5f1e6;
+  --card-red: #b33a3a;
+  --card-black: #1c1f1c;
+  --card-back: #12291f;
+  --card-back-line: rgba(216, 179, 106, 0.28);
+
+  /* Radii */
+  --r-control: 6px;
+  --r-card: 10px;
+  --r-modal: 16px;
+
+  /* Elevation. Colored and soft, never gray. */
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 8px 30px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 20px 60px rgba(0, 0, 0, 0.55);
+  --ring-gold: 0 0 0 1px var(--accent-deep), 0 0 24px var(--accent-glow);
+
+  /* Type scale */
+  --t-xs: 0.75rem;
+  --t-sm: 0.844rem;
+  --t-base: 0.938rem;
+  --t-md: 1.125rem;
+  --t-lg: 1.5rem;
+  --t-xl: 2.125rem;
+  --t-2xl: 3rem;
+
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Chip counts must not jitter as they tick. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}

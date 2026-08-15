@@ -1,0 +1,118 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* Map the tokens into Tailwind so utilities and raw CSS stay in sync. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-felt-hi: var(--felt-hi);
+  --color-felt-lo: var(--felt-lo);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-dim: var(--text-dim);
+  --color-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-deep: var(--accent-deep);
+  --color-win: var(--win);
+  --color-lose: var(--lose);
+  --color-info: var(--info);
+  --color-card-face: var(--card-face);
+
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--t-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* Focus should be obvious without shouting. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* Scrollbars that do not fight the palette. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-2);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line);
+}
+
+/* Wallet adapter ships its own look. Pull it onto our palette. */
+.wallet-adapter-button {
+  font-family: var(--font-sans) !important;
+  font-size: var(--t-sm) !important;
+  height: 38px !important;
+  padding: 0 16px !important;
+  border-radius: var(--r-control) !important;
+  background: var(--accent) !important;
+  color: #12180f !important;
+  font-weight: 600 !important;
+  transition: background 0.12s ease;
+}
+.wallet-adapter-button:not([disabled]):hover {
+  background: var(--accent-deep) !important;
+}
+.wallet-adapter-modal-wrapper {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-modal) !important;
+}
+.wallet-adapter-modal-title {
+  font-family: var(--font-display) !important;
+  color: var(--text) !important;
+}
+.wallet-adapter-modal-list li button {
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+  border-radius: var(--r-control) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
