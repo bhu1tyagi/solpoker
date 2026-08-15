@@ -1,17 +1,21 @@
 pub mod action;
 pub mod delegation;
 pub mod hand;
+pub mod history;
 pub mod player;
 pub mod privacy;
 pub mod settle;
 pub mod shuffle;
 pub mod table;
+pub mod timeout;
 
 pub use action::*;
 pub use delegation::*;
 pub use hand::*;
+pub use history::*;
 pub use player::*;
 pub use privacy::*;
 pub use settle::*;
 pub use shuffle::*;
 pub use table::*;
+pub use timeout::*;

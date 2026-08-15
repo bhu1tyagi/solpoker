@@ -121,7 +121,7 @@ pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
         hand.dealt_in = dealt_in;
         hand.revealed = [[NO_CARD; 2]; MAX_SEATS];
         hand.revealed_mask = 0;
-        hand.deadline = Clock::get()?.unix_timestamp + ACTION_TIMEOUT_SECS;
+        hand.deadline = Clock::get()?.unix_timestamp + ctx.accounts.config.action_timeout_secs;
     }
     {
         let mut seats = seats_mut!(ctx.accounts);
@@ -222,7 +222,7 @@ pub fn advance_street(ctx: Context<AdvanceStreet>) -> Result<()> {
         let mut seats = seats_mut!(ctx.accounts);
         store_betting(&betting, &mut ctx.accounts.hand, &mut seats);
     }
-    ctx.accounts.hand.deadline = Clock::get()?.unix_timestamp + ACTION_TIMEOUT_SECS;
+    ctx.accounts.hand.deadline = Clock::get()?.unix_timestamp + ctx.accounts.config.action_timeout_secs;
 
     msg!(
         "street -> {}, to act {}",

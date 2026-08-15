@@ -106,7 +106,7 @@ pub fn player_action(ctx: Context<PlayerAction>, action: PlayerMove) -> Result<(
         let mut seats = seats_mut!(ctx.accounts);
         seats[seat_index].last_action_slot = slot;
     }
-    ctx.accounts.hand.deadline = now + ACTION_TIMEOUT_SECS;
+    ctx.accounts.hand.deadline = now + ctx.accounts.config.action_timeout_secs;
 
     msg!(
         "seat {} {:?}; bet {} to act {}",

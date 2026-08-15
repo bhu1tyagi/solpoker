@@ -7,7 +7,8 @@
     "//test": "NODE_OPTIONS disables Node 24+/25 native TS stripping, which loads .ts as ESM and breaks Anchor's extensionless generated imports before ts-node sees them.",
     "test": "NODE_OPTIONS=--no-experimental-strip-types TS_NODE_PROJECT=./tsconfig.json ANCHOR_WALLET=${ANCHOR_WALLET:-$HOME/.config/solana/id.json} ANCHOR_PROVIDER_URL=${ANCHOR_PROVIDER_URL:-https://rpc.magicblock.app/devnet} mocha --require ts-node/register -t 1000000",
     "test:base": "npm test -- tests/base-layer.ts",
-    "test:er": "npm test -- tests/ephemeral-rollup.ts"
+    "test:er": "npm test -- tests/ephemeral-rollup.ts",
+    "test:session": "npm test -- tests/session.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",

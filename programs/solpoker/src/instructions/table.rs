@@ -28,6 +28,7 @@ pub fn create_table(
     big_blind: u64,
     min_buy_in: u64,
     max_buy_in: u64,
+    action_timeout_secs: i64,
 ) -> Result<()> {
     require!(big_blind > 0 && small_blind > 0, PokerError::IllegalAction);
     require!(small_blind <= big_blind, PokerError::IllegalAction);
@@ -44,6 +45,8 @@ pub fn create_table(
     config.min_buy_in = min_buy_in;
     config.max_buy_in = max_buy_in;
     config.max_seats = MAX_SEATS as u8;
+    require!(action_timeout_secs > 0, PokerError::IllegalAction);
+    config.action_timeout_secs = action_timeout_secs;
     config.bump = ctx.bumps.config;
 
     let table = &mut ctx.accounts.table;
@@ -66,6 +69,7 @@ pub fn create_table(
     hand.button = 0;
     hand.last_aggressor = NO_SEAT;
     hand.deadline = 0;
+    hand.result_hash = [0u8; 32];
     hand.shuffle_seed = [0u8; 32];
     hand.revealed = [[NO_CARD; 2]; MAX_SEATS];
     hand.revealed_mask = 0;

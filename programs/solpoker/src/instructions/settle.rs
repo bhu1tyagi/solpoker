@@ -14,6 +14,7 @@
 //! Each one's PDA is re-derived and checked, so passing the wrong account fails.
 
 use anchor_lang::prelude::*;
+use sha2::{Digest, Sha256};
 use poker_engine::eval::evaluate;
 use poker_engine::pots::{build_pots, distribute};
 use poker_engine::HandRank;
@@ -128,6 +129,8 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
             seats[i].in_hand = false;
             seats[i].folded = false;
             seats[i].all_in = false;
+            // Salts are single use, so the next hand needs fresh commitments.
+            seats[i].salt_state = crate::instructions::shuffle::SALT_NONE;
         }
     }
 
@@ -158,6 +161,23 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
         // which is the same as at a real table.
         hand.revealed = revealed;
         hand.revealed_mask = revealed_mask;
+
+        // Reset the shuffle so the next hand draws a fresh seed. Without this a
+        // table would reuse one deck order forever.
+        hand.shuffle_state = crate::instructions::shuffle::SHUFFLE_IDLE;
+        hand.salt_xor = [0u8; 32];
+        hand.salt_mask = 0;
+
+        // Digest of what happened, small enough to commit and enough to pin the
+        // hand against a published history.
+        let mut d = Sha256::new();
+        d.update(hand.hand_number.to_le_bytes());
+        d.update(hand.shuffle_seed);
+        d.update(board);
+        for p in dist.payouts.iter() {
+            d.update(p.to_le_bytes());
+        }
+        hand.result_hash = d.finalize().into();
     }
     ctx.accounts.table.state = TableState::Waiting;
 

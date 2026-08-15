@@ -53,6 +53,7 @@ pub mod solpoker {
         big_blind: u64,
         min_buy_in: u64,
         max_buy_in: u64,
+        action_timeout_secs: i64,
     ) -> Result<()> {
         instructions::table::create_table(
             ctx,
@@ -61,7 +62,12 @@ pub mod solpoker {
             big_blind,
             min_buy_in,
             max_buy_in,
+            action_timeout_secs,
         )
+    }
+
+    pub fn create_history(ctx: Context<CreateHistory>) -> Result<()> {
+        instructions::history::create_history(ctx)
     }
 
     pub fn create_seat(ctx: Context<CreateSeat>, seat_index: u8) -> Result<()> {
@@ -153,5 +159,24 @@ pub mod solpoker {
 
     pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
         instructions::settle::settle_hand(ctx)
+    }
+
+    /// Permissionless turn clock. Anyone may call it once the deadline passes.
+    pub fn force_timeout(ctx: Context<ForceTimeout>) -> Result<()> {
+        instructions::timeout::force_timeout(ctx)
+    }
+
+    /// Commit table state and record the last hand on the base layer.
+    pub fn commit_results(ctx: Context<CommitResults>) -> Result<()> {
+        instructions::history::commit_results(ctx)
+    }
+
+    /// Base-layer target of the post-commit Magic Action.
+    pub fn record_hand_result(
+        ctx: Context<RecordHandResult>,
+        hand_number: u64,
+        result_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::history::record_hand_result(ctx, hand_number, result_hash)
     }
 }

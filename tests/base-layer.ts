@@ -133,7 +133,7 @@ describe("SolPoker Phase 2, base layer", () => {
 
   it("creates a table with six seat PDAs", async () => {
     await program.methods
-      .createTable(tableId, SMALL_BLIND, BIG_BLIND, MIN_BUY_IN, MAX_BUY_IN)
+      .createTable(tableId, SMALL_BLIND, BIG_BLIND, MIN_BUY_IN, MAX_BUY_IN, new BN(30))
       .accountsPartial({
         config,
         table,

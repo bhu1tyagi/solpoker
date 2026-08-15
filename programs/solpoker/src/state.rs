@@ -45,6 +45,7 @@ pub const SEAT_SEED: &[u8] = b"seat";
 pub const HAND_SEED: &[u8] = b"hand";
 pub const DECK_SEED: &[u8] = b"deck";
 pub const HOLE_SEED: &[u8] = b"hole";
+pub const HISTORY_SEED: &[u8] = b"history";
 
 /// A player's chip balance and faucet state. **Never delegated.**
 ///
@@ -74,6 +75,9 @@ pub struct TableConfig {
     pub min_buy_in: u64,
     pub max_buy_in: u64,
     pub max_seats: u8,
+    /// Seconds a player has to act before anyone may time them out. Per table so
+    /// a fast game and a slow game can coexist.
+    pub action_timeout_secs: i64,
     pub bump: u8,
 }
 
@@ -213,6 +217,9 @@ pub struct Hand {
     pub vrf_randomness: [u8; 32],
     /// 0 idle, 1 requested, 2 fulfilled.
     pub shuffle_state: u8,
+    /// Digest of the finished hand: number, seed, board and payouts. Committed to
+    /// the base layer so a hand can be pinned without publishing every detail.
+    pub result_hash: [u8; 32],
     pub bump: u8,
 }
 
@@ -247,6 +254,20 @@ impl Deck {
         self.cards = [NO_CARD; 52];
         self.next_index = 0;
     }
+}
+
+/// Base-layer record of hands played at a table. **Never delegated.**
+///
+/// Written by a post-commit Magic Action at settlement, so the rollup can leave a
+/// permanent trace on Solana without anyone sending a separate transaction.
+#[account]
+#[derive(InitSpace)]
+pub struct TableHistory {
+    pub table: Pubkey,
+    pub hands_recorded: u64,
+    pub last_hand_number: u64,
+    pub last_result_hash: [u8; 32],
+    pub bump: u8,
 }
 
 /// Hole cards for one seat. **Delegated to the ER; TEE-private from Phase 4.**
