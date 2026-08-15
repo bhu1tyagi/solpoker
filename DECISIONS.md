@@ -293,3 +293,164 @@ The log-based form is used instead.
 **Rejected:** `litesvm` and `mollusk-svm`. Both are good tools, but they would have
 required matching solana-sdk versions against the existing toolchain, and devnet was
 already working.
+
+---
+
+## Phase 2 — Base-layer program
+
+### D2.1 — Chip custody moves only on the base layer, only while undelegated
+
+**Chose:** `join_table` and `leave_table` are the sole instructions that move chips
+between a [`Player`] balance and a seat stack, and both are base-layer-only. The ER
+never touches a player balance.
+
+**Why:** `Player` is never delegated, so a single instruction physically cannot write
+both a player balance and a delegated seat — they live on different layers. Rather than
+work around that, it becomes the security model: while a hand runs on the rollup, chips
+move *between seats* but the total at the table is invariant, and no rollup transaction
+can reach a player's balance or mint a chip.
+
+This is enforced by ownership rather than a flag. Delegated accounts are owned by the
+delegation program on the base layer, so Anchor's owner check rejects `join_table`
+outright; on the ER the same instruction fails because `Player` cannot be written there.
+
+**Rejected:** Delegating `Player` too. That would put chip custody inside a rollup and
+make the trust story much worse for no gameplay benefit.
+
+### D2.2 — Seat creation is its own instruction, not part of `create_table`
+
+**Chose:** `create_table` creates config/table/hand/deck; `create_seat` and `create_hole`
+each create one PDA.
+
+**Why:** Initialising all six seats alongside the table overflowed the **4KB BPF stack
+frame** in Anchor's generated `try_accounts` — 4120 bytes against a 4096 limit. The
+failure mode is worth recording: it does not surface as a clean error but as
+`Access violation reading 8 bytes at address 0x0`, a null-pointer dereference at runtime.
+The build does emit a warning, but only if you are looking for it.
+
+**Cost:** Seven transactions to set up a table instead of one. Worth it.
+
+---
+
+## Phase 3 — Ephemeral Rollup, public state
+
+### D3.1 — Delegation is split into small instructions and the validator is always pinned
+
+**Chose:** `delegate_core` (table/hand/deck) plus `delegate_seat` per seat (seat + hole
+cards together). Same split for undelegation.
+
+**Why:** Fifteen delegated accounts in one context is far past the stack frame limit, and
+smaller transactions keep each one well inside its compute budget. Seat and hole-card
+accounts are delegated as a pair because they always move together.
+
+The ER validator is passed explicitly through `DelegateConfig` on every call. Letting it
+float would mean the rollup a table lands on could change between hands.
+
+### D3.2 — Large accounts are `Box`ed to fit the stack frame
+
+**Chose:** `Box<Account<'info, Table>>` and friends in `StartHand` and `SettleHand`.
+
+**Why:** `Table` carries a 192-byte seat map, and with six seat accounts already in the
+context these instructions overflowed the stack frame by 32 bytes. Boxing moves the
+deserialised struct to the heap. This is the standard Anchor remedy and costs nothing
+meaningful at runtime.
+
+### D3.3 — Hole cards reach settlement through `remaining_accounts`
+
+**Chose:** `settle_hand` takes the six `HoleCards` accounts as `remaining_accounts` and
+re-derives each PDA to verify it.
+
+**Why:** Six more `Account<HoleCards>` fields on a context that already holds six seats
+overflows the stack frame; raw `AccountInfo`s cost almost nothing. The trade is losing
+Anchor's automatic verification, which is why each account's PDA is recomputed and
+checked explicitly — passing the wrong account fails rather than silently scoring the
+wrong hand.
+
+### D3.4 — Session keys cover betting actions only
+
+**Chose:** `player_action` accepts either the player's wallet or a session key. Every
+custody path — join, leave, faucet — stays wallet-only.
+
+**Why:** A wallet popup per action is not a poker client, so the hot path needs session
+keys. But the blast radius should be bounded: a leaked session key can make bad betting
+decisions at the table it was scoped to, and nothing else. It cannot cash out, cannot
+move chips to a balance, and cannot join another table.
+
+Session authority is also deliberately *additional* to application authorisation. The
+token proves "this key may act for this wallet on this program"; the instruction still
+checks that the wallet actually occupies the seat that is to act. A valid session token
+for the wrong player is worth nothing.
+
+**Simplification worth noting:** the SPL-token delegate layer that the MagicBlock example
+needs does not apply here, because chips are program state rather than tokens. Play money
+makes the session-key story strictly simpler.
+
+### D3.5 — No burn cards
+
+**Chose:** Deal straight off the shuffled deck.
+
+**Why:** Burning is traditional but protects against nothing when the shuffle is
+committed to a published seed. Skipping it keeps the deal exactly reproducible by the
+Phase 5 verifier, which is a property worth more than the tradition.
+
+### D3.6 — MEASURED: action latency is 249-1133ms, well above the sub-100ms target
+
+Twelve session-key-signed actions over a full hand on the devnet TEE ER:
+
+| min | p50 | avg | max |
+|----:|----:|----:|----:|
+| 249ms | 324ms | 484ms | 1133ms |
+
+This is send → `confirmed` round trip from this machine. It confirms
+[D0.9](#d09--concern-measured-er-latency-is-6x-the-specs-target): the binding constraint
+is network distance, not ER block time — devnet's only TEE region is in Asia.
+
+**Not addressed in Phase 3.** The levers remain what Phase 0 identified: send at
+`processed` instead of `confirmed`, and decouple perceived latency from confirmation with
+optimistic client-side updates. A poker client can render an action the instant it is
+signed and reconcile on confirmation, which is what the sub-100ms *perceived* target
+actually asks for. Neither is a program change, so both belong with the Phase 7 frontend.
+
+### D3.7 — `Hand::dealt_in` bitmask so dealing does not need the seat accounts
+
+**Chose:** Store which seats are in the hand as a `u8` bitmask on `Hand`.
+
+**Why:** `deal_hole_cards` needs to know who is in the hand, but loading six seat accounts
+alongside six hole-card accounts blows the stack frame. The bitmask carries exactly the
+needed information in one byte.
+
+### D3.8 — Test harness must check `confirmTransaction` for errors
+
+**Finding, not a choice, but it cost real debugging time.**
+
+`connection.confirmTransaction` resolves successfully for transactions that *failed*. With
+`skipPreflight: true`, a broken instruction looks exactly like a working one: the test
+loop spun 23 times calling `advance_street` against a hand that had never started, and the
+logs showed nothing wrong.
+
+The harness now checks `conf.value.err` and pulls the program logs on failure. The actual
+bug was mundane once visible — a transient devnet `Blockhash not found` had aborted setup
+partway through, so seat 4 was never created — but it was invisible until the harness
+stopped hiding it. Base-layer setup calls now retry through transient RPC failures and
+assert every account exists before the ER tests begin.
+
+### D3.9 — Deploy operations reclaim orphaned buffers
+
+**Worth recording because it silently ate ~10 SOL.**
+
+Each failed `anchor deploy` leaves a buffer account holding the full rent for the program
+binary (~4.9 SOL at 705KB). They are not cleaned up automatically. `solana program show
+--buffers` lists them and `solana program close <address>` refunds the rent.
+
+Growing the program past its allocation also needs `solana program extend` first;
+otherwise deploy fails with `ProgramData account not large enough`.
+
+**Rejected:** `opt-level = "z"` to shrink the binary. It did cut 705KB to 537KB, but
+introduced >4KB stack frames inside `sha2`'s `crypto-common` dependency. Shipping a
+program with stack-overflow-capable code to save rent is a bad trade.
+
+**Open optimisation:** replacing the software SHA-256 in the shuffle with Solana's
+`sha256` syscall would remove the `sha2` crate from the binary entirely, cut the shuffle's
+18,289 CU substantially, and eliminate those stack frames. It needs `poker-engine`'s
+shuffle to become generic over its hash function so the crate stays Solana-free. Not done;
+worth doing before mainnet.

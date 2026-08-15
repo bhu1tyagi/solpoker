@@ -4,10 +4,17 @@ Real-time, fully on-chain Texas Hold'em on Solana — built on MagicBlock Epheme
 Rollups for sub-second gameplay and **Private** Ephemeral Rollups (Intel TDX TEE) for
 hole-card secrecy.
 
-> **Status: Phases 0 and 1 complete.** The TEE privacy pipe is proven end to end on
-> devnet, and the chain-agnostic rules engine is built and property-tested. Nothing is
-> wired together yet — that starts at Phase 2. See [SPEC.md](SPEC.md) for the phase plan
-> and [DECISIONS.md](DECISIONS.md) for the running decision log.
+> **Status: Phases 0–3 complete.** A full hand of Texas Hold'em plays end to end on a
+> devnet Ephemeral Rollup, with betting actions signed by session keys rather than a
+> wallet prompt per action.
+>
+> **Cards are face up.** The deck and hole cards currently live in ordinary public PDAs,
+> readable by anyone. Making them secret is Phase 4 — the TEE mechanism is already proven
+> (see below), but it is not yet wired into the game. Nothing here should be described as
+> hidden-information poker yet.
+>
+> See [SPEC.md](SPEC.md) for the phase plan and [DECISIONS.md](DECISIONS.md) for the
+> running decision log.
 
 ## Why this architecture
 
@@ -95,9 +102,50 @@ cargo test                                  # 48 unit + 8 property tests
 cargo run --example three_way_side_pot      # worked multi-way all-in
 ```
 
+## The game on-chain
+
+Execution splits across two layers, and where each account lives is the security model:
+
+| Account | Layer | Why |
+| --- | --- | --- |
+| `Player` (chip balance) | base layer, never delegated | Chip custody stays settled on Solana |
+| `TableConfig` | base layer, never delegated | Immutable params |
+| `Table`, `Seat`, `Hand`, `Deck`, `HoleCards` | delegated to the ER | Change on every action |
+
+Chips move between a player's balance and a seat stack **only on the base layer, only
+while the table is undelegated**. So while a hand runs on the rollup, chips move between
+seats but the table total is invariant, and no rollup transaction can reach a player's
+balance or mint a chip. This is enforced by account ownership rather than a flag.
+
+Betting actions accept a **session key**, so a player authorises once and then folds,
+calls, and raises with no wallet prompt. Everything that touches custody — join, leave,
+faucet — stays wallet-only, so a leaked session key can play badly at one table and
+nothing worse.
+
+Measured on the devnet TEE rollup over a full hand, 12 session-key actions:
+
+| min | p50 | avg | max |
+| ---: | ---: | ---: | ---: |
+| 249ms | 324ms | 484ms | 1133ms |
+
+That is above the sub-100ms target. The constraint is network distance rather than rollup
+block time — devnet's only TEE region is in Asia — and closing it is a client-side problem
+(optimistic updates, `processed` commitment) rather than a program change.
+
+```bash
+npm install
+anchor build && npm run deploy
+npm run test:base   # Phase 2: base layer, chip conservation
+npm run test:er     # Phase 3: full hand on the ER
+```
+
 ## Repo layout
 
 ```
+programs/solpoker/        The game program (Phases 2-3)
+  src/state.rs            Account layouts for every phase
+  src/bridge.rs           Accounts <-> poker-engine state machine
+  src/instructions/       player, table, delegation, hand, action, settle
 crates/poker-engine/      Chain-agnostic rules engine (Phase 1)
   src/card.rs             Card encoding, deck, deterministic shuffle
   src/eval.rs             Table-free 7-card evaluator
