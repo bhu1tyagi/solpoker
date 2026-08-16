@@ -74,8 +74,20 @@ export function friendlyError(e: unknown): string {
 export function isRaceLost(e: unknown): boolean {
   const name = errorName(e);
   if (name && RACE_LOST.has(name)) return true;
-  return /already been processed|AlreadyProcessed/i.test(String(e));
+  return ER_RACE.test(String(e));
 }
+
+/**
+ * Races the rollup reports rather than the program.
+ *
+ * `InvalidWritableAccount` is the rollup saying an account is not writable
+ * here, which is what a seat looks like for the moment either side of
+ * delegation. Every client cranks the same steps, so hitting that window is
+ * routine and the next tick succeeds. It was reaching players as a wall of
+ * red text about a failure that had already fixed itself.
+ */
+const ER_RACE =
+  /already been processed|AlreadyProcessed|InvalidWritableAccount|ExternalAccountLamportSpend|AccountBorrowFailed/i;
 
 /** Retry a read through transient failures. Safe because reads do not mutate. */
 export async function net<T>(

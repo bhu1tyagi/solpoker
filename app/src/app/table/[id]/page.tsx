@@ -40,7 +40,7 @@ import {
   NO_SEAT,
   SHUFFLE_REQUESTED,
 } from "@/lib/constants";
-import { friendlyError } from "@/lib/net";
+import { friendlyError, isRaceLost } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
 import { spring } from "@/styles/theme";
 import { isDelegated } from "@/lib/instructions";
@@ -302,7 +302,12 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
       try {
         await actions.act(kind, toTotal);
       } catch (e) {
-        toast(friendlyError(e), "bad");
+        // Losing the race is not a failure worth showing. By the time a press
+        // reaches the rollup the turn may already have moved, usually because
+        // the clock ran out and a timeout acted for you, and telling the player
+        // their own click was an error reads as a broken table when nothing
+        // went wrong. The felt already shows what actually happened.
+        if (!isRaceLost(e)) toast(friendlyError(e), "bad");
       } finally {
         setPending(null);
         setActing(false);

@@ -277,7 +277,11 @@ export function SeatPod({
         position: "relative",
       }}
     >
-      {/* Cards, tucked behind the plate's edge. */}
+      {/* Cards, tucked behind the plate's edge.
+          They centre over the plate's text area rather than the whole plate,
+          because the avatar tile stands proud of one end and would otherwise
+          cover a card. Your own hand being half hidden by your own picture is
+          the one thing on this table you must always be able to read. */}
       <div
         style={{
           display: "flex",
@@ -285,6 +289,8 @@ export function SeatPod({
           height: dealtIn ? undefined : 0,
           marginBottom: cardsOn === "above" ? -14 : 0,
           marginTop: cardsOn === "below" ? -10 : 0,
+          marginLeft: avatarOn === "left" ? AVATAR + 8 : 0,
+          marginRight: avatarOn === "right" ? AVATAR + 8 : 0,
           zIndex: 0,
         }}
       >
