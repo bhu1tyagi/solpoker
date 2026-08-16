@@ -61,37 +61,47 @@ button {
   color: var(--text);
 }
 
-/* Scrollbars that do not fight the palette. */
+/* No scrollbars anywhere. Content still scrolls by wheel, trackpad, keyboard
+   and touch; only the bar itself is gone, because a grey gutter cutting down
+   the side of a dark room is the most visible thing on the page. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--surface-2);
-  border-radius: 999px;
-  border: 2px solid var(--bg);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--line);
+  width: 0;
+  height: 0;
+  display: none;
 }
 
-/* Wallet adapter ships its own look. Pull it onto our palette. */
+/* The wallet adapter ships its own look. Rebuild it as one of our controls:
+   the same height, radius, weight and casing as every other action, so the
+   connect button stops announcing that it came from somewhere else. */
 .wallet-adapter-button {
   font-family: var(--font-sans) !important;
-  font-size: var(--t-sm) !important;
-  height: 38px !important;
-  padding: 0 16px !important;
-  border-radius: var(--r-control) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  height: 56px !important;
+  padding: 0 22px !important;
+  border-radius: var(--r-panel) !important;
   background: var(--accent) !important;
   color: var(--on-accent) !important;
-  font-weight: 600 !important;
-  transition: filter 0.12s ease;
+  transition: transform 0.12s ease, filter 0.12s ease;
 }
 .wallet-adapter-button:not([disabled]):hover {
-  filter: brightness(1.08);
+  background: var(--accent) !important;
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+/* The adapter puts the wallet's own logo here; size it to our icon grid. */
+.wallet-adapter-button-start-icon,
+.wallet-adapter-button-start-icon img,
+.wallet-adapter-button-start-icon svg {
+  width: 20px !important;
+  height: 20px !important;
+  margin-right: 10px !important;
 }
 /* The connect screen: no box, just a dark room with a centred column, a big
    cyan title, and one quiet row per wallet. */

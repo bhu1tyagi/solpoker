@@ -15,7 +15,9 @@
 :root {
   /* The ground: steel falling away from the top right */
   --bg: #131f25;
-  --bg-grad: radial-gradient(120% 178% at 100% 0%, #3c4c57 0%, #131f25 100%);
+  /* Light in the top left corner, falling away to the right and down, so the
+     whole page is one lit surface rather than a set of shaded panels. */
+  --bg-grad: radial-gradient(135% 135% at 0% 0%, #3c4c57 0%, #202d35 42%, #131f25 100%);
   --panel-grad: radial-gradient(76.12% 100% at 50% 0%, #36444e 0%, #10191e 100%);
 
   /* The panel the table stands on: a dark slab with a sheen down its face.

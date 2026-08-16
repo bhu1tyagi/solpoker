@@ -3,133 +3,140 @@
 /**
  * The icon set.
  *
- * Drawn here rather than pulled from a package, because the pages have to work
- * with no network and every icon has to sit on the same 24 unit grid with the
- * same stroke weight. They all take their colour from the text around them.
+ * These are Lucide outlines (ISC licensed) rather than shapes drawn by hand, so
+ * they carry the proportions and stroke weight of a set people already
+ * recognise. They are inlined instead of fetched because the pages have to work
+ * with no network, and they take their colour from the text around them.
  */
 
-type Props = { size?: number; className?: string };
+type Props = { size?: number };
 
-const svg = (size: number) => ({
+const frame = (size: number) => ({
   width: size,
   height: size,
   viewBox: "0 0 24 24",
   fill: "none" as const,
-  "aria-hidden": true,
-  style: { display: "block" as const, flexShrink: 0 },
-});
-
-const stroke = {
   stroke: "currentColor",
   strokeWidth: 2,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
-};
+  "aria-hidden": true,
+  style: { display: "block" as const, flexShrink: 0 },
+});
 
-/**
- * A poker table from above: the rail and the felt inside it.
- *
- * Drawn flat rather than on a pedestal, because a pedestal version sits beside
- * the trophy in the tab bar and the two become the same silhouette.
- */
+/** Spade: the suit, standing for a poker table. */
 export function TableIcon({ size = 20 }: Props) {
   return (
-    <svg {...svg(size)}>
-      <ellipse cx="12" cy="12" rx="9.5" ry="6.5" {...stroke} />
-      <ellipse cx="12" cy="12" rx="5.5" ry="3" {...stroke} strokeWidth={1.6} />
+    <svg {...frame(size)}>
+      <path d="M5 9c-1.5 1.5-3 3.2-3 5.5A5.5 5.5 0 0 0 7.5 20c1.8 0 3-.5 4.5-2 1.5 1.5 2.7 2 4.5 2a5.5 5.5 0 0 0 5.5-5.5c0-2.3-1.5-4-3-5.5l-7-7-7 7Z" />
+      <path d="M12 18v4" />
     </svg>
   );
 }
 
-/** Two people: how many are sitting. */
-export function PlayersIcon({ size = 20 }: Props) {
-  return (
-    <svg {...svg(size)}>
-      <circle cx="9" cy="8" r="3.4" {...stroke} />
-      <path d="M3 19.5c0-3 2.7-5 6-5s6 2 6 5" {...stroke} />
-      <path d="M16.5 5.2a3.4 3.4 0 0 1 0 5.6M18 14.9c2 .7 3.4 2.4 3.4 4.6" {...stroke} />
-    </svg>
-  );
-}
-
-/** Plus, for buying in. */
-export function PlusIcon({ size = 20 }: Props) {
-  return (
-    <svg {...svg(size)}>
-      <path d="M12 5v14M5 12h14" {...stroke} strokeWidth={2.4} />
-    </svg>
-  );
-}
-
-/** An arrow leaving a tray: cashing out. */
-export function CashOutIcon({ size = 20 }: Props) {
-  return (
-    <svg {...svg(size)}>
-      <path d="M12 15V4M8.5 7.5L12 4l3.5 3.5" {...stroke} />
-      <path d="M4 14v4.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V14" {...stroke} />
-    </svg>
-  );
-}
-
-/** A clock wound backwards: history. */
-export function HistoryIcon({ size = 20 }: Props) {
-  return (
-    <svg {...svg(size)}>
-      <path d="M3.5 9.5A9 9 0 1 1 3 12" {...stroke} />
-      <path d="M3 4.5v5h5" {...stroke} />
-      <path d="M12 7.5V12l3 2" {...stroke} />
-    </svg>
-  );
-}
-
-/** A question in a circle: how this works. */
-export function InfoIcon({ size = 20 }: Props) {
-  return (
-    <svg {...svg(size)}>
-      <circle cx="12" cy="12" r="9" {...stroke} />
-      <path d="M9.6 9.3a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.4" {...stroke} />
-      <path d="M12 17h.01" {...stroke} strokeWidth={2.6} />
-    </svg>
-  );
-}
-
-/** A door with an arrow: leaving. */
-export function ExitIcon({ size = 20 }: Props) {
-  return (
-    <svg {...svg(size)}>
-      <path d="M14 4h5v16h-5" {...stroke} />
-      <path d="M11 8l-4 4 4 4M7 12h10" {...stroke} />
-    </svg>
-  );
-}
-
-/** Circular arrows: reload the list. */
-export function RefreshIcon({ size = 20 }: Props) {
-  return (
-    <svg {...svg(size)}>
-      <path d="M20 12a8 8 0 1 1-2.3-5.6" {...stroke} />
-      <path d="M20 4v4.5h-4.5" {...stroke} />
-    </svg>
-  );
-}
-
-/** A cup on a plinth: the leaderboard. */
 export function TrophyIcon({ size = 20 }: Props) {
   return (
-    <svg {...svg(size)}>
-      <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" {...stroke} />
-      <path d="M7 6H4.5v1.5A3.5 3.5 0 0 0 8 11M17 6h2.5v1.5A3.5 3.5 0 0 1 16 11" {...stroke} />
-      <path d="M12 14v3.5M8.5 20h7" {...stroke} />
+    <svg {...frame(size)}>
+      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+      <path d="M4 22h16" />
+      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+      <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
     </svg>
   );
 }
 
-/** A table with a plus: start a new one. */
+export function PlayersIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+export function PlusIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M5 12h14" />
+      <path d="M12 5v14" />
+    </svg>
+  );
+}
+
+/** Upload: taking value back out. */
+export function CashOutIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M17 8l-5-5-5 5" />
+      <path d="M12 3v12" />
+    </svg>
+  );
+}
+
+export function HistoryIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l4 2" />
+    </svg>
+  );
+}
+
+export function InfoIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+export function ExitIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="M16 17l5-5-5-5" />
+      <path d="M21 12H9" />
+    </svg>
+  );
+}
+
+export function RefreshIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M8 16H3v5" />
+    </svg>
+  );
+}
+
+/** A spade with a plus: open a new table. */
 export function NewTableIcon({ size = 20 }: Props) {
   return (
-    <svg {...svg(size)}>
-      <ellipse cx="10.5" cy="13" rx="8" ry="5.5" {...stroke} />
-      <path d="M18.5 3v5.5M15.75 5.75h5.5" {...stroke} strokeWidth={2.2} />
+    <svg {...frame(size)}>
+      <path d="M4.5 10.5c-1.2 1.2-2.5 2.6-2.5 4.5A4.5 4.5 0 0 0 6.5 19.5c1.5 0 2.5-.4 3.7-1.6 1.2 1.2 2.2 1.6 3.7 1.6" />
+      <path d="M10.2 17.9V21" />
+      <path d="M4.5 10.5 10.2 4.8l4 4" />
+      <path d="M18.5 3v6M15.5 6h6" />
+    </svg>
+  );
+}
+
+/** A wallet, for the connect control. */
+export function WalletIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2" />
+      <path d="M21 12a2 2 0 0 0-2-2h-4a2 2 0 0 0 0 4h4a2 2 0 0 0 2-2Z" />
     </svg>
   );
 }

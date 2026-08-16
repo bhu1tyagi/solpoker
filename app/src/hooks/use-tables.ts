@@ -90,8 +90,17 @@ export function useTables() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  /**
+   * Reload the list.
+   *
+   * `showLoading` is for a refresh the player asked for by hand: the list goes
+   * back to skeletons so the press visibly did something. The background poll
+   * leaves it alone, because flashing the whole lobby every few seconds on its
+   * own schedule is worse than showing nothing.
+   */
+  const refresh = useCallback(async (showLoading = false) => {
     const conn = getBaseConnection();
+    if (showLoading) setLoading(true);
     try {
       setError(null);
       const filters = [{ memcmp: { offset: 0, bytes: bs58.encode(TABLE_DISCRIMINATOR) } }];

@@ -11,7 +11,7 @@
  *   node scripts/two-browser-gate.mjs [port]
  */
 import { chromium } from "playwright";
-import { readFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import nacl from "tweetnacl";
 
@@ -84,8 +84,32 @@ async function shot(b, label) {
   await b.page.screenshot({ path: `${SHOTS}/${b.name}-${label}.png` });
 }
 
+/**
+ * The two test players, kept between runs.
+ *
+ * Generating fresh keypairs every run left a new Player account on chain each
+ * time, each holding chips nobody can ever spend because the key is gone. They
+ * pile up in the leaderboard forever. Two wallets reused across runs keep the
+ * chain as clean as the test can leave it.
+ */
+function testWallets() {
+  const path = `${SHOTS}/gate-wallets.json`;
+  try {
+    const saved = JSON.parse(readFileSync(path, "utf8"));
+    return saved.map((secret) => Keypair.fromSecretKey(Uint8Array.from(secret)));
+  } catch {
+    const fresh = [Keypair.generate(), Keypair.generate()];
+    try {
+      writeFileSync(path, JSON.stringify(fresh.map((k) => Array.from(k.secretKey))));
+    } catch {
+      // Not being able to save them only costs the next run two more accounts.
+    }
+    return fresh;
+  }
+}
+
 async function main() {
-  const players = [Keypair.generate(), Keypair.generate()];
+  const players = testWallets();
   log(`funding ${players.map((p) => p.publicKey.toBase58().slice(0, 8)).join(", ")}`);
 
   const fund = new Transaction().add(

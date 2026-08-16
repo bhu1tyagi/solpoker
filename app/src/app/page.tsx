@@ -21,7 +21,7 @@ import {
   TrophyIcon,
 } from "@/components/primitives/Icons";
 import { usePlayer } from "@/hooks/use-player";
-import { useLeaderboard } from "@/hooks/use-leaderboard";
+import { useLeaderboard, type LeaderRow } from "@/hooks/use-leaderboard";
 import { isJoinable, useTables, type LobbyTable } from "@/hooks/use-tables";
 import { spring, stagger } from "@/styles/theme";
 import { LAMPORTS_PER_CHIP, MAX_SEATS } from "@/lib/constants";
@@ -94,48 +94,49 @@ export default function Lobby() {
               </h1>
 
               {connected && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    background: "var(--surface)",
-                    borderRadius: "var(--r-panel)",
-                    padding: "12px 20px 12px 12px",
-                    height: 56,
-                  }}
-                >
-                  <span
+                <>
+                  {/* Your chips, with the way to get more built into the same
+                      control, then the way to take them out, then the wallet. */}
+                  <div
                     style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 8,
-                      background: "var(--accent)",
-                      color: "var(--on-accent)",
-                      display: "grid",
-                      placeItems: "center",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      background: "var(--surface)",
+                      borderRadius: "var(--r-panel)",
+                      padding: "0 6px 0 14px",
+                      height: 56,
                     }}
                   >
-                    <ChipGlyph size={20} color="currentColor" />
-                  </span>
-                  <span
-                    className="tnum"
-                    style={{ fontWeight: 700, fontSize: 16, color: "var(--text-dim)" }}
-                  >
-                    {state ? state.chips.toLocaleString() : "..."}
-                  </span>
-                </div>
-              )}
+                    <ChipGlyph size={22} />
+                    <span
+                      className="tnum"
+                      style={{ fontWeight: 700, fontSize: 16, color: "var(--text-dim)" }}
+                    >
+                      {state ? state.chips.toLocaleString() : "..."}
+                    </span>
+                    <motion.button
+                      title="Buy chips"
+                      aria-label="Buy chips"
+                      onClick={() => setExchange("buy")}
+                      whileTap={{ scale: 0.94 }}
+                      transition={spring.snappy}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        display: "grid",
+                        placeItems: "center",
+                        border: "none",
+                        borderRadius: "var(--r-panel)",
+                        background: "var(--accent)",
+                        color: "var(--on-accent)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <PlusIcon size={20} />
+                    </motion.button>
+                  </div>
 
-              <WalletMultiButton />
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {connected && (
-                <>
-                  <IconButton title="Buy chips" solid onClick={() => setExchange("buy")}>
-                    <PlusIcon />
-                  </IconButton>
                   <IconButton
                     title="Cash out"
                     disabled={!state || state.chips === 0}
@@ -143,16 +144,44 @@ export default function Lobby() {
                   >
                     <CashOutIcon />
                   </IconButton>
-                  <IconButton title="New table" onClick={() => setCreating(true)}>
-                    <NewTableIcon />
-                  </IconButton>
                 </>
               )}
+
+              <WalletMultiButton />
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {connected && (
+                <LabelButton
+                  title="Create a table"
+                  icon={<NewTableIcon />}
+                  onClick={() => setCreating(true)}
+                />
+              )}
               <Link href="/trust" style={{ textDecoration: "none" }}>
-                <IconButton title="How this works">
-                  <InfoIcon />
-                </IconButton>
+                <LabelButton title="How this works" icon={<InfoIcon />} />
               </Link>
+
+              {/* Chips left on a seat are the one thing worth interrupting the
+                  layout for, so a table you are sitting at says so here rather
+                  than waiting to be found under a tab. */}
+              {myTables.map((t) => (
+                <Link
+                  key={t.table.address}
+                  href={`/table/${t.table.tableId}`}
+                  style={{ textDecoration: "none" }}
+                >
+                  <LabelButton title="Return to table" icon={<TableIcon />} solid />
+                </Link>
+              ))}
+
+              <div style={{ marginLeft: "auto" }}>
+                <LabelButton
+                  title="Refresh"
+                  icon={<RefreshIcon />}
+                  onClick={() => void refreshTables(true)}
+                />
+              </div>
             </div>
           </header>
 
@@ -214,21 +243,20 @@ export default function Lobby() {
             </div>
           )}
 
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
-            <IconButton title="Refresh" onClick={() => void refreshTables()}>
-              <RefreshIcon />
-            </IconButton>
-          </div>
         </section>
 
-        {/* Who is winning, and where you are sitting. */}
-        <aside>
-          <div style={{ display: "flex", gap: 0, marginBottom: 2 }}>
+        {/* Who is winning, and where you are sitting. The panel lifts away from
+            the page on its left edge and sinks into it on the right, so the
+            column reads as its own surface without needing a border. */}
+        <aside style={{ alignSelf: "stretch" }}>
+          <div style={{ display: "flex", gap: 0 }}>
             <Tab active={tab === "players"} onClick={() => setTab("players")} title="Leaderboard">
-              <TrophyIcon size={22} />
+              <TrophyIcon size={20} />
+              Leaderboard
             </Tab>
             <Tab active={tab === "mine"} onClick={() => setTab("mine")} title="Your tables">
-              <TableIcon size={22} />
+              <TableIcon size={20} />
+              Your tables
             </Tab>
           </div>
           <div style={{ height: 1, background: "var(--control)", opacity: 0.48 }} />
@@ -281,11 +309,16 @@ function TableRow({ t }: { t: LobbyTable }) {
           borderRadius: "var(--r-panel)",
         }}
       >
-        <span
-          className="tnum"
-          style={{ fontWeight: 500, fontSize: 18, color: "var(--text-dim)" }}
-        >
-          {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "-"}
+        <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span
+            className="tnum"
+            style={{ fontWeight: 500, fontSize: 18, color: "var(--text-dim)" }}
+          >
+            {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "-"}
+          </span>
+          <span className="tnum" style={{ fontSize: 11, color: "var(--text-faint)" }}>
+            {t.table.tableId}
+          </span>
         </span>
 
         <span
@@ -370,6 +403,13 @@ function TableRow({ t }: { t: LobbyTable }) {
  */
 function Leaderboard({ me }: { me?: string }) {
   const { rows, loading } = useLeaderboard();
+  const PAGE = 15;
+  const [shown, setShown] = useState(PAGE);
+
+  // Where you actually stand, found before the list is cut down, so the pinned
+  // row shows a true position rather than a position within the first page.
+  const myIndex = me ? rows.findIndex((r) => r.authority === me) : -1;
+  const mine = myIndex >= 0 ? rows[myIndex] : null;
 
   if (loading && rows.length === 0) {
     return (
@@ -403,64 +443,110 @@ function Leaderboard({ me }: { me?: string }) {
         <span style={{ textAlign: "right" }}>Chips</span>
       </div>
 
-      {rows.slice(0, 12).map((r, i) => {
-        const mine = r.authority === me;
-        return (
-          <motion.div
-            key={r.authority}
-            initial={{ opacity: 0, x: 6 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ ...spring.gentle, delay: i * stagger.list }}
+      {/* You stay at the top whatever page is scrolled, showing your real
+          position, so the board never has to be hunted through to find it. */}
+      {mine && (
+        <>
+          <LeaderRowView row={mine} rank={myIndex} isMe highlight />
+          <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "28px 1fr 36px auto",
-              gap: 12,
-              alignItems: "center",
-              height: 52,
+              height: 1,
+              background: "var(--control)",
+              opacity: 0.34,
+              margin: "2px 0 4px",
             }}
-          >
-            <span
-              className="tnum"
-              style={{
-                fontWeight: 700,
-                fontSize: 15,
-                color: i < 3 ? "var(--accent)" : "var(--text-faint)",
-              }}
-            >
-              {String(i + 1).padStart(2, "0")}
-            </span>
-            <span
-              style={{
-                fontWeight: 500,
-                fontSize: 16,
-                color: mine ? "var(--accent)" : "var(--text-dim)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {mine ? "you" : shortKey(r.authority)}
-            </span>
-            <Avatar pubkey={r.authority} size={30} square />
-            <span
-              className="tnum"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontWeight: 500,
-                fontSize: 16,
-                color: "var(--accent)",
-                justifyContent: "flex-end",
-              }}
-            >
-              <ChipGlyph size={15} />
-              {r.chips.toLocaleString()}
-            </span>
-          </motion.div>
-        );
-      })}
+          />
+        </>
+      )}
+
+      <div
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+            setShown((n) => Math.min(n + PAGE, rows.length));
+          }
+        }}
+        style={{ maxHeight: "62vh", overflowY: "auto", overflowX: "hidden" }}
+      >
+        {rows.slice(0, shown).map((r, i) =>
+          // Your row is pinned above, so it is not repeated in the list.
+          r.authority === me ? null : (
+            <LeaderRowView key={r.authority} row={r} rank={i} isMe={false} index={i} />
+          ),
+        )}
+      </div>
     </div>
+  );
+}
+
+function LeaderRowView({
+  row,
+  rank,
+  isMe,
+  index = 0,
+  highlight = false,
+}: {
+  row: LeaderRow;
+  rank: number;
+  isMe: boolean;
+  index?: number;
+  highlight?: boolean;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 6 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ ...spring.gentle, delay: Math.min(index, 12) * stagger.list }}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "30px 1fr 34px auto",
+        gap: 12,
+        alignItems: "center",
+        height: 52,
+        paddingLeft: highlight ? 8 : 0,
+        borderRadius: "var(--r-panel)",
+        background: highlight ? "rgba(152, 222, 227, 0.08)" : "transparent",
+      }}
+    >
+      <span
+        className="tnum"
+        style={{
+          fontWeight: 700,
+          fontSize: 15,
+          color: rank < 3 ? "var(--accent)" : "var(--text-faint)",
+        }}
+      >
+        {String(rank + 1).padStart(2, "0")}
+      </span>
+      <span
+        style={{
+          fontWeight: 500,
+          fontSize: 16,
+          color: isMe ? "var(--accent)" : "var(--text-dim)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {isMe ? "you" : shortKey(row.authority)}
+      </span>
+      <Avatar pubkey={row.authority} size={30} square />
+      <span
+        className="tnum"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          fontWeight: 500,
+          fontSize: 16,
+          color: "var(--accent)",
+          justifyContent: "flex-end",
+        }}
+      >
+        <ChipGlyph size={15} />
+        {row.chips.toLocaleString()}
+      </span>
+    </motion.div>
   );
 }
 
@@ -584,19 +670,75 @@ function Tab({
       aria-label={title}
       style={{
         flex: 1,
-        height: 56,
-        display: "grid",
-        placeItems: "center",
+        height: 60,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 9,
         background: "none",
         border: "none",
         borderBottom: `2px solid ${active ? "var(--accent)" : "transparent"}`,
         color: active ? "var(--accent)" : "var(--text-dim)",
+        fontWeight: 700,
+        fontSize: 13,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
         cursor: "pointer",
         marginBottom: -1,
       }}
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * An action with its name beside it.
+ *
+ * The icon alone was a guessing game for anything that is not universal, so
+ * everything outside the balance strip says what it does.
+ */
+function LabelButton({
+  title,
+  icon,
+  onClick,
+  solid = false,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  onClick?: () => void;
+  solid?: boolean;
+}) {
+  return (
+    <motion.button
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      whileHover={{ y: -1 }}
+      whileTap={{ scale: 0.97 }}
+      transition={spring.snappy}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 10,
+        height: 56,
+        padding: "0 20px",
+        border: "none",
+        borderRadius: "var(--r-panel)",
+        background: solid ? "var(--accent)" : "var(--surface)",
+        color: solid ? "var(--on-accent)" : "var(--accent)",
+        fontWeight: 700,
+        fontSize: 14,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
+        cursor: "pointer",
+      }}
+    >
+      {icon}
+      {title}
+    </motion.button>
   );
 }
 
