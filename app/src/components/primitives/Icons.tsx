@@ -131,6 +131,25 @@ export function NewTableIcon({ size = 20 }: Props) {
   );
 }
 
+export function SoundIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M11 4.7 6.6 8.2H3v7.6h3.6L11 19.3V4.7Z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+    </svg>
+  );
+}
+
+export function MutedIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M11 4.7 6.6 8.2H3v7.6h3.6L11 19.3V4.7Z" />
+      <path d="M22 9.5 16 15.5M16 9.5l6 6" />
+    </svg>
+  );
+}
+
 /** A wallet, for the connect control. */
 export function WalletIcon({ size = 20 }: Props) {
   return (

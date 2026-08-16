@@ -17,6 +17,8 @@ import { useTableSubscriptions } from "@/hooks/use-table-subscriptions";
 import { useCrank } from "@/hooks/use-crank";
 import { useHandCapture } from "@/hooks/use-hand-capture";
 import { useShowdownSequence } from "@/hooks/use-showdown-sequence";
+import { useTableSounds } from "@/hooks/use-table-sounds";
+import { sfx } from "@/lib/sfx";
 import { usePlayer } from "@/hooks/use-player";
 import { useTableActions } from "@/hooks/use-table-actions";
 import {
@@ -225,6 +227,10 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     captureReady: readyForNextHand,
   });
 
+  // Sound is on by default and remembered once turned off.
+  const [muted, setMuted] = useState(false);
+  useEffect(() => setMuted(sfx.isMuted()), []);
+
   /** One prompt, then the table is silent for a day. */
   const [authorising, setAuthorising] = useState(false);
   const authorise = useCallback(async () => {
@@ -277,6 +283,12 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const onAct = useCallback(
     async (kind: ActionKind, toTotal: number) => {
       if (!hand) return;
+      // Your own action answers immediately. Waiting for the chain to confirm
+      // before making a sound turns a third of a second into a broken button.
+      if (kind === "fold") sfx.fold();
+      else if (kind === "check") sfx.check();
+      else if (kind === "call") sfx.call();
+      else sfx.bet();
       setActing(true);
       // Show the result immediately. The chain confirms it about a third of a
       // second later, inside the chip animation.
@@ -308,6 +320,16 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   // the deal being prepared. Show it shuffling rather than showing nothing.
   const working =
     delegated === true && tableView?.state === 0 && fundedCount >= 2;
+
+  // The same events the felt draws, heard.
+  useTableSounds({
+    hand,
+    table: tableView,
+    seats,
+    mySeat,
+    stage: showdown.stage,
+    working,
+  });
 
   // Long operations narrate themselves over the felt.
   const overlay =
@@ -481,6 +503,19 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
               Delete table
             </Button>
           )}
+          <IconButton
+            title={muted ? "Unmute" : "Mute"}
+            onClick={() => {
+              const next = !muted;
+              sfx.setMuted(next);
+              setMuted(next);
+              // Unmuting is itself a gesture, so the browser will let the
+              // context start; a small sound confirms it worked.
+              if (!next) sfx.chip();
+            }}
+          >
+            {muted ? <MutedIcon /> : <SoundIcon />}
+          </IconButton>
           <Link href="/" style={{ textDecoration: "none" }}>
             <IconButton title="Leave table">
               <ExitIcon />
@@ -736,16 +771,19 @@ function IconButton({
   children,
   title,
   solid = false,
+  onClick,
 }: {
   children: React.ReactNode;
   title: string;
   solid?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <motion.span
       title={title}
       aria-label={title}
       role="button"
+      onClick={onClick}
       whileHover={{ y: -1 }}
       whileTap={{ scale: 0.96 }}
       transition={spring.snappy}
@@ -789,6 +827,29 @@ function HistoryIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function SoundIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11 4.7 6.6 8.2H3v7.6h3.6L11 19.3V4.7Z" />
+        <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+        <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+      </g>
+    </svg>
+  );
+}
+
+function MutedIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11 4.7 6.6 8.2H3v7.6h3.6L11 19.3V4.7Z" />
+        <path d="M22 9.5 16 15.5M16 9.5l6 6" />
+      </g>
     </svg>
   );
 }
