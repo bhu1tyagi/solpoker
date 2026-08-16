@@ -46,7 +46,11 @@ export default function Lobby() {
   const visible = useMemo(
     () =>
       tables.filter(
-        (t) => (!t.outdated && !t.abandoned) || (me && t.table.seats.includes(me)),
+        (t) =>
+          (!t.outdated && !t.abandoned && !t.stale) ||
+          // A table you are sitting at is always shown, whatever its state,
+          // because chips on a seat must never become unreachable.
+          (me && t.table.seats.includes(me)),
       ),
     [tables, me],
   );

@@ -68,7 +68,24 @@ export interface LobbyTable {
   outdated: boolean;
   /** Empty long enough that anyone may sweep it away. */
   abandoned: boolean;
+  /**
+   * Created, sat at, and then left without a single hand ever being played,
+   * long enough ago that nobody is coming back.
+   *
+   * The on-chain sweep cannot reach these: the empty-table clock never starts
+   * because a seat is taken, and the game-stale clock never starts because no
+   * hand was ever dealt. So they are unreachable litter, usually an abandoned
+   * test run or a create flow that was closed half way. The table id carries
+   * the moment it was made, which is enough to recognise them and stop showing
+   * them. Nothing is destroyed; a table you are sitting at is always shown.
+   */
+  stale: boolean;
 }
+
+/** A table id is `Date.now() * 1000 + random`, so it carries its own birthday. */
+export const createdAt = (tableId: number) => Math.floor(tableId / 1000);
+
+const NEVER_PLAYED_GRACE_MS = 60 * 60 * 1000;
 
 /**
  * Every table on the program, including the ones currently playing.
@@ -178,6 +195,10 @@ export function useTables() {
               outdated: !deck || deck.data.length < DECK_ACCOUNT_SIZE,
               abandoned:
                 !d.delegated && seated === 0 && emptyFor >= ABANDONED_AFTER_SECS,
+              stale:
+                !d.delegated &&
+                d.table.handNumber === 0 &&
+                Date.now() - createdAt(d.table.tableId) > NEVER_PLAYED_GRACE_MS,
             };
           })
           .sort((a, b) => b.table.tableId - a.table.tableId),
