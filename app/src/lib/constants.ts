@@ -168,6 +168,12 @@ export const ERROR_MESSAGES: Record<string, string> = {
   InsufficientVault:
     "The vault cannot cover that sale right now. This should not happen, please report it.",
   InsufficientChips: "Not enough chips for that.",
+  // Raised by the session key program, not this one. Its numbers overlap ours,
+  // so these are matched by name.
+  InvalidToken: "Your session key is no longer valid. Authorise a new one.",
+  NoToken: "Your session key is missing. Authorise a new one.",
+  InvalidAuthority: "That session key belongs to a different wallet.",
+  ValidityTooLong: "That session would last too long.",
   BuyInOutOfRange: "That buy-in is outside the table limits.",
   SeatOccupied: "Someone took that seat first.",
   NotSeated: "You are not seated at this table.",

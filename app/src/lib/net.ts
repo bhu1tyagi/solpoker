@@ -30,6 +30,16 @@ export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** The program error name behind a failure, if there is one. */
 export function errorName(e: unknown): string | null {
   const s = String(e);
+
+  // Anchor prints the name of the error it raised, and that is the only
+  // unambiguous signal: error numbers are per-program and collide. The session
+  // key crate's InvalidToken is 6001, exactly the same number as our own
+  // InsufficientChips, so an expired session used to be reported to players as
+  // "Not enough chips for that", which sent them looking in the wrong place
+  // entirely. The name in the logs is never wrong.
+  const named = s.match(/Error Code:\s*([A-Za-z][A-Za-z0-9]*)/);
+  if (named) return named[1];
+
   const coded = s.match(/custom program error: 0x([0-9a-f]+)/i);
   if (coded) {
     const code = parseInt(coded[1], 16);

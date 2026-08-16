@@ -31,7 +31,7 @@ import {
 import { configPda, deckPda, tablePda } from "@/lib/pdas";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeConfig } from "@/lib/decode";
-import { ensureSession, loadSession } from "@/lib/session";
+import { clearSession, ensureSession, loadSession } from "@/lib/session";
 import { bestFive, describe, evaluate } from "@/lib/engine/evaluate";
 import { NO_CARD } from "@/lib/engine/cards";
 import {
@@ -225,6 +225,14 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
       delegated && !outdated && session && sessionToken && erProgram && mySeat >= 0,
     ),
     captureReady: readyForNextHand,
+    // A refused session key is a dead end otherwise: the authorise button only
+    // appears when there is no session, so dropping it is what lets the player
+    // out.
+    onSessionInvalid: useCallback(() => {
+      if (publicKey) clearSession(publicKey);
+      setSession(null);
+      setSessionToken(null);
+    }, [publicKey]),
   });
 
   // Sound is on by default and remembered once turned off.

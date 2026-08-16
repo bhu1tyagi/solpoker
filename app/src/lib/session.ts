@@ -54,11 +54,22 @@ export function loadSession(wallet: PublicKey): {
     if (!raw) return null;
     const s = JSON.parse(raw) as StoredSession;
     if (s.validUntil - Date.now() / 1000 < RENEW_WITHIN_SECS) return null;
-    return {
-      keypair: Keypair.fromSecretKey(bs58.decode(s.secret)),
-      tokenPda: new PublicKey(s.tokenPda),
-      validUntil: s.validUntil,
-    };
+
+    const keypair = Keypair.fromSecretKey(bs58.decode(s.secret));
+
+    // A session token is bound to the program it was made for, and the stored
+    // address is only a cache of that derivation. If the program has changed
+    // since, the cached token still exists on chain and still loads, but every
+    // action signed with it is refused as an invalid token, with no way back
+    // because the authorise button only appears when there is no session at
+    // all. Re-deriving and comparing makes a redeployment heal itself.
+    const expected = sessionTokenPda(keypair.publicKey, wallet);
+    if (expected.toBase58() !== s.tokenPda) {
+      window.localStorage.removeItem(storageKey(wallet));
+      return null;
+    }
+
+    return { keypair, tokenPda: expected, validUntil: s.validUntil };
   } catch {
     return null;
   }

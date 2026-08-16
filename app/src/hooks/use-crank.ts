@@ -8,8 +8,11 @@ import { useTableStore } from "@/stores/table-store";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeHistory } from "@/lib/decode";
 import { historyPda } from "@/lib/pdas";
-import { friendlyError } from "@/lib/net";
+import { errorName, friendlyError } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
+
+/** Raised by the session key program when a key can no longer act. */
+const SESSION_ERRORS = new Set(["InvalidToken", "NoToken", "InvalidAuthority"]);
 
 const TICK_MS = 500;
 /** How often to ask the base layer what it has already recorded. */
@@ -37,6 +40,8 @@ export function useCrank(args: {
   mySeat: number;
   enabled: boolean;
   captureReady: () => boolean;
+  /** Called when the session key is refused, so the page can ask for a new one. */
+  onSessionInvalid?: () => void;
 }) {
   const crank = useRef<Crank | null>(null);
   const running = useRef(false);
@@ -73,6 +78,15 @@ export function useCrank(args: {
       mySeat,
       captureReady,
       onError: (e: unknown, stepName: string) => {
+        // A dead session key fails every step forever, and the table simply
+        // stops. Say so once and hand the session back so the authorise button
+        // comes back, rather than repeating the same error until the player
+        // gives up.
+        if (SESSION_ERRORS.has(errorName(e) ?? "")) {
+          toast(friendlyError(e), "bad");
+          args.onSessionInvalid?.();
+          return;
+        }
         // Losing a race is silent. Anything that reaches here is worth saying.
         toast(`${stepName.split(":")[0]}: ${friendlyError(e)}`, "bad");
       },
