@@ -9,6 +9,7 @@ import { CreateTableModal } from "@/components/chrome/CreateTableModal";
 import { Button } from "@/components/primitives/Button";
 import { Modal, Skeleton } from "@/components/primitives/Surface";
 import { ChipGlyph } from "@/components/primitives/Chip";
+import { Logo } from "@/components/primitives/Logo";
 import { Avatar, shortKey } from "@/components/primitives/Avatar";
 import {
   CashOutIcon,
@@ -76,12 +77,21 @@ export default function Lobby() {
             >
               <h1
                 style={{
+                  display: "flex",
+                  alignItems: "center",
+                  // The mark scales with the name rather than sitting at a fixed
+                  // size, so the pair holds together from a phone to a desktop.
+                  gap: "clamp(10px, 1.2vw, 16px)",
                   fontSize: "clamp(34px, 4vw, 52px)",
                   color: "var(--accent)",
                   letterSpacing: "-0.03em",
                   marginRight: "auto",
                 }}
               >
+                {/* Decorative: the name is right there in the heading. Sized in
+                    em so it tracks the clamped heading instead of towering over
+                    it on a phone. */}
+                <Logo size="1em" />
                 SolPoker
               </h1>
 

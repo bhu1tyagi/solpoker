@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!--
+    The browser tab mark. Same geometry as components/primitives/Logo.tsx, and
+    the two must be changed together or the tab and the header stop agreeing.
+    Next.js serves this as the favicon by file convention; there is no <link>
+    to keep in step.
+  -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#43535e"/>
+      <stop offset="1" stop-color="#161f25"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="96" height="96" rx="10" fill="url(#tile)" stroke="#61737f" stroke-width="2"/>
+  <g transform="translate(50 51) scale(0.76) translate(-50 -50)">
+    <path fill="#98dee3" d="M50 12 C 38 28, 17 39, 17 55 C 17 66, 25 74, 35 74 C 41 74, 46 71, 48 67 C 47 76, 44 83, 37 89 L 63 89 C 56 83, 53 76, 52 67 C 54 71, 59 74, 65 74 C 75 74, 83 66, 83 55 C 83 39, 62 28, 50 12 Z"/>
+  </g>
+</svg>

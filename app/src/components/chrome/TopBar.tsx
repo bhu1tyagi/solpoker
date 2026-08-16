@@ -4,6 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { ChipGlyph } from "@/components/primitives/Chip";
+import { Logo } from "@/components/primitives/Logo";
 
 // The wallet button reaches for window on mount, so it cannot render on the server.
 const WalletMultiButton = dynamic(
@@ -35,7 +36,16 @@ export function TopBar({ chips }: { chips?: number }) {
       <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
         <Link
           href="/"
+          aria-label="SolPoker home"
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 9,
+            // The wordmark alone was a short, thin hit target. Padding takes it
+            // to a comfortable tap without moving the text off the bar's line.
+            padding: "6px 8px",
+            margin: "-6px -8px",
+            borderRadius: "var(--r-panel)",
             fontFamily: "var(--font-display)",
             fontSize: "var(--t-md)",
             color: "var(--text)",
@@ -43,6 +53,8 @@ export function TopBar({ chips }: { chips?: number }) {
             letterSpacing: "-0.01em",
           }}
         >
+          {/* Decorative: the wordmark beside it already says the name. */}
+          <Logo size={22} />
           Sol<span style={{ color: "var(--accent)" }}>Poker</span>
         </Link>
         <Link

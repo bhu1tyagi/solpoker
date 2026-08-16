@@ -434,9 +434,6 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             <span className="m-hide">
               <Field label="Table">{String(id).slice(-6)}</Field>
             </span>
-            <Field label="Link">
-              <LinkPill state={link} delegated={delegated} />
-            </Field>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -982,38 +979,10 @@ function useStatusLine(
   return "shuffling";
 }
 
-function LinkPill({ state, delegated }: { state: string; delegated: boolean | null }) {
-  const tone =
-    state === "live" ? "var(--win)" : state === "degraded" ? "var(--accent)" : "var(--text-faint)";
-  const label = !delegated ? "on Solana" : state === "live" ? "live" : state;
-  // Anything short of a live link is a link still being made, so the dot
-  // breathes. A still dot beside the word "connecting" looks like a hang.
-  const settled = !delegated || state === "live";
-  return (
-    <span
-      style={{
-        fontSize: "var(--t-xs)",
-        color: tone,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-      }}
-    >
-      <motion.span
-        animate={settled ? { opacity: 1, scale: 1 } : { opacity: [1, 0.25, 1], scale: [1, 0.8, 1] }}
-        transition={settled ? undefined : { repeat: Infinity, duration: 1.3 }}
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: tone,
-          display: "inline-block",
-        }}
-      />
-      {label}
-    </span>
-  );
-}
+// The Link field is gone from the HUD. Which layer a table is sitting on is
+// plumbing, not something a player at the table needs to read every hand, and
+// the status line already says when the room is not ready. The `link` store
+// value still drives the offline notice below the felt.
 
 /**
  * Work out what to highlight at showdown.
