@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Dela_Gothic_One, Poppins } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -42,6 +43,17 @@ export default function RootLayout({
     <html lang="en" className={`${dela.variable} ${poppins.variable}`}>
       <body>
         <Providers>{children}</Providers>
+        {/*
+          Page views, from the /next entry point rather than /react: it reads
+          route changes out of next/navigation, so a client-side move between
+          the lobby and a table counts as a view. It does nothing off Vercel,
+          so local development stays quiet.
+
+          It sees URLs, not players. A table id is in the path, and a wallet
+          address is never in one. Nothing here touches the cards, the shuffle,
+          or anything the trust page makes a claim about.
+        */}
+        <Analytics />
       </body>
     </html>
   );
