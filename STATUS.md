@@ -124,7 +124,7 @@ to choose a mark that has to survive 16 pixels.
 | Shuffle seed during a live hand | not public |
 | Raw VRF output during a live hand | not public |
 | Undelegating mid-hand to force a reveal | refused by the program |
-| Starting a hand before the cards are locked down | refused by the program |
+| Starting a hand before the *deck* is locked down | refused by the program |
 
 The three seed and randomness rows came out of an audit late in the build and
 are the most important. See
@@ -285,6 +285,32 @@ Still open. See [Known problems](#known-problems).
 
 Worth recording, because most of it was invisible to the tests that existed.
 
+**The privacy fix wedged a table permanently, 17 August.** The 16 August change
+made `start_hand` refuse to deal to any seat whose `cards_secured` bit was
+false, and made sitting down clear that bit, on the reasoning that a permission
+naming the previous occupant must not vouch for the next one. The reasoning was
+right and the enforcement was unworkable, for a reason that only shows up on
+chain: **a hole-card permission can only be updated by the member it already
+names.** Updating it means loading the account, and the enclave refuses to load
+a private account for anyone outside its member list. Secure a seat while it is
+empty and the member list is empty, so the moment someone sits down nobody can
+point the permission at them. Not the new occupant, not the crank, not the
+creator.
+
+So a seat changing hands produced a table that could not start a hand, could not
+undelegate because the deck still held fulfilled VRF randomness, and therefore
+could not be paused or deleted either. It presented as the status line reading
+"shuffling" forever, because `CardsNotSecured` had been added to the client's
+race-lost set and was being swallowed as a benign retry. One table on devnet was
+lost to it and had to be freed by redeploying the program.
+
+The per-seat gate is gone. The deck gate stays, and is safe for a reason the
+seat gate was not: the deck's permission has no members by design, and
+`secure_deck` sets its flag the first time it runs, which is the only moment the
+permission does not yet exist. False there always means "creatable", never
+"locked out". `cards_secured` survives as advisory state so a client can see a
+stale permission and fix it while it still can.
+
 **The shuffle seed was public for the whole hand.** The VRF output and seed were
 written to the `Hand` account, which anyone can read. Salts are public once
 revealed, and the deal is a deterministic function of the seed, so anyone could
@@ -367,6 +393,18 @@ already true on chain. The cost is skipping a record when the action runs ahead
 of the commit, which is exactly the case `hands_recorded` is a counter rather
 than a flag for. One deploy and one `HANDS=3 npm run test:session` to confirm
 the account ordering.
+
+**A seat that changes hands can keep a permission naming its previous
+occupant.** That player could then read the new occupant's hole cards. The
+program cannot close this by refusing to deal, which was tried and wedged a
+table: a permission is only updatable by the member it already names, so once a
+seat is secured while empty nobody can ever re-point it. `secure_hole` succeeds
+only when the permission does not exist yet, or when the caller is already its
+member, and the crank now attempts it once per seat per hand and carries on when
+it fails. Closing this properly needs a way to update a permission you are
+locked out of, which is a MagicBlock question rather than something this program
+can decide. In practice it needs a seat to be secured, vacated, and retaken by
+someone else, on a table that is never re-delegated in between.
 
 **23 test `Player` accounts are on chain and cannot be removed.** They are the
 leaderboard. The program has `close_table` but nothing to close a player, and

@@ -26,6 +26,15 @@ export interface SeatView {
   saltState: number;
   saltCommit: string;
   salt: string;
+  /**
+   * Does this seat's hole-card permission name whoever is sitting in it now?
+   *
+   * Cleared on chain by every path that changes the occupant, because a
+   * permission naming the previous player would let them read the next one's
+   * cards. `start_hand` refuses to deal to a seat without it, so the crank has
+   * to put it back before a hand can begin.
+   */
+  cardsSecured: boolean;
 }
 
 export interface HandView {

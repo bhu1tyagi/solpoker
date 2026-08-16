@@ -115,7 +115,8 @@ export function decodeTable(d: Uint8Array, address: string): TableView {
 /**
  * Seat: 8 disc, 32 table, 1 index, 32 occupant, 8 stack, 8 committed_street,
  * 8 committed_total, folded, all_in, needs_action, may_raise, in_hand,
- * 8 last_action_slot, 32 salt_commit, 32 salt, 1 salt_state, 1 bump
+ * 8 last_action_slot, 32 salt_commit, 32 salt, 1 salt_state, 1 bump,
+ * 1 cards_secured
  */
 export function decodeSeat(d: Uint8Array): SeatView {
   return {
@@ -132,6 +133,9 @@ export function decodeSeat(d: Uint8Array): SeatView {
     saltCommit: hex(d.subarray(110, 142)),
     salt: hex(d.subarray(142, 174)),
     saltState: u8(d, 174),
+    // Appended after bump, so a seat written by an older build stops before it
+    // and reads as unsecured, which is the safe direction to be wrong in.
+    cardsSecured: u8(d, 176) === 1,
   };
 }
 

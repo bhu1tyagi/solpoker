@@ -79,12 +79,34 @@ pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
         check_seat_order(&seats, &table_key)?;
     }
 
-    // Nothing may be dealt until the cards are actually hidden. The deck holds
-    // the VRF output and the salts are public, so starting a hand against a deck
-    // that is still world-readable publishes the whole deal. The client has
-    // always locked these down first; this is what stops the hand when it does
-    // not, and what stops anyone else calling this permissionless instruction
-    // before it gets the chance.
+    // Nothing may be dealt until the deck is actually hidden. It holds the VRF
+    // output while the salts are public, so starting a hand against a deck that
+    // is still world-readable publishes the whole deal, for every player at
+    // once. The client has always locked it down first; this is what stops the
+    // hand when it does not, and what stops anyone else calling this
+    // permissionless instruction before it gets the chance.
+    //
+    // This flag is safe to gate on because it can never be stuck false. The
+    // deck's permission has no members by design, and `secure_deck` sets this
+    // the first time it runs, which is also the only time the permission does
+    // not yet exist. False therefore always means "creatable", never "locked".
+    //
+    // The same is emphatically **not** true per seat, which is why there is no
+    // matching `seat.cards_secured` check here. A hole-card permission names
+    // exactly one member, and updating it means loading the account, which the
+    // enclave refuses to anyone who is not already that member. Secure a seat
+    // while it is empty and the member list is empty, so when someone sits down
+    // nobody on earth can point the permission at them: not the new occupant,
+    // not the crank, not the table creator. Gating the deal on that flag turned
+    // a seat changing hands into a table that could not start a hand, could not
+    // undelegate because the deck held randomness, and so could not be deleted
+    // either. It cost a table on devnet before it was understood.
+    //
+    // The residual risk is real and smaller: a seat whose permission still names
+    // a previous occupant lets that one player read the current occupant's hole
+    // cards. Closing it needs a way to update a permission you are locked out
+    // of, which is a MagicBlock question, not something this program can fix by
+    // refusing to deal. See STATUS.md.
     require!(ctx.accounts.deck.secured, PokerError::CardsNotSecured);
 
     // Only seated players with chips are dealt in.
@@ -94,9 +116,6 @@ pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
         let seats = seats_ref!(ctx.accounts);
         for (i, seat) in seats.iter().enumerate() {
             if seat.is_occupied() && seat.stack > 0 {
-                // A seat whose permission is missing or still names its previous
-                // occupant must not be dealt cards someone else can read.
-                require!(seat.cards_secured, PokerError::CardsNotSecured);
                 stacks[i] = seat.stack;
                 dealt_in |= 1 << i;
             }

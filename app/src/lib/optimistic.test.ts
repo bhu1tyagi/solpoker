@@ -17,6 +17,7 @@ const seat = (over: Partial<SeatView> = {}): SeatView => ({
   saltState: 2,
   saltCommit: "",
   salt: "",
+  cardsSecured: true,
   ...over,
 });
 

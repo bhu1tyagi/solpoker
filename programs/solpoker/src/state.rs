@@ -184,14 +184,16 @@ pub struct Seat {
     /// 0 none, 1 committed, 2 revealed.
     pub salt_state: u8,
     pub bump: u8,
-    /// Has this seat's hole-card permission been pointed at its current occupant?
+    /// Has `secure_hole` ever pointed this seat's permission at its occupant?
     ///
-    /// Set by `secure_hole`, which is the only instruction that writes the
-    /// permission, and cleared by every path that changes who is sitting here.
-    /// `start_hand` refuses to deal to a seat without it, so a table cannot play
-    /// a hand whose cards are still readable, or whose read right still belongs
-    /// to whoever sat here last. Before this, ordering the calls correctly was
-    /// the client's job, which meant privacy rested on a habit rather than a rule.
+    /// Advisory only. `start_hand` deliberately does **not** gate on it, and the
+    /// long comment there explains why: a hole-card permission can only be
+    /// updated by the member it already names, so a seat secured while empty
+    /// names nobody and can never be re-pointed once someone sits down. Refusing
+    /// to deal on that basis wedges the table permanently.
+    ///
+    /// Cleared when the occupant changes, so a client can see that the
+    /// permission is stale and try to fix it while it still can.
     pub cards_secured: bool,
 }
 
