@@ -21,10 +21,9 @@ const PAGES = [
   {
     path: "/",
     expect: {
-      brand: "text=SolPoker",
       connect: "button:has-text('Select Wallet'), button:has-text('Connect')",
-      trustLink: "text=Trust model",
-      heading: "h1",
+      trustLink: "[aria-label='How this works']",
+      heading: "h1:has-text('Poker Rooms')",
     },
   },
   {

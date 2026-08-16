@@ -1,343 +1,235 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { motion } from "motion/react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { TopBar } from "@/components/chrome/TopBar";
 import { CreateTableModal } from "@/components/chrome/CreateTableModal";
 import { Button } from "@/components/primitives/Button";
-import { Modal, Panel, Skeleton, Stat } from "@/components/primitives/Surface";
+import { Modal, Skeleton } from "@/components/primitives/Surface";
 import { ChipGlyph } from "@/components/primitives/Chip";
+import { Avatar, shortKey } from "@/components/primitives/Avatar";
+import {
+  CashOutIcon,
+  InfoIcon,
+  NewTableIcon,
+  PlayersIcon,
+  PlusIcon,
+  RefreshIcon,
+  TableIcon,
+} from "@/components/primitives/Icons";
 import { usePlayer } from "@/hooks/use-player";
 import { isJoinable, useTables, type LobbyTable } from "@/hooks/use-tables";
 import { spring, stagger } from "@/styles/theme";
-import { LAMPORTS_PER_CHIP } from "@/lib/constants";
+import { LAMPORTS_PER_CHIP, MAX_SEATS } from "@/lib/constants";
+
+const WalletMultiButton = dynamic(
+  () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
+  { ssr: false, loading: () => <div style={{ width: 150, height: 48 }} /> },
+);
+
+/** Stakes, buy-in, seats, players, action. One room per row. */
+const COLUMNS = "1.1fr 1.2fr 0.9fr 0.7fr 118px";
 
 export default function Lobby() {
   const { connected, publicKey } = useWallet();
-  const { state, buy, sell, busy, affordable, refresh } = usePlayer();
+  const { state, buy, sell, busy, affordable } = usePlayer();
   const [exchange, setExchange] = useState<"buy" | "sell" | null>(null);
   const { tables, loading, error, refresh: refreshTables } = useTables();
   const [creating, setCreating] = useState(false);
+  const [tab, setTab] = useState<"players" | "mine">("players");
 
-  // Tables this wallet is sitting at, live or not. Losing track of a table you
-  // have chips on is the one navigation failure that really matters.
   const me = publicKey?.toBase58();
-  const myTables = me ? tables.filter((t) => t.table.seats.includes(me)) : [];
+  const visible = useMemo(
+    () =>
+      tables.filter(
+        (t) => (!t.outdated && !t.abandoned) || (me && t.table.seats.includes(me)),
+      ),
+    [tables, me],
+  );
+  const myTables = useMemo(
+    () => (me ? tables.filter((t) => t.table.seats.includes(me)) : []),
+    [tables, me],
+  );
 
   return (
     <>
-      <TopBar chips={state?.chips} />
-
-      <main style={{ maxWidth: 980, margin: "0 auto", padding: "36px 24px 80px" }}>
-        <section style={{ marginBottom: 34 }}>
-          <h1 style={{ fontSize: "var(--t-xl)", marginBottom: 6 }}>
-            Real-time Hold&apos;em, on chain
-          </h1>
-          <p style={{ color: "var(--text-dim)", margin: 0, maxWidth: 620 }}>
-            Buy chips with SOL, play, sell them back. Every hand runs inside a
-            secure enclave, so nobody sees your cards, and every shuffle can be
-            checked afterwards by anyone. Provably fair shuffle, TEE-protected
-            hole cards.{" "}
-            <Link href="/trust" style={{ color: "var(--accent)" }}>
-              What that means
-            </Link>
-            .
-          </p>
-        </section>
-
-        {!connected ? (
-          <>
-            <Panel style={{ textAlign: "center", padding: 46 }}>
-              <p style={{ color: "var(--text-dim)", margin: "0 0 6px" }}>
-                Connect a wallet to get chips and take a seat.
-              </p>
-              <p style={{ color: "var(--text-faint)", fontSize: "var(--t-sm)", margin: 0 }}>
-                Devnet only for now, so the SOL involved is test currency.
-                Chips are backed one to one by SOL in the program vault.
-              </p>
-            </Panel>
-
-            <div
+      <main
+        style={{
+          minHeight: "100dvh",
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) 380px",
+          gap: 48,
+          maxWidth: 1720,
+          margin: "0 auto",
+          padding: "48px 40px 64px",
+          alignItems: "start",
+        }}
+      >
+        <section>
+          {/* Title and everything you carry, on one line. */}
+          <header
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              marginBottom: 44,
+              flexWrap: "wrap",
+            }}
+          >
+            <h1
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-                gap: 14,
-                marginTop: 30,
+                fontSize: "clamp(34px, 4vw, 52px)",
+                color: "var(--accent)",
+                letterSpacing: "-0.03em",
+                marginRight: "auto",
               }}
             >
-              {[
-                {
-                  n: "01",
-                  t: "Everyone salts the deck",
-                  d: "Each player commits to random bytes before anyone reveals. One honest player is enough to keep the shuffle fair.",
-                },
-                {
-                  n: "02",
-                  t: "The hand runs in an enclave",
-                  d: "Cards are dealt inside secure hardware. Your opponents cannot read your hand, and neither can anyone watching Solana.",
-                },
-                {
-                  n: "03",
-                  t: "Check it afterwards",
-                  d: "Every finished hand publishes what it was dealt from. Recompute the deck yourself and see that it matches.",
-                },
-              ].map((s, i) => (
-                <motion.div
-                  key={s.n}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ ...spring.gentle, delay: 0.05 + i * 0.06 }}
-                  style={{
-                    borderTop: "1px solid var(--line)",
-                    paddingTop: 16,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      fontSize: "var(--t-sm)",
-                      color: "var(--accent)",
-                      marginBottom: 8,
-                    }}
-                  >
-                    {s.n}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      fontSize: "var(--t-base)",
-                      marginBottom: 6,
-                    }}
-                  >
-                    {s.t}
-                  </div>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "var(--t-sm)",
-                      color: "var(--text-dim)",
-                      lineHeight: 1.55,
-                    }}
-                  >
-                    {s.d}
-                  </p>
-                </motion.div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: "28px 44px",
-                padding: "10px 4px 30px",
-              }}
-            >
-              <div>
-                <Stat
-                  label="Your chips"
-                  value={state ? state.chips.toLocaleString() : "..."}
-                  size="lg"
-                  tone="var(--accent)"
-                />
-                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                  <Button variant="primary" size="sm" onClick={() => setExchange("buy")}>
-                    Buy chips
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={!state || state.chips === 0}
-                    onClick={() => setExchange("sell")}
-                  >
-                    Cash out
-                  </Button>
-                </div>
-              </div>
+              Poker Rooms
+            </h1>
 
-              <div
-                style={{
-                  width: 1,
-                  alignSelf: "stretch",
-                  background:
-                    "linear-gradient(180deg, transparent, var(--line), transparent)",
-                }}
-              />
-
-              <div>
-                <Stat
-                  label="Wallet"
-                  value={state ? `${(state.lamports / 1e9).toFixed(3)} SOL` : "..."}
-                  size="lg"
-                />
-                <p
-                  style={{
-                    color: "var(--text-faint)",
-                    fontSize: "var(--t-xs)",
-                    margin: "10px 0 0",
-                    maxWidth: 230,
-                  }}
-                >
-                  10,000 chips cost 0.01 SOL, and sell back for exactly the
-                  same. The vault holds the difference.
-                </p>
-              </div>
-
-              <div
-                style={{
-                  width: 1,
-                  alignSelf: "stretch",
-                  background:
-                    "linear-gradient(180deg, transparent, var(--line), transparent)",
-                }}
-              />
-
-              <div>
-                <Stat label="Start something" value="New table" size="lg" />
-                <div style={{ marginTop: 10 }}>
-                  <Button variant="ghost" size="sm" onClick={() => setCreating(true)}>
-                    Create a table
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {myTables.length > 0 && (
-              <Panel
-                style={{
-                  marginBottom: 22,
-                  borderLeft: "2px solid var(--accent)",
-                }}
-              >
+            {connected && (
+              <>
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 14,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <div>
-                    <div style={{ fontFamily: "var(--font-display)", fontSize: "var(--t-base)" }}>
-                      You are seated at {myTables.length === 1 ? "a table" : `${myTables.length} tables`}
-                    </div>
-                    <p
-                      style={{
-                        margin: "4px 0 0",
-                        fontSize: "var(--t-sm)",
-                        color: "var(--text-dim)",
-                      }}
-                    >
-                      Your chips stay on the seat until you cash out there.
-                    </p>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {myTables.map((t) => (
-                      <Link
-                        key={t.table.address}
-                        href={`/table/${t.table.tableId}`}
-                        style={{ textDecoration: "none" }}
-                      >
-                        <Button variant="primary" size="sm">
-                          Return to table {String(t.table.tableId).slice(-4)}
-                        </Button>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </Panel>
-            )}
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "space-between",
-                marginBottom: 16,
-              }}
-            >
-              <h2 style={{ fontSize: "var(--t-lg)", color: "var(--accent)" }}>
-                Poker rooms
-              </h2>
-              <Button variant="quiet" size="sm" onClick={() => void refreshTables()}>
-                Refresh
-              </Button>
-            </div>
-
-            {loading ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <Skeleton height={72} />
-                <Skeleton height={72} />
-              </div>
-            ) : error ? (
-              <Panel style={{ textAlign: "center", padding: 32 }}>
-                <p style={{ color: "var(--lose)", margin: "0 0 6px" }}>
-                  Could not load the table list.
-                </p>
-                <p
-                  style={{
-                    color: "var(--text-faint)",
-                    fontSize: "var(--t-xs)",
-                    margin: "0 0 12px",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {error}
-                </p>
-                <Button variant="ghost" size="sm" onClick={() => void refreshTables()}>
-                  Try again
-                </Button>
-              </Panel>
-            ) : tables.length === 0 ? (
-              <Panel style={{ textAlign: "center", padding: 40 }}>
-                <p style={{ color: "var(--text-dim)", margin: 0 }}>
-                  No tables yet. Create the first one.
-                </p>
-              </Panel>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: ROW_COLUMNS,
                     gap: 12,
-                    padding: "0 18px 6px",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: "var(--text-faint)",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.14em",
+                    background: "var(--surface)",
+                    borderRadius: "var(--r-panel)",
+                    padding: "12px 20px 12px 12px",
+                    height: 56,
                   }}
                 >
-                  <span>Stakes</span>
-                  <span>Buy-in</span>
-                  <span>Players</span>
-                  <span>Status</span>
-                  <span />
-                </div>
-                {tables
-                .filter((t) => (!t.outdated && !t.abandoned) || (me && t.table.seats.includes(me)))
-                .slice(0, 25)
-                .map((t, i) => (
-                  <motion.div
-                    key={t.table.address}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ ...spring.gentle, delay: i * stagger.list }}
+                  <span
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 8,
+                      background: "var(--accent)",
+                      color: "var(--on-accent)",
+                      display: "grid",
+                      placeItems: "center",
+                    }}
                   >
-                    <TableRow t={t} />
-                  </motion.div>
-                ))}
-              </div>
+                    <ChipGlyph size={20} color="currentColor" />
+                  </span>
+                  <span
+                    className="tnum"
+                    style={{ fontWeight: 700, fontSize: 16, color: "var(--text-dim)" }}
+                  >
+                    {state ? state.chips.toLocaleString() : "..."}
+                  </span>
+                </div>
+
+                <IconButton title="Buy chips" solid onClick={() => setExchange("buy")}>
+                  <PlusIcon />
+                </IconButton>
+                <IconButton
+                  title="Cash out"
+                  disabled={!state || state.chips === 0}
+                  onClick={() => setExchange("sell")}
+                >
+                  <CashOutIcon />
+                </IconButton>
+                <IconButton title="New table" onClick={() => setCreating(true)}>
+                  <NewTableIcon />
+                </IconButton>
+              </>
             )}
-          </>
-        )}
+
+            <Link href="/trust" style={{ textDecoration: "none" }}>
+              <IconButton title="How this works">
+                <InfoIcon />
+              </IconButton>
+            </Link>
+            <WalletMultiButton />
+          </header>
+
+          {/* Column headings, then a row per room. */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: COLUMNS,
+              gap: 24,
+              padding: "0 8px 14px",
+              color: "var(--text-dim)",
+              opacity: 0.64,
+              fontSize: 14,
+              letterSpacing: "0.02em",
+            }}
+          >
+            <span>Stakes</span>
+            <span>Buy-in</span>
+            <span>Seats</span>
+            <span>Players</span>
+            <span style={{ textAlign: "right" }}>Action</span>
+          </div>
+
+          {loading ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <Skeleton height={64} />
+              <Skeleton height={64} />
+              <Skeleton height={64} />
+            </div>
+          ) : error ? (
+            <EmptyRow tone="var(--lose)">
+              <span>Could not reach the network.</span>
+              <Button variant="ghost" size="sm" onClick={() => void refreshTables()}>
+                Try again
+              </Button>
+            </EmptyRow>
+          ) : visible.length === 0 ? (
+            <EmptyRow>
+              <TableIcon size={22} />
+              <span>No rooms yet.</span>
+              {connected && (
+                <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+                  Open one
+                </Button>
+              )}
+            </EmptyRow>
+          ) : (
+            <div>
+              {visible.slice(0, 25).map((t, i) => (
+                <motion.div
+                  key={t.table.address}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ ...spring.gentle, delay: i * stagger.list }}
+                >
+                  <TableRow t={t} />
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+            <IconButton title="Refresh" onClick={() => void refreshTables()}>
+              <RefreshIcon />
+            </IconButton>
+          </div>
+        </section>
+
+        {/* Who is playing, and where you are sitting. */}
+        <aside>
+          <div style={{ display: "flex", gap: 0, marginBottom: 2 }}>
+            <Tab active={tab === "players"} onClick={() => setTab("players")}>
+              <PlayersIcon size={22} />
+            </Tab>
+            <Tab active={tab === "mine"} onClick={() => setTab("mine")}>
+              <TableIcon size={22} />
+            </Tab>
+          </div>
+          <div style={{ height: 1, background: "var(--control)", opacity: 0.48 }} />
+
+          {tab === "players" ? (
+            <PlayerList tables={visible} me={me} />
+          ) : (
+            <MyTables tables={myTables} />
+          )}
+        </aside>
       </main>
 
       <ExchangeModal
@@ -348,6 +240,7 @@ export default function Lobby() {
         busy={busy}
         onBuy={buy}
         onSell={sell}
+        solPerChip={LAMPORTS_PER_CHIP / 1e9}
       />
 
       <CreateTableModal
@@ -360,83 +253,338 @@ export default function Lobby() {
   );
 }
 
-/** Stakes, buy-in, players, status, join. One room per row, like a lobby board. */
-const ROW_COLUMNS = "1.2fr 1.2fr 0.8fr 0.8fr auto";
-
 function TableRow({ t }: { t: LobbyTable }) {
   const joinable = isJoinable(t);
   const live = t.delegated;
-  const status = t.outdated
-    ? { label: "outdated", tone: "var(--lose)" }
-    : live
-      ? { label: "playing", tone: "var(--win)" }
-      : joinable
-        ? { label: "open", tone: "var(--accent)" }
-        : { label: "full", tone: "var(--text-faint)" };
 
   return (
     <Link href={`/table/${t.table.tableId}`} style={{ textDecoration: "none" }}>
-      <Panel hoverable padded={false} style={{ padding: "13px 18px" }}>
-        <div
+      <motion.div
+        whileHover={{ backgroundColor: "rgba(64, 82, 94, 0.16)" }}
+        transition={spring.snappy}
+        style={{
+          display: "grid",
+          gridTemplateColumns: COLUMNS,
+          gap: 24,
+          alignItems: "center",
+          height: 64,
+          padding: "0 8px",
+          borderRadius: "var(--r-panel)",
+        }}
+      >
+        <span
+          className="tnum"
+          style={{ fontWeight: 500, fontSize: 18, color: "var(--text-dim)" }}
+        >
+          {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "-"}
+        </span>
+
+        <span
+          className="tnum"
           style={{
-            display: "grid",
-            gridTemplateColumns: ROW_COLUMNS,
-            gap: 12,
+            display: "inline-flex",
             alignItems: "center",
+            gap: 8,
+            fontWeight: 500,
+            fontSize: 18,
+            color: "var(--accent)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <ChipGlyph size={16} />
-            <div>
-              <div className="tnum" style={{ fontWeight: 700, color: "var(--text)" }}>
-                {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "table"}
-              </div>
-              <div style={{ fontSize: 10, color: "var(--text-faint)" }}>
-                room {String(t.table.tableId)} · hand {t.table.handNumber}
-              </div>
-            </div>
-          </div>
+          <ChipGlyph size={17} />
+          {t.config
+            ? `${t.config.minBuyIn.toLocaleString()} - ${t.config.maxBuyIn.toLocaleString()}`
+            : "-"}
+        </span>
 
-          <div className="tnum" style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)" }}>
-            {t.config
-              ? `${t.config.minBuyIn.toLocaleString()} - ${t.config.maxBuyIn.toLocaleString()}`
-              : "-"}
-          </div>
-
-          <div className="tnum" style={{ color: "var(--text)", fontSize: "var(--t-sm)" }}>
-            {t.seated} / 6
-          </div>
-
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: status.tone,
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-            }}
-          >
-            {status.label}
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 10,
+            color: "var(--accent)",
+            fontWeight: 500,
+            fontSize: 18,
+          }}
+        >
+          <span style={{ color: "var(--text-dim)", opacity: 0.8 }}>
+            <TableIcon size={22} />
           </span>
+          {MAX_SEATS}
+        </span>
 
-          <span
-            style={{
-              background: joinable && !live ? "var(--accent)" : "var(--control)",
-              color: joinable && !live ? "var(--on-accent)" : "var(--text-dim)",
-              borderRadius: "var(--r-panel)",
-              fontFamily: "var(--font-display)",
-              fontSize: 11,
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-              padding: "9px 18px",
-              justifySelf: "end",
-            }}
-          >
-            {live ? "Watch" : joinable ? "Join" : "View"}
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 10,
+            color: "var(--accent)",
+            fontWeight: 500,
+            fontSize: 18,
+          }}
+        >
+          <span style={{ color: "var(--text-dim)", opacity: 0.8 }}>
+            <PlayersIcon size={22} />
           </span>
-        </div>
-      </Panel>
+          {t.seated}
+        </span>
+
+        <span
+          style={{
+            justifySelf: "end",
+            width: 118,
+            height: 48,
+            display: "grid",
+            placeItems: "center",
+            borderRadius: "var(--r-panel)",
+            background: joinable && !live ? "var(--accent)" : "rgba(152, 222, 227, 0.06)",
+            color: joinable && !live ? "var(--on-accent)" : "var(--accent)",
+            fontWeight: 700,
+            fontSize: 14,
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+          }}
+        >
+          {live ? "Watch" : joinable ? "Join" : "View"}
+        </span>
+      </motion.div>
     </Link>
+  );
+}
+
+/** Everyone currently sitting somewhere, richest first. */
+function PlayerList({ tables, me }: { tables: LobbyTable[]; me?: string }) {
+  const players = useMemo(() => {
+    const rows: { key: string; seat: number; tableId: number }[] = [];
+    for (const t of tables) {
+      t.table.seats.forEach((occupant, seat) => {
+        if (occupant) rows.push({ key: occupant, seat: seat + 1, tableId: t.table.tableId });
+      });
+    }
+    return rows;
+  }, [tables]);
+
+  if (players.length === 0) {
+    return <SideEmpty icon={<PlayersIcon size={24} />} />;
+  }
+
+  return (
+    <div>
+      <SideHead cols={["Player", "", "#"]} />
+      {players.slice(0, 12).map((p, i) => (
+        <Link
+          key={`${p.tableId}-${p.seat}`}
+          href={`/table/${p.tableId}`}
+          style={{ textDecoration: "none" }}
+        >
+          <motion.div
+            initial={{ opacity: 0, x: 6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ ...spring.gentle, delay: i * stagger.list }}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 40px 40px",
+              gap: 14,
+              alignItems: "center",
+              height: 52,
+            }}
+          >
+            <span
+              style={{
+                fontWeight: 500,
+                fontSize: 17,
+                color: p.key === me ? "var(--accent)" : "var(--text-dim)",
+              }}
+            >
+              {p.key === me ? "you" : shortKey(p.key)}
+            </span>
+            <Avatar pubkey={p.key} size={34} square />
+            <span
+              className="tnum"
+              style={{
+                fontWeight: 500,
+                fontSize: 17,
+                color: "var(--text-dim)",
+                textAlign: "right",
+              }}
+            >
+              {String(p.seat).padStart(2, "0")}
+            </span>
+          </motion.div>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/** Tables this wallet is seated at, so chips are never lost track of. */
+function MyTables({ tables }: { tables: LobbyTable[] }) {
+  if (tables.length === 0) return <SideEmpty icon={<TableIcon size={24} />} />;
+  return (
+    <div>
+      <SideHead cols={["Table", "", "Seats"]} />
+      {tables.map((t) => (
+        <Link
+          key={t.table.address}
+          href={`/table/${t.table.tableId}`}
+          style={{ textDecoration: "none" }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 40px 40px",
+              gap: 14,
+              alignItems: "center",
+              height: 52,
+            }}
+          >
+            <span className="tnum" style={{ fontSize: 17, color: "var(--text-dim)" }}>
+              {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "-"}
+            </span>
+            <span style={{ color: "var(--accent)" }}>
+              <TableIcon size={22} />
+            </span>
+            <span
+              className="tnum"
+              style={{ fontSize: 17, color: "var(--accent)", textAlign: "right" }}
+            >
+              {t.seated}
+            </span>
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function SideHead({ cols }: { cols: string[] }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 40px 40px",
+        gap: 14,
+        height: 52,
+        alignItems: "center",
+        color: "var(--text-dim)",
+        opacity: 0.64,
+        fontSize: 14,
+        letterSpacing: "0.02em",
+      }}
+    >
+      <span>{cols[0]}</span>
+      <span />
+      <span style={{ textAlign: "right" }}>{cols[2]}</span>
+    </div>
+  );
+}
+
+function SideEmpty({ icon }: { icon: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        height: 160,
+        display: "grid",
+        placeItems: "center",
+        color: "var(--text-faint)",
+        opacity: 0.5,
+      }}
+    >
+      {icon}
+    </div>
+  );
+}
+
+function EmptyRow({
+  children,
+  tone = "var(--text-dim)",
+}: {
+  children: React.ReactNode;
+  tone?: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 14,
+        height: 128,
+        color: tone,
+        fontSize: 15,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Tab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1,
+        height: 56,
+        display: "grid",
+        placeItems: "center",
+        background: "none",
+        border: "none",
+        borderBottom: `2px solid ${active ? "var(--accent)" : "transparent"}`,
+        color: active ? "var(--accent)" : "var(--text-dim)",
+        cursor: "pointer",
+        marginBottom: -1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function IconButton({
+  children,
+  title,
+  solid = false,
+  disabled = false,
+  onClick,
+}: {
+  children: React.ReactNode;
+  title: string;
+  solid?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <motion.button
+      title={title}
+      aria-label={title}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      whileHover={disabled ? undefined : { y: -1 }}
+      whileTap={disabled ? undefined : { scale: 0.96 }}
+      transition={spring.snappy}
+      style={{
+        width: 56,
+        height: 56,
+        display: "grid",
+        placeItems: "center",
+        border: "none",
+        borderRadius: "var(--r-panel)",
+        background: solid ? "var(--accent)" : "var(--surface)",
+        color: solid ? "var(--on-accent)" : "var(--accent)",
+        opacity: disabled ? 0.35 : 1,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      {children}
+    </motion.button>
   );
 }
 
@@ -448,6 +596,7 @@ function ExchangeModal({
   busy,
   onBuy,
   onSell,
+  solPerChip,
 }: {
   mode: "buy" | "sell" | null;
   onClose: () => void;
@@ -456,26 +605,17 @@ function ExchangeModal({
   busy: "buy" | "sell" | null;
   onBuy: (chips: number) => Promise<void>;
   onSell: (chips: number) => Promise<void>;
+  solPerChip: number;
 }) {
   const [amount, setAmount] = useState(10_000);
   const buying = mode === "buy";
   const max = buying ? affordable : chips;
   const clamped = Math.min(Math.max(amount, 0), max);
-  const sol = (clamped * LAMPORTS_PER_CHIP) / 1e9;
+  const sol = clamped * solPerChip;
 
   return (
-    <Modal
-      open={mode !== null}
-      onClose={onClose}
-      title={buying ? "Buy chips" : "Cash out to SOL"}
-    >
-      <p style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)", marginTop: 0 }}>
-        {buying
-          ? "SOL moves from your wallet into the program vault and chips appear in your balance. The rate is fixed in the program."
-          : "Chips leave your balance and the vault pays SOL back to your wallet, at the same fixed rate they were bought at."}
-      </p>
-
-      <div style={{ display: "flex", gap: 8, margin: "16px 0 10px" }}>
+    <Modal open={mode !== null} onClose={onClose} title={buying ? "Buy chips" : "Cash out"}>
+      <div style={{ display: "flex", gap: 8, margin: "4px 0 14px" }}>
         {[1_000, 10_000, 50_000].map((v) => (
           <Button
             key={v}
@@ -492,7 +632,7 @@ function ExchangeModal({
         </Button>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "6px 0 18px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "6px 0 18px" }}>
         <input
           type="range"
           min={0}
@@ -500,25 +640,41 @@ function ExchangeModal({
           step={100}
           value={clamped}
           onChange={(e) => setAmount(Number(e.target.value))}
-          style={{ flex: 1, accentColor: "var(--accent)" }}
+          style={{ flex: 1 }}
         />
         <span
           className="tnum"
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
             fontFamily: "var(--font-display)",
-            fontSize: "var(--t-md)",
+            fontSize: 18,
             color: "var(--accent)",
-            minWidth: 90,
-            textAlign: "right",
+            minWidth: 120,
+            justifyContent: "flex-end",
           }}
         >
+          <ChipGlyph size={17} />
           {clamped.toLocaleString()}
         </span>
       </div>
 
-      <p style={{ color: "var(--text-faint)", fontSize: "var(--t-sm)", margin: "0 0 16px" }}>
-        {buying ? `Costs ${sol} SOL` : `Pays ${sol} SOL`}
-      </p>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 20,
+          color: "var(--text-dim)",
+          fontSize: 15,
+        }}
+      >
+        <span>{buying ? "You pay" : "You receive"}</span>
+        <span className="tnum" style={{ color: "var(--text)", fontWeight: 600 }}>
+          {sol.toFixed(4)} SOL
+        </span>
+      </div>
 
       <div style={{ display: "flex", gap: 10 }}>
         <Button
