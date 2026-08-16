@@ -79,12 +79,12 @@ button {
    connect button stops announcing that it came from somewhere else. */
 .wallet-adapter-button {
   font-family: var(--font-sans) !important;
-  font-size: 14px !important;
+  font-size: 12px !important;
   font-weight: 700 !important;
   letter-spacing: 0.04em !important;
   text-transform: uppercase !important;
-  height: 56px !important;
-  padding: 0 22px !important;
+  height: 44px !important;
+  padding: 0 16px !important;
   border-radius: var(--r-panel) !important;
   background: var(--accent) !important;
   color: var(--on-accent) !important;
@@ -99,9 +99,9 @@ button {
 .wallet-adapter-button-start-icon,
 .wallet-adapter-button-start-icon img,
 .wallet-adapter-button-start-icon svg {
-  width: 20px !important;
-  height: 20px !important;
-  margin-right: 10px !important;
+  width: 17px !important;
+  height: 17px !important;
+  margin-right: 9px !important;
 }
 /* The connect screen: no box, just a dark room with a centred column, a big
    cyan title, and one quiet row per wallet. */

@@ -104,8 +104,8 @@ export default function Lobby() {
                       gap: 12,
                       background: "var(--surface)",
                       borderRadius: "var(--r-panel)",
-                      padding: "0 6px 0 14px",
-                      height: 56,
+                      padding: "0 5px 0 12px",
+                      height: 44,
                     }}
                   >
                     <ChipGlyph size={22} />
@@ -122,8 +122,8 @@ export default function Lobby() {
                       whileTap={{ scale: 0.94 }}
                       transition={spring.snappy}
                       style={{
-                        width: 44,
-                        height: 44,
+                        width: 34,
+                        height: 34,
                         display: "grid",
                         placeItems: "center",
                         border: "none",
@@ -133,7 +133,7 @@ export default function Lobby() {
                         cursor: "pointer",
                       }}
                     >
-                      <PlusIcon size={20} />
+                      <PlusIcon size={16} />
                     </motion.button>
                   </div>
 
@@ -154,12 +154,12 @@ export default function Lobby() {
               {connected && (
                 <LabelButton
                   title="Create a table"
-                  icon={<NewTableIcon />}
+                  icon={<NewTableIcon size={16} />}
                   onClick={() => setCreating(true)}
                 />
               )}
               <Link href="/trust" style={{ textDecoration: "none" }}>
-                <LabelButton title="How this works" icon={<InfoIcon />} />
+                <LabelButton title="How this works" icon={<InfoIcon size={16} />} />
               </Link>
 
               {/* Chips left on a seat are the one thing worth interrupting the
@@ -171,14 +171,14 @@ export default function Lobby() {
                   href={`/table/${t.table.tableId}`}
                   style={{ textDecoration: "none" }}
                 >
-                  <LabelButton title="Return to table" icon={<TableIcon />} solid />
+                  <LabelButton title="Return to table" icon={<TableIcon size={16} />} solid />
                 </Link>
               ))}
 
               <div style={{ marginLeft: "auto" }}>
                 <LabelButton
                   title="Refresh"
-                  icon={<RefreshIcon />}
+                  icon={<RefreshIcon size={16} />}
                   onClick={() => void refreshTables(true)}
                 />
               </div>
@@ -251,11 +251,11 @@ export default function Lobby() {
         <aside style={{ alignSelf: "stretch" }}>
           <div style={{ display: "flex", gap: 0 }}>
             <Tab active={tab === "players"} onClick={() => setTab("players")} title="Leaderboard">
-              <TrophyIcon size={20} />
+              <TrophyIcon size={16} />
               Leaderboard
             </Tab>
             <Tab active={tab === "mine"} onClick={() => setTab("mine")} title="Your tables">
-              <TableIcon size={20} />
+              <TableIcon size={16} />
               Your tables
             </Tab>
           </div>
@@ -427,7 +427,7 @@ function Leaderboard({ me }: { me?: string }) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "28px 1fr 36px auto",
+          gridTemplateColumns: "26px minmax(0, 1fr) 30px auto",
           gap: 12,
           height: 52,
           alignItems: "center",
@@ -447,13 +447,13 @@ function Leaderboard({ me }: { me?: string }) {
           position, so the board never has to be hunted through to find it. */}
       {mine && (
         <>
-          <LeaderRowView row={mine} rank={myIndex} isMe highlight />
+          <LeaderRowView row={mine} rank={myIndex} isMe />
           <div
             style={{
               height: 1,
               background: "var(--control)",
-              opacity: 0.34,
-              margin: "2px 0 4px",
+              opacity: 0.48,
+              margin: "4px 0 6px",
             }}
           />
         </>
@@ -484,13 +484,11 @@ function LeaderRowView({
   rank,
   isMe,
   index = 0,
-  highlight = false,
 }: {
   row: LeaderRow;
   rank: number;
   isMe: boolean;
   index?: number;
-  highlight?: boolean;
 }) {
   return (
     <motion.div
@@ -499,29 +497,26 @@ function LeaderRowView({
       transition={{ ...spring.gentle, delay: Math.min(index, 12) * stagger.list }}
       style={{
         display: "grid",
-        gridTemplateColumns: "30px 1fr 34px auto",
+        gridTemplateColumns: "26px minmax(0, 1fr) 30px auto",
         gap: 12,
         alignItems: "center",
-        height: 52,
-        paddingLeft: highlight ? 8 : 0,
-        borderRadius: "var(--r-panel)",
-        background: highlight ? "rgba(152, 222, 227, 0.08)" : "transparent",
+        height: 48,
       }}
     >
       <span
         className="tnum"
         style={{
           fontWeight: 700,
-          fontSize: 15,
-          color: rank < 3 ? "var(--accent)" : "var(--text-faint)",
+          fontSize: 14,
+          color: isMe || rank < 3 ? "var(--accent)" : "var(--text-faint)",
         }}
       >
         {String(rank + 1).padStart(2, "0")}
       </span>
       <span
         style={{
-          fontWeight: 500,
-          fontSize: 16,
+          fontWeight: isMe ? 700 : 500,
+          fontSize: 15,
           color: isMe ? "var(--accent)" : "var(--text-dim)",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -538,7 +533,7 @@ function LeaderRowView({
           alignItems: "center",
           gap: 6,
           fontWeight: 500,
-          fontSize: 16,
+          fontSize: 15,
           color: "var(--accent)",
           justifyContent: "flex-end",
         }}
@@ -670,7 +665,7 @@ function Tab({
       aria-label={title}
       style={{
         flex: 1,
-        height: 60,
+        height: 48,
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -680,7 +675,7 @@ function Tab({
         borderBottom: `2px solid ${active ? "var(--accent)" : "transparent"}`,
         color: active ? "var(--accent)" : "var(--text-dim)",
         fontWeight: 700,
-        fontSize: 13,
+        fontSize: 12,
         letterSpacing: "0.04em",
         textTransform: "uppercase",
         whiteSpace: "nowrap",
@@ -721,15 +716,15 @@ function LabelButton({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 10,
-        height: 56,
-        padding: "0 20px",
+        gap: 8,
+        height: 40,
+        padding: "0 14px",
         border: "none",
         borderRadius: "var(--r-panel)",
         background: solid ? "var(--accent)" : "var(--surface)",
         color: solid ? "var(--on-accent)" : "var(--accent)",
         fontWeight: 700,
-        fontSize: 14,
+        fontSize: 12,
         letterSpacing: "0.04em",
         textTransform: "uppercase",
         whiteSpace: "nowrap",
@@ -765,8 +760,8 @@ function IconButton({
       whileTap={disabled ? undefined : { scale: 0.96 }}
       transition={spring.snappy}
       style={{
-        width: 56,
-        height: 56,
+        width: 44,
+        height: 44,
         display: "grid",
         placeItems: "center",
         border: "none",
