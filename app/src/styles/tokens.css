@@ -114,15 +114,22 @@
   color-scheme: dark;
 }
 
-html,
-body {
+/*
+ * The wash goes on the root element and nothing paints over it. On body it
+ * covers only the body's own box, so a page shorter than the window ends in a
+ * visible seam, and a solid body colour on top hides it just as badly.
+ */
+html {
+  min-height: 100%;
   color: var(--text);
   background-color: var(--bg);
+  background-image: var(--bg-grad);
+  background-attachment: fixed;
 }
 
 body {
-  background-image: var(--bg-grad);
-  background-attachment: fixed;
+  color: var(--text);
+  background: transparent;
 }
 
 /* Chip counts must not jitter as they tick. */
