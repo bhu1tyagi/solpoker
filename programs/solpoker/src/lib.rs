@@ -25,7 +25,7 @@ pub mod state;
 
 use instructions::*;
 
-declare_id!("CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd");
+declare_id!("4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9");
 
 // Injects the undelegation callback the delegation program CPIs into, plus the
 // commit/undelegate intent builders. Must sit above `#[program]`.

@@ -16,7 +16,7 @@ import bs58 from "bs58";
 import idl from "../src/lib/idl/solpoker.json" with { type: "json" };
 
 const RPC = "https://rpc.magicblock.app/devnet";
-const P = new PublicKey("CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd");
+const P = new PublicKey("4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9");
 const conn = new Connection(RPC, "confirmed");
 const kp = Keypair.fromSecretKey(
   Uint8Array.from(JSON.parse(readFileSync(`${process.env.HOME}/.config/solana/id.json`, "utf8"))),

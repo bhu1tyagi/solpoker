@@ -1,5 +1,5 @@
 {
-  "address": "CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd",
+  "address": "4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9",
   "metadata": {
     "name": "solpoker",
     "version": "0.1.0",
@@ -244,7 +244,7 @@
         },
         {
           "name": "program_id",
-          "address": "CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd"
+          "address": "4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9"
         },
         {
           "name": "magic_program",
@@ -1185,7 +1185,7 @@
         },
         {
           "name": "owner_program",
-          "address": "CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd"
+          "address": "4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9"
         },
         {
           "name": "delegation_program",
@@ -1500,7 +1500,7 @@
         },
         {
           "name": "owner_program",
-          "address": "CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd"
+          "address": "4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9"
         },
         {
           "name": "delegation_program",

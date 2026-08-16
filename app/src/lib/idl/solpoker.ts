@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/solpoker.json`.
  */
 export type Solpoker = {
-  "address": "CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd",
+  "address": "4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9",
   "metadata": {
     "name": "solpoker",
     "version": "0.1.0",
@@ -250,7 +250,7 @@ export type Solpoker = {
         },
         {
           "name": "programId",
-          "address": "CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd"
+          "address": "4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9"
         },
         {
           "name": "magicProgram",
@@ -1191,7 +1191,7 @@ export type Solpoker = {
         },
         {
           "name": "ownerProgram",
-          "address": "CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd"
+          "address": "4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9"
         },
         {
           "name": "delegationProgram",
@@ -1506,7 +1506,7 @@ export type Solpoker = {
         },
         {
           "name": "ownerProgram",
-          "address": "CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd"
+          "address": "4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9"
         },
         {
           "name": "delegationProgram",

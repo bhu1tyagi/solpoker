@@ -40,7 +40,7 @@ can play a real hand without a single wallet prompt after setup.
 | Browser tests | Playwright | 1.62 |
 | Unit tests | Vitest, cargo test, proptest | current |
 
-Deployed program: `CJT1DDJe5cFsSVcwTAWr3wEo7QEqNjrXwmWkw1pdxmJd`
+Deployed program: `4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9`
 TEE endpoint: `https://devnet-tee.magicblock.app`
 Pinned validator: `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo`
 
