@@ -91,14 +91,15 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
                   </PresetButton>
                 ))}
                 <span
-                  className="tnum plaque"
+                  className="tnum"
                   style={{
                     marginLeft: "auto",
+                    fontFamily: "var(--font-display)",
                     fontSize: "var(--t-sm)",
-                    fontWeight: 800,
                     color: "var(--accent)",
-                    background: "rgba(0,0,0,0.35)",
-                    padding: "6px 14px",
+                    background: "var(--surface)",
+                    borderRadius: "var(--r-panel)",
+                    padding: "7px 14px",
                     minWidth: 76,
                     textAlign: "right",
                   }}
@@ -184,16 +185,16 @@ function PresetButton({
       onClick={onClick}
       whileTap={{ scale: 0.95 }}
       transition={spring.snappy}
-      className="plaque"
       style={{
-        background: active ? "var(--grad-accent)" : "rgba(0,0,0,0.35)",
+        background: active ? "var(--accent)" : "var(--surface)",
         color: active ? "var(--on-accent)" : "var(--text-dim)",
         border: "none",
+        borderRadius: "var(--r-panel)",
+        fontFamily: "var(--font-display)",
         fontSize: 11,
-        fontWeight: 800,
         textTransform: "uppercase",
-        letterSpacing: "0.08em",
-        padding: "7px 12px",
+        letterSpacing: "0.04em",
+        padding: "8px 13px",
         cursor: "pointer",
         whiteSpace: "nowrap",
       }}
@@ -205,21 +206,20 @@ function PresetButton({
 
 const TONES = {
   danger: {
-    background: "var(--grad-danger)",
+    background: "var(--lose)",
     color: "var(--on-danger)",
   },
   accent: {
-    background: "var(--grad-accent)",
+    background: "var(--accent)",
     color: "var(--on-accent)",
   },
   dark: {
-    background: "var(--plate)",
+    background: "var(--control)",
     color: "var(--text)",
-    boxShadow: "inset 0 0 0 1px var(--line)",
   },
 } as const;
 
-/** The three verbs. Angular, loud, and unmistakable at arm's length. */
+/** The three verbs. Flat, wide, and unmistakable at arm's length. */
 function BigButton({
   tone,
   disabled,
@@ -240,16 +240,17 @@ function BigButton({
       whileTap={disabled ? undefined : { scale: 0.97 }}
       whileHover={disabled ? undefined : { y: -1 }}
       transition={spring.snappy}
-      className="plaque tnum"
+      className="tnum"
       style={{
         ...TONES[tone],
         flex,
-        height: 50,
+        height: 52,
         border: "none",
+        borderRadius: "var(--r-panel)",
+        fontFamily: "var(--font-display)",
         fontSize: "var(--t-sm)",
-        fontWeight: 800,
         textTransform: "uppercase",
-        letterSpacing: "0.1em",
+        letterSpacing: "0.04em",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.45 : 1,
         whiteSpace: "nowrap",

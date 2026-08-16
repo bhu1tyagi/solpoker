@@ -133,44 +133,31 @@ export function TableFelt({
       style={{
         position: "relative",
         width: "100%",
-        maxWidth: 980,
-        aspectRatio: "16 / 10",
+        maxWidth: 1108,
+        aspectRatio: "1108 / 640",
         margin: "0 auto",
       }}
     >
-      {/* The felt: a padded rail around a lit oval. The light sits slightly
-          above centre so the board reads as the brightest thing on the table.
-          It is inset far enough that the seat plates sit on the rail rather
-          than across the cloth. */}
+      {/* The table: an ellipse lit from above centre, so the board is the
+          brightest thing on it and the rim falls away into the room. The room
+          itself is the page background, not a panel drawn in here. */}
       <div
         style={{
           position: "absolute",
-          inset: "13% 9%",
+          inset: "13% 11%",
           borderRadius: "50% / 50%",
-          background: "linear-gradient(180deg, var(--felt-rail-hi) 0%, var(--felt-rail-lo) 100%)",
-          padding: 14,
+          background:
+            "radial-gradient(ellipse at 50% 34%, #46596a 0%, #354653 34%, #26333d 68%, #1b242c 100%)",
           boxShadow:
-            "0 26px 70px rgba(3,8,14,0.6), inset 0 1px 0 var(--accent-soft)",
+            "inset 0 2px 4px rgba(152,222,227,0.16), inset 0 -22px 50px rgba(7,12,15,0.55), 0 22px 48px -10px rgba(7,12,15,0.6)",
         }}
       >
         <div
           style={{
             position: "absolute",
-            inset: 14,
+            inset: "5% 3.5%",
             borderRadius: "50% / 50%",
-            background:
-              "radial-gradient(var(--felt-speck) 1px, transparent 1.4px), radial-gradient(ellipse at 50% 40%, var(--felt-glow) 0%, var(--felt-hi) 42%, var(--felt-lo) 78%, var(--felt-edge) 100%)",
-            backgroundSize: "22px 22px, 100% 100%",
-            boxShadow:
-              "inset 0 10px 40px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.5)",
-          }}
-        />
-        <div
-          style={{
-            position: "absolute",
-            inset: 26,
-            borderRadius: "50% / 50%",
-            border: "1px solid var(--accent-soft)",
+            border: "1px solid rgba(114,127,135,0.12)",
             pointerEvents: "none",
           }}
         />
@@ -208,11 +195,11 @@ export function TableFelt({
             >
               <span
                 style={{
-                  fontSize: "var(--t-xs)",
-                  fontWeight: 700,
-                  color: "var(--text-faint)",
+                  fontFamily: "var(--font-display)",
+                  fontSize: 15,
+                  color: "var(--text-dim)",
                   textTransform: "uppercase",
-                  letterSpacing: "0.18em",
+                  letterSpacing: "-0.01em",
                 }}
               >
                 total pot :
@@ -220,10 +207,9 @@ export function TableFelt({
               <span
                 className="tnum"
                 style={{
-                  fontSize: "var(--t-md)",
-                  fontWeight: 800,
+                  fontFamily: "var(--font-display)",
+                  fontSize: 17,
                   color: "var(--text)",
-                  letterSpacing: "0.04em",
                 }}
               >
                 <AnimatedNumber value={displayPot} />
@@ -302,7 +288,7 @@ export function TableFelt({
               timeoutSecs={timeoutSecs}
               handLive={handLive}
               stackReference={stackReference}
-              chipsOn={pos.x > 50 ? "right" : "left"}
+              avatarOn={pos.x > 50 ? "left" : "right"}
               cardsOn={pos.y < 50 ? "below" : "above"}
               winner={awardBySeat.has(i)}
               onSit={onSit}
@@ -315,22 +301,21 @@ export function TableFelt({
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
-                  className="plaque"
                   style={{
                     position: "absolute",
                     left: "50%",
                     transform: "translateX(-50%)",
-                    bottom: -38,
-                    background: winners?.has(i)
-                      ? "var(--grad-accent)"
-                      : "rgba(0,0,0,0.6)",
-                    color: winners?.has(i) ? "var(--on-accent)" : "var(--text-dim)",
+                    bottom: -30,
+                    background: winners?.has(i) ? "var(--accent)" : "var(--surface-2)",
+                    color: winners?.has(i) ? "var(--on-accent)" : "var(--text)",
+                    borderRadius: "var(--r-panel)",
+                    fontFamily: "var(--font-display)",
                     fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.08em",
+                    letterSpacing: "0.04em",
                     textTransform: "uppercase",
-                    padding: "3px 10px",
+                    padding: "4px 10px",
                     whiteSpace: "nowrap",
+                    backdropFilter: "blur(8px)",
                   }}
                 >
                   {handNames.get(i)}
@@ -350,9 +335,9 @@ export function TableFelt({
             transition={{ duration: 0.25 }}
             style={{
               position: "absolute",
-              inset: "13% 9%",
+              inset: "13% 11%",
               borderRadius: "50% / 50%",
-              background: "rgba(6, 10, 15, 0.72)",
+              background: "rgba(7, 12, 15, 0.76)",
               backdropFilter: "blur(3px)",
               display: "grid",
               placeItems: "center",
@@ -424,16 +409,16 @@ export function TableFelt({
                 }}
               >
                 <div
-                  className="plaque"
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
-                    background: "var(--grad-accent)",
+                    background: "var(--accent)",
                     color: "var(--on-accent)",
-                    padding: "5px 12px",
+                    borderRadius: "var(--r-panel)",
+                    padding: "6px 13px",
+                    fontFamily: "var(--font-display)",
                     fontSize: "var(--t-sm)",
-                    fontWeight: 800,
                     boxShadow: "0 0 26px var(--accent-glow)",
                   }}
                 >
@@ -468,11 +453,11 @@ function StatusLine({ stage, fallback }: { stage: ShowdownStage; fallback: strin
           exit={{ opacity: 0, y: -3 }}
           transition={{ duration: 0.18 }}
           style={{
-            fontSize: "var(--t-xs)",
-            color: stage ? "var(--accent)" : "var(--text-faint)",
+            fontFamily: "var(--font-display)",
+            fontSize: 12,
+            color: stage ? "var(--accent)" : "var(--text-dim)",
             textTransform: "uppercase",
-            letterSpacing: "0.14em",
-            fontWeight: 600,
+            letterSpacing: "0.04em",
           }}
         >
           {label}

@@ -420,15 +420,15 @@ function TableRow({ t }: { t: LobbyTable }) {
           </span>
 
           <span
-            className="plaque"
             style={{
-              background: joinable && !live ? "var(--grad-accent)" : "var(--surface-2)",
+              background: joinable && !live ? "var(--accent)" : "var(--control)",
               color: joinable && !live ? "var(--on-accent)" : "var(--text-dim)",
+              borderRadius: "var(--r-panel)",
+              fontFamily: "var(--font-display)",
               fontSize: 11,
-              fontWeight: 800,
               textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              padding: "8px 18px",
+              letterSpacing: "0.04em",
+              padding: "9px 18px",
               justifySelf: "end",
             }}
           >

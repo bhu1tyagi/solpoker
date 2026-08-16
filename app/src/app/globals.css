@@ -4,8 +4,7 @@
 /* Map the tokens into Tailwind so utilities and raw CSS stay in sync. */
 @theme inline {
   --color-bg: var(--bg);
-  --color-felt-hi: var(--felt-hi);
-  --color-felt-lo: var(--felt-lo);
+  --color-table: var(--table);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-line: var(--line);
@@ -17,12 +16,11 @@
   --color-win: var(--win);
   --color-lose: var(--lose);
   --color-info: var(--info);
-  --color-card-face: var(--card-face-hi);
+  --color-card: var(--card-hi);
 
-  /* One bold geometric voice for headings and big numerals. The serif is
-     retired; the room reads as a modern client now, not a book. */
-  --font-display: var(--font-inter), system-ui, sans-serif;
-  --font-sans: var(--font-inter), system-ui, sans-serif;
+  /* Display for names and numbers on the table, Poppins for everything else. */
+  --font-display: var(--font-dela), system-ui, sans-serif;
+  --font-sans: var(--font-poppins), system-ui, sans-serif;
 }
 
 * {
@@ -42,7 +40,7 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: -0.02em;
   margin: 0;
 }
@@ -87,7 +85,7 @@ button {
   height: 38px !important;
   padding: 0 16px !important;
   border-radius: var(--r-control) !important;
-  background: var(--grad-accent) !important;
+  background: var(--accent) !important;
   color: var(--on-accent) !important;
   font-weight: 600 !important;
   transition: filter 0.12s ease;
@@ -96,7 +94,7 @@ button {
   filter: brightness(1.08);
 }
 /* The connect screen: no box, just a dark room with a centred column, a big
-   mint title, and one quiet row per wallet. */
+   cyan title, and one quiet row per wallet. */
 .wallet-adapter-modal {
   background: rgba(9, 13, 18, 0.9) !important;
   backdrop-filter: blur(6px);
@@ -110,7 +108,7 @@ button {
 }
 .wallet-adapter-modal-title {
   font-family: var(--font-display) !important;
-  font-weight: 700 !important;
+  font-weight: 400 !important;
   font-size: var(--t-xl) !important;
   letter-spacing: -0.02em !important;
   color: var(--accent) !important;

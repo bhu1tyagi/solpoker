@@ -1,83 +1,106 @@
 /*
- * Nocturne, second cut.
+ * Slate.
  *
- * Deep graphite slate under faint washes, mint for everything that matters.
- * Cards are dark faced with a four colour deck, seat plates are angular
- * plaques, and the felt is charcoal rather than green. Surfaces stay glass:
- * a soft gradient and a hairline, not a border and a fill.
+ * Blue-grey steel lit from above, cyan for anything that carries a number, and
+ * corners that are almost square. Surfaces are frosted panels stacked in two
+ * bands rather than outlined boxes, and the table is a lit rectangle instead of
+ * a green oval.
  *
- * Nothing is pure white or pure black. Body text sits near 8:1 on the ground,
- * dim text near 4.5:1. This is a committed dark palette; a poker room lit like
- * a spreadsheet stops feeling like a room.
+ * Values here come from the design spec directly, so the room matches the
+ * drawing rather than an interpretation of it. Nothing is pure white or pure
+ * black; the brightest thing on screen is a card rank and the dimmest is the
+ * shadow the table casts on the floor.
  */
 
 :root {
-  /* The ground */
-  --bg: #10161d;
-  --bg-glow-1: rgba(70, 92, 122, 0.14);
-  --bg-glow-2: rgba(94, 230, 193, 0.05);
+  /* The ground: steel falling away from the top right */
+  --bg: #131f25;
+  --bg-grad: radial-gradient(120% 178% at 100% 0%, #3c4c57 0%, #131f25 100%);
+  --panel-grad: radial-gradient(76.12% 100% at 50% 0%, #36444e 0%, #10191e 100%);
 
-  /* The felt: charcoal slate, lit from above, speckled like worn cloth */
-  --felt-hi: #1c242e;
-  --felt-lo: #131a22;
-  --felt-glow: #232d39;
-  --felt-rail-hi: #1a212a;
-  --felt-rail-lo: #0f151c;
-  --felt-edge: #0b1117;
-  --felt-speck: rgba(255, 255, 255, 0.028);
+  /* The panel the table stands on: a dark slab with a sheen down its face.
+     The spec's tint is dialled back so the felt above it stays the brightest
+     thing in the room; at full strength the two read as one grey mass. */
+  --table: #182025;
+  --table-tint: rgba(52, 66, 77, 0.22);
+  --table-sheen: radial-gradient(
+    55.25% 100% at 50% 0%,
+    rgba(47, 60, 69, 0) 0%,
+    rgba(7, 12, 15, 0.48) 100%
+  );
+  --table-inset: inset 0 2px 2px rgba(51, 64, 74, 0.89);
+  --table-shadow: rgba(24, 32, 37, 0.32);
 
-  /* Surfaces: glass, not boxes */
-  --surface: rgba(255, 255, 255, 0.04);
-  --surface-2: rgba(255, 255, 255, 0.075);
-  --plate: linear-gradient(180deg, #232c37 0%, #1a222b 100%);
-  --plate-solid: #1e2731;
-  --line: rgba(255, 255, 255, 0.08);
-  --grad-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012));
+  /* Seat plates: two solid bands, the upper one lighter. These were
+     translucent and blurred, which turned every plate into a smear of whatever
+     happened to be behind it. Solid reads as an object sitting on the table. */
+  --plate-hi: #46596a;
+  --plate-lo: #33424e;
+  --plate-hi-taken: #3b4c5a;
+  --plate-lo-taken: #2c3945;
+  /* An open seat is quieter than a taken one but still has to look like a
+     seat. Too faint and the avatar tile floats on its own with nothing under
+     it, which reads as a bug rather than an invitation. */
+  --plate-hi-idle: #2c3841;
+  --plate-lo-idle: #232d35;
+  --avatar: #485c69;
+
+  /* Surfaces and controls */
+  --surface: rgba(64, 82, 94, 0.24);
+  --surface-2: rgba(64, 82, 94, 0.42);
+  --control: #40525e;
+  --line: rgba(114, 127, 135, 0.22);
+  --grad-surface: linear-gradient(0deg, rgba(64, 82, 94, 0.24), rgba(64, 82, 94, 0.24));
 
   /* Content */
-  --text: #e9eef3;
-  --text-dim: #93a1ad;
-  --text-faint: #5b6873;
+  --text: #dbe6ea;
+  --text-dim: #727f87;
+  --text-faint: #55636b;
 
-  /* Accent */
-  --accent: #5ee6c1;
-  --accent-deep: #2fa98c;
-  --accent-glow: rgba(94, 230, 193, 0.22);
-  --accent-soft: rgba(94, 230, 193, 0.1);
-  --grad-accent: linear-gradient(135deg, #7df2d0 0%, #46d0ab 100%);
-  --on-accent: #06231b;
+  /* Accent: the cyan every number is written in */
+  --accent: #98dee3;
+  --accent-deep: #3fa3aa;
+  --accent-glow: rgba(152, 222, 227, 0.22);
+  --accent-soft: rgba(152, 222, 227, 0.1);
+  --grad-accent: linear-gradient(0deg, #98dee3, #98dee3);
+  /* Action tags fade in from the right, the way the spec draws them. */
+  --grad-tag: linear-gradient(270deg, #98dee3 12.75%, rgba(55, 71, 82, 0) 92.45%);
+  --on-accent: #040706;
 
-  /* Danger, filled: the fold button, plates mid fold */
-  --grad-danger: linear-gradient(135deg, #f6798d 0%, #e6506a 100%);
-  --on-danger: #33070f;
+  /* Danger: the timer arc and the fold button */
+  --lose: #ed7483;
+  --grad-danger: linear-gradient(0deg, #ed7483, #ed7483);
+  --on-danger: #2b060b;
 
   /* Semantic */
-  --win: #6fe3a5;
-  --lose: #f08a8a;
-  --info: #8fb7f0;
+  --win: #98dee3;
+  --info: #7aa7ff;
 
-  /* Cards: dark faces, four colour deck */
-  --card-face-hi: #29323e;
-  --card-face-lo: #1d252f;
-  --card-line: rgba(255, 255, 255, 0.09);
-  --card-back: #16323a;
-  --card-back-line: rgba(94, 230, 193, 0.24);
-  --suit-clubs: #5ee6c1;
-  --suit-diamonds: #f5a05f;
-  --suit-hearts: #f2547d;
-  --suit-spades: #8ea8ff;
+  /* Cards: a slab lit from the bottom edge */
+  --card-hi: #45545f;
+  --card-lo: #2c3a44;
+  --card-back-hi: #596c7a;
+  --card-back-lo: #354652;
+  --card-shadow: -1px 0 2px rgba(20, 28, 33, 0.56);
 
-  /* Radii: soft everywhere */
-  --r-control: 10px;
-  --r-card: 12px;
-  --r-panel: 18px;
-  --r-modal: 22px;
+  /* Four colour deck */
+  --suit-clubs: #98dee3;
+  --suit-diamonds: #eaa680;
+  --suit-hearts: #e97b88;
+  --suit-spades: #7aa7ff;
 
-  /* Elevation, colored and soft */
-  --shadow-1: 0 2px 10px rgba(4, 8, 13, 0.35);
-  --shadow-2: 0 10px 34px rgba(4, 8, 13, 0.5);
-  --shadow-3: 0 24px 70px rgba(4, 8, 13, 0.6);
-  --ring-accent: 0 0 0 1px var(--accent-deep), 0 0 26px var(--accent-glow);
+  /* Radii: the spec is nearly square. Only the big page panels are soft. */
+  --r-control: 1px;
+  --r-card: 3px;
+  --r-panel: 2px;
+  --r-modal: 8px;
+  --r-shell: 33px;
+
+  /* Elevation */
+  --shadow-1: 0 2px 8px rgba(7, 12, 15, 0.4);
+  --shadow-2: 0 12px 36px rgba(7, 12, 15, 0.5);
+  --shadow-3: 0 26px 70px rgba(7, 12, 15, 0.6);
+  --ring-accent: 0 0 0 1px var(--accent-deep), 0 0 22px var(--accent-glow);
 
   /* Type scale */
   --t-xs: 0.75rem;
@@ -97,12 +120,8 @@ body {
   background-color: var(--bg);
 }
 
-/* Two faint washes that give the slate some depth. Fixed, so the light stays
-   put while content scrolls over it. */
 body {
-  background-image:
-    radial-gradient(90rem 42rem at 12% -8%, var(--bg-glow-1), transparent 60%),
-    radial-gradient(70rem 36rem at 95% 108%, var(--bg-glow-2), transparent 65%);
+  background-image: var(--bg-grad);
   background-attachment: fixed;
 }
 
@@ -112,15 +131,11 @@ body {
   font-feature-settings: "tnum";
 }
 
-/* The angular plaque: a rectangle with two corners sliced off, the shape every
-   seat plate, action tag, and lobby row accent shares. */
-.plaque {
-  clip-path: polygon(
-    10px 0,
-    100% 0,
-    100% calc(100% - 10px),
-    calc(100% - 10px) 100%,
-    0 100%,
-    0 10px
-  );
+/* Labels in the spec are small, wide, and shouted. */
+.label {
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }

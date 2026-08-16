@@ -627,6 +627,17 @@ pub fn close_table(ctx: Context<CloseTable>) -> Result<()> {
 /// The discriminator is overwritten so the account cannot be mistaken for a
 /// live one if something recreates it at the same address later.
 fn drain<'a, 'b>(account: &AccountInfo<'a>, to: &AccountInfo<'b>) -> Result<()> {
+    // An account this program never created has no rent to return and no data
+    // to erase, so there is nothing to do. Table creation is several
+    // transactions, and one that stopped half way leaves seats that were never
+    // made; refusing here left such a table impossible for anyone, creator
+    // included, to ever close. The caller has already checked this address is
+    // the right PDA, so skipping an empty one cannot skip a real account.
+    if account.owner == &anchor_lang::solana_program::system_program::ID
+        && account.data_is_empty()
+    {
+        return Ok(());
+    }
     require_keys_eq!(*account.owner, crate::ID, PokerError::SeatOrderMismatch);
     let lamports = account.lamports();
     **account.try_borrow_mut_lamports()? = 0;

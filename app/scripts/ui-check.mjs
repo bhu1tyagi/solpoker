@@ -38,7 +38,11 @@ const PAGES = [
   {
     // Any table id renders; an unknown one shows an empty table.
     path: "/table/1",
-    expect: { felt: "main", seats: "text=seat", historyLink: "text=Hand history" },
+    expect: {
+      felt: "main",
+      seats: "[aria-label^='Seat ']",
+      historyLink: "[aria-label='Hand history']",
+    },
   },
   { path: "/history/1", expect: { heading: "h1:has-text('Hand history')" } },
 ];

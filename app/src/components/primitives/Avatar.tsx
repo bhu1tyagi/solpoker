@@ -23,10 +23,13 @@ export function Avatar({
   pubkey,
   size = 40,
   ring,
+  square = false,
 }: {
   pubkey: string;
   size?: number;
   ring?: string;
+  /** Fill a square tile, the way the seat plates use it. */
+  square?: boolean;
 }) {
   const h = hashOf(pubkey);
   const hue = HUES[h % HUES.length];
@@ -45,7 +48,7 @@ export function Avatar({
       style={{
         width: size,
         height: size,
-        borderRadius: "30%",
+        borderRadius: square ? "var(--r-panel)" : "30%",
         overflow: "hidden",
         position: "relative",
         background: `linear-gradient(140deg, hsl(${hue} 34% 24%), hsl(${hue2} 30% 15%))`,

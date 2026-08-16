@@ -6,13 +6,18 @@ import { spring } from "@/styles/theme";
 
 type Size = "sm" | "md" | "lg";
 
+/**
+ * Card geometry, in the proportions the design spec draws: a 96 by 136 slab for
+ * the board, smaller ones for hands. The rank is set large and low, with the
+ * suit above it, so a fanned hand reads from the top corner.
+ */
 const SIZES: Record<Size, { w: number; h: number; rank: number; suit: number }> = {
-  sm: { w: 34, h: 46, rank: 20, suit: 10 },
-  md: { w: 48, h: 66, rank: 30, suit: 13 },
-  lg: { w: 64, h: 88, rank: 42, suit: 16 },
+  sm: { w: 40, h: 57, rank: 24, suit: 11 },
+  md: { w: 56, h: 80, rank: 32, suit: 14 },
+  lg: { w: 72, h: 102, rank: 40, suit: 17 },
 };
 
-/** The four colour deck: every suit its own colour, so a flush reads at a glance. */
+/** The four colour deck, straight from the spec. */
 export const SUIT_COLORS = [
   "var(--suit-clubs)",
   "var(--suit-diamonds)",
@@ -56,9 +61,9 @@ export function PlayingCard({
         position: "relative",
       }}
       animate={{
-        y: highlighted ? -6 : 0,
+        y: highlighted ? -8 : 0,
         opacity: dimmed ? 0.4 : 1,
-        filter: highlighted ? "brightness(1.06)" : "brightness(1)",
+        filter: highlighted ? "brightness(1.1)" : "brightness(1)",
       }}
       transition={reduce ? { duration: 0.15 } : spring.snappy}
     >
@@ -100,29 +105,30 @@ function Face({
         position: "absolute",
         inset: 0,
         backfaceVisibility: "hidden",
-        borderRadius: 8,
-        background: "linear-gradient(180deg, var(--card-face-hi), var(--card-face-lo))",
-        border: "1px solid var(--card-line)",
+        borderRadius: "var(--r-card)",
+        // Lit from the bottom edge, as the spec's radial gradient does.
+        background:
+          "radial-gradient(98.12% 100% at 50% 100%, var(--card-hi) 0%, var(--card-lo) 100%)",
         color,
         boxShadow: highlighted
-          ? "0 0 0 1px var(--accent), 0 0 18px var(--accent-glow), var(--shadow-1)"
-          : "var(--shadow-1)",
+          ? "0 0 0 1px var(--accent), 0 0 20px var(--accent-glow), var(--card-shadow)"
+          : "var(--card-shadow)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 1,
+        gap: s.rank * 0.06,
         lineHeight: 1,
         userSelect: "none",
       }}
     >
-      <span style={{ fontSize: s.suit, opacity: 0.95 }}>{suit}</span>
+      <span style={{ fontSize: s.suit, lineHeight: 1 }}>{suit}</span>
       <span
-        className="tnum"
         style={{
-          fontSize: rank === "10" ? s.rank * 0.82 : s.rank,
-          fontWeight: 800,
-          letterSpacing: "-0.03em",
+          fontFamily: "var(--font-display)",
+          fontSize: rank === "10" ? s.rank * 0.78 : s.rank,
+          lineHeight: 1.08,
+          letterSpacing: "-0.02em",
         }}
       >
         {rank}
@@ -131,7 +137,13 @@ function Face({
   );
 }
 
+/**
+ * The back: an outer slab with a lighter inset panel, both lit from below.
+ * Two layers rather than a pattern, which is what makes a face-down hand read
+ * as a physical object at a glance.
+ */
 function Back({ s }: { s: (typeof SIZES)[Size] }) {
+  const inset = Math.max(3, Math.round(s.w * 0.07));
   return (
     <div
       style={{
@@ -139,23 +151,20 @@ function Back({ s }: { s: (typeof SIZES)[Size] }) {
         inset: 0,
         backfaceVisibility: "hidden",
         transform: "rotateY(180deg)",
-        borderRadius: 8,
-        background: "var(--card-back)",
-        boxShadow: "var(--shadow-1)",
-        border: "1px solid var(--card-back-line)",
+        borderRadius: "var(--r-card)",
+        background:
+          "radial-gradient(98.12% 100% at 50% 100%, var(--card-hi) 0%, var(--card-lo) 100%)",
+        boxShadow: "var(--card-shadow)",
         overflow: "hidden",
       }}
     >
-      {/* A mint lattice, faint enough to read as texture rather than pattern. */}
       <div
         style={{
           position: "absolute",
-          inset: 3,
-          borderRadius: 5,
-          border: "1px solid var(--card-back-line)",
-          backgroundImage: `repeating-linear-gradient(45deg, var(--card-back-line) 0 1px, transparent 1px ${Math.round(s.w / 6)}px),
-                            repeating-linear-gradient(-45deg, var(--card-back-line) 0 1px, transparent 1px ${Math.round(s.w / 6)}px)`,
-          opacity: 0.5,
+          inset,
+          borderRadius: 2,
+          background:
+            "radial-gradient(98.12% 100% at 50% 100%, var(--card-back-hi) 0%, var(--card-back-lo) 100%)",
         }}
       />
     </div>
@@ -170,9 +179,9 @@ export function CardSlot({ size = "md" }: { size?: Size }) {
       style={{
         width: s.w,
         height: s.h,
-        borderRadius: 8,
-        border: "1px dashed var(--line)",
-        background: "rgba(0, 0, 0, 0.16)",
+        borderRadius: "var(--r-card)",
+        background: "rgba(7, 12, 15, 0.24)",
+        boxShadow: "inset 0 1px 0 rgba(114, 127, 135, 0.1)",
       }}
     />
   );

@@ -36,6 +36,7 @@ export function ClockRing({
   const remaining = Math.max(0, deadline - now);
   const fraction = totalSecs > 0 ? Math.min(1, remaining / totalSecs) : 0;
   const urgent = remaining <= 5;
+  // The spec draws the arc in its pink, on a dark disc inside a grey collar.
   const color = urgent ? "var(--lose)" : "var(--accent)";
   const degrees = fraction * 360;
 
@@ -49,9 +50,11 @@ export function ClockRing({
         display: "grid",
         placeItems: "center",
         // A conic gradient is the cheapest honest way to draw a draining ring.
-        background: `conic-gradient(${color} ${degrees}deg, rgba(255,255,255,0.06) ${degrees}deg)`,
+        background: `conic-gradient(${color} ${degrees}deg, #303d46 ${degrees}deg)`,
         padding: thickness,
-        boxShadow: urgent ? "0 0 18px rgba(201,127,127,0.3)" : "0 0 18px var(--accent-glow)",
+        boxShadow: urgent
+          ? "0 0 18px rgba(237,116,131,0.35)"
+          : "0 0 18px var(--accent-glow)",
         transition: "box-shadow 0.2s ease",
       }}
     >
@@ -60,7 +63,7 @@ export function ClockRing({
           position: "absolute",
           inset: thickness,
           borderRadius: "50%",
-          background: "var(--surface)",
+          background: "#202a31",
         }}
       />
       <div style={{ position: "relative", display: "grid", placeItems: "center" }}>

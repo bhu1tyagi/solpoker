@@ -1,13 +1,22 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Dela_Gothic_One, Poppins } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-// One typeface, many weights. Headings and big numerals lean on the heavy end
-// rather than on a second font.
-const inter = Inter({
+// Two voices, as the design spec uses them: a heavy display face for anything
+// that is a name or a number on the table, and Poppins for ordinary interface
+// text. Dela Gothic One ships a single weight, which is the point of it.
+const dela = Dela_Gothic_One({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-dela",
+  weight: "400",
+  display: "swap",
+});
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  variable: "--font-poppins",
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -21,7 +30,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${dela.variable} ${poppins.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

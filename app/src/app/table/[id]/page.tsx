@@ -7,11 +7,11 @@ import { motion, AnimatePresence } from "motion/react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
-import { TopBar } from "@/components/chrome/TopBar";
 import { TableFelt } from "@/components/poker/TableFelt";
 import { ActionBar, type ActionKind } from "@/components/poker/ActionBar";
 import { Button } from "@/components/primitives/Button";
-import { Modal, Panel } from "@/components/primitives/Surface";
+import { ChipGlyph } from "@/components/primitives/Chip";
+import { Modal } from "@/components/primitives/Surface";
 import { useTee } from "@/hooks/use-tee";
 import { useTableSubscriptions } from "@/hooks/use-table-subscriptions";
 import { useCrank } from "@/hooks/use-crank";
@@ -329,153 +329,212 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
 
   return (
     <>
-      <TopBar chips={player.state?.chips} />
-
-      <main style={{ maxWidth: 1080, margin: "0 auto", padding: "20px 20px 40px" }}>
+      {/* The room fills the screen. The table sits in the middle of it and the
+          controls live in the four corners, the way a real client is laid out,
+          so nothing floats in a panel and nothing competes with the felt. */}
+      <main
+        style={{
+          position: "fixed",
+          inset: 0,
+          overflow: "hidden",
+          background: "var(--panel-grad)",
+        }}
+      >
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 14,
-            gap: 12,
-            flexWrap: "wrap",
+            position: "absolute",
+            inset: 0,
+            display: "grid",
+            placeItems: "center",
+            padding: "76px 24px 96px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-            <h1 style={{ fontSize: "var(--t-md)" }}>
-              {tableConfig
-                ? `${tableConfig.smallBlind} / ${tableConfig.bigBlind}`
-                : "Table"}
-            </h1>
-            <span style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>
-              table {id} · hand {tableView?.handNumber ?? 0}
-            </span>
-            <LinkPill state={link} delegated={delegated} />
-            {connected && link === "offline" && (
-              <Button variant="quiet" size="sm" onClick={() => void connectTee()}>
-                Retry connection
-              </Button>
-            )}
-          </div>
-
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Link href={`/history/${id}`} style={{ textDecoration: "none" }}>
-              <Button variant="quiet" size="sm">
-                Hand history
-              </Button>
-            </Link>
-            {connected && !session && (
-              <Button
-                variant="primary"
-                size="sm"
-                loading={authorising}
-                onClick={authorise}
-              >
-                Authorise session key
-              </Button>
-            )}
-            {session && mySeat >= 0 && !outdated && delegated === false && seatedCount >= 2 && (
-              <Button
-                variant="primary"
-                size="sm"
-                loading={actions.busy?.startsWith("start")}
-                onClick={async () => {
-                  await actions.startTable(occupiedSeats);
-                  await refreshDelegation();
-                }}
-              >
-                Start playing
-              </Button>
-            )}
-            {session && mySeat >= 0 && delegated && tableView?.state === 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                loading={actions.busy === "pause"}
-                onClick={async () => {
-                  await actions.pauseTable();
-                  await refreshDelegation();
-                }}
-              >
-                Pause table
-              </Button>
-            )}
-            {delegated === false && mySeat >= 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                loading={actions.busy === "leave"}
-                onClick={async () => {
-                  await actions.leave(mySeat);
-                  await player.refresh();
-                }}
-              >
-                Cash out
-              </Button>
-            )}
-            {isCreator && delegated === false && (
-              <Button
-                variant="danger"
-                size="sm"
-                loading={actions.busy === "delete"}
-                onClick={() => setConfirmDelete(true)}
-              >
-                Delete table
-              </Button>
-            )}
+          <div style={{ width: "min(1108px, 94vw, 168vh)" }}>
+            <TableFelt
+              table={tableView}
+              hand={viewHand}
+              seats={viewSeats}
+              mySeat={mySeat}
+              myHole={myHole}
+              myHoleHandNumber={myHoleHandNumber}
+              pot={pot}
+              winning={winningCards}
+              winners={winnerSeats}
+              timeoutSecs={tableConfig?.actionTimeoutSecs ?? 30}
+              status={status}
+              working={working}
+              overlay={overlay}
+              showdown={showdown}
+              handNames={handNames}
+              onSit={
+                delegated === false && mySeat < 0 && connected
+                  ? (i) => {
+                      setSitting(i);
+                      setBuyIn(affordableBuyIn);
+                    }
+                  : undefined
+              }
+            />
           </div>
         </div>
 
-        <TableFelt
-          table={tableView}
-          hand={viewHand}
-          seats={viewSeats}
-          mySeat={mySeat}
-          myHole={myHole}
-          myHoleHandNumber={myHoleHandNumber}
-          pot={pot}
-          winning={winningCards}
-          winners={winnerSeats}
-          timeoutSecs={tableConfig?.actionTimeoutSecs ?? 30}
-          status={status}
-          working={working}
-          overlay={overlay}
-          showdown={showdown}
-          handNames={handNames}
-          onSit={
-            delegated === false && mySeat < 0 && connected
-              ? (i) => {
-                  setSitting(i);
-                  setBuyIn(affordableBuyIn);
-                }
-              : undefined
-          }
-        />
-
+        {/* Top left: which table this is and how it is connected. Two tidy
+            lines, label above value, with the controls in a row beside them. */}
         <div
           style={{
+            position: "absolute",
+            top: 22,
+            left: 26,
             display: "flex",
-            flexDirection: "column",
             alignItems: "center",
-            gap: 12,
-            marginTop: 18,
-            minHeight: 96,
+            gap: 18,
           }}
         >
-          {outdated && (
-            <Panel style={{ textAlign: "center", maxWidth: 520 }}>
-              <p style={{ margin: "0 0 6px", color: "var(--lose)" }}>
-                This table cannot be played.
-              </p>
-              <p style={{ margin: 0, color: "var(--text-dim)", fontSize: "var(--t-sm)" }}>
-                It was created by an earlier version of the game, and its deck no
-                longer matches. Pause it if it is running, cash out, and create a
-                new table from the lobby.
-              </p>
-            </Panel>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+            <Field label="Blinds">
+              {tableConfig
+                ? `${tableConfig.smallBlind} / ${tableConfig.bigBlind}`
+                : "-"}
+            </Field>
+            <Field label="Hand">{tableView?.handNumber ?? 0}</Field>
+            <Field label="Table">{String(id).slice(-6)}</Field>
+            <Field label="Link">
+              <LinkPill state={link} delegated={delegated} />
+            </Field>
+          </div>
 
+          <Link href={`/history/${id}`} style={{ textDecoration: "none" }}>
+            <IconButton title="Hand history">
+              <HistoryIcon />
+            </IconButton>
+          </Link>
+          {connected && link === "offline" && (
+            <Button variant="quiet" size="sm" onClick={() => void connectTee()}>
+              Retry connection
+            </Button>
+          )}
+        </div>
+
+        {/* Top right: everything that changes the table's state, ending in the
+            way out. */}
+        <div
+          style={{
+            position: "absolute",
+            top: 22,
+            right: 26,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          {connected && !session && (
+            <Button variant="primary" size="sm" loading={authorising} onClick={authorise}>
+              Authorise session key
+            </Button>
+          )}
+          {session && mySeat >= 0 && !outdated && delegated === false && seatedCount >= 2 && (
+            <Button
+              variant="primary"
+              size="sm"
+              loading={actions.busy?.startsWith("start")}
+              onClick={async () => {
+                await actions.startTable(occupiedSeats);
+                await refreshDelegation();
+              }}
+            >
+              Start playing
+            </Button>
+          )}
+          {session && mySeat >= 0 && delegated && tableView?.state === 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={actions.busy === "pause"}
+              onClick={async () => {
+                await actions.pauseTable();
+                await refreshDelegation();
+              }}
+            >
+              Pause table
+            </Button>
+          )}
+          {delegated === false && mySeat >= 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={actions.busy === "leave"}
+              onClick={async () => {
+                await actions.leave(mySeat);
+                await player.refresh();
+              }}
+            >
+              Cash out
+            </Button>
+          )}
+          {isCreator && delegated === false && (
+            <Button
+              variant="danger"
+              size="sm"
+              loading={actions.busy === "delete"}
+              onClick={() => setConfirmDelete(true)}
+            >
+              Delete table
+            </Button>
+          )}
+          <Link href="/" style={{ textDecoration: "none" }}>
+            <IconButton title="Leave table">
+              <ExitIcon />
+            </IconButton>
+          </Link>
+        </div>
+
+        {/* Bottom left: what you are carrying. */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 22,
+            left: 26,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              background: "var(--surface)",
+              backdropFilter: "blur(8px)",
+              borderRadius: "var(--r-panel)",
+              padding: "12px 18px",
+            }}
+          >
+            <ChipGlyph size={20} />
+            <span className="tnum" style={{ fontWeight: 700, fontSize: 15, color: "var(--text-dim)" }}>
+              {player.state ? player.state.chips.toLocaleString() : "..."}
+            </span>
+          </div>
+          <Link href="/" style={{ textDecoration: "none" }}>
+            <IconButton title="Buy more chips" solid>
+              <PlusIcon />
+            </IconButton>
+          </Link>
+        </div>
+
+        {/* Bottom right: the decision in front of you. */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 22,
+            right: 26,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: 10,
+            maxWidth: "min(560px, 52vw)",
+          }}
+        >
           <AnimatePresence>
             {myHandName && (
               <motion.div
@@ -484,9 +543,11 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
                 exit={{ opacity: 0 }}
                 transition={spring.snappy}
                 style={{
-                  fontSize: "var(--t-sm)",
-                  color: "var(--text-dim)",
                   fontFamily: "var(--font-display)",
+                  fontSize: 12,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  color: "var(--accent)",
                 }}
               >
                 you have {myHandName}
@@ -505,25 +566,35 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             />
           )}
 
-          {connected && mySeat < 0 && delegated && (
-            <Panel style={{ textAlign: "center", maxWidth: 460 }}>
-              <p style={{ margin: 0, color: "var(--text-dim)", fontSize: "var(--t-sm)" }}>
-                This table is playing. Seats open again when it pauses between
-                hands.
-              </p>
-            </Panel>
-          )}
-
           {connected && mySeat >= 0 && !session && (
-            <Panel style={{ textAlign: "center", maxWidth: 460 }}>
-              <p style={{ margin: "0 0 10px", color: "var(--text-dim)", fontSize: "var(--t-sm)" }}>
+            <Notice>
+              <span>
                 Authorise a session key to play without a wallet prompt on every
                 action. It can bet for you at this table and nothing else.
-              </p>
+              </span>
               <Button variant="primary" size="sm" loading={authorising} onClick={authorise}>
                 Authorise
               </Button>
-            </Panel>
+            </Notice>
+          )}
+
+          {connected && mySeat < 0 && delegated && (
+            <Notice>
+              <span>
+                This table is playing. Seats open again when it pauses between
+                hands.
+              </span>
+            </Notice>
+          )}
+
+          {outdated && (
+            <Notice tone="var(--lose)">
+              <span>
+                This table cannot be played. It was made by an earlier version of
+                the game and its deck no longer matches. Cash out and create a new
+                one from the lobby.
+              </span>
+            </Notice>
           )}
         </div>
       </main>
@@ -618,6 +689,157 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         </Button>
       </Modal>
     </>
+  );
+}
+
+/**
+ * A labelled value in the corner strip.
+ *
+ * The stakes used to sit on their own as "5 / 10", which says nothing unless
+ * you already know it means the blinds. Every figure up here now carries the
+ * word for what it is, on a line above it, and they share a baseline so the
+ * strip reads as a row rather than a pile.
+ */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3, lineHeight: 1 }}>
+      <span
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: 9,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          color: "var(--text-faint)",
+        }}
+      >
+        {label}
+      </span>
+      <span
+        className="tnum"
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: 14,
+          color: "var(--text)",
+          display: "flex",
+          alignItems: "center",
+          height: 18,
+        }}
+      >
+        {children}
+      </span>
+    </div>
+  );
+}
+
+/** A square icon button, the shape the corners of the room are built from. */
+function IconButton({
+  children,
+  title,
+  solid = false,
+}: {
+  children: React.ReactNode;
+  title: string;
+  solid?: boolean;
+}) {
+  return (
+    <motion.span
+      title={title}
+      aria-label={title}
+      role="button"
+      whileHover={{ y: -1 }}
+      whileTap={{ scale: 0.96 }}
+      transition={spring.snappy}
+      style={{
+        width: 44,
+        height: 44,
+        display: "grid",
+        placeItems: "center",
+        borderRadius: "var(--r-panel)",
+        background: solid ? "var(--control)" : "var(--surface)",
+        color: solid ? "var(--accent)" : "var(--text-dim)",
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </motion.span>
+  );
+}
+
+/** A clock wound backwards: the usual mark for history. */
+function HistoryIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M3.5 9.5A9 9 0 1 1 3 12"
+        stroke="currentColor"
+        strokeWidth="2.1"
+        strokeLinecap="round"
+      />
+      <path
+        d="M3 4.5v5h5"
+        stroke="currentColor"
+        strokeWidth="2.1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 7.5V12l3 2"
+        stroke="currentColor"
+        strokeWidth="2.1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ExitIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M14 4h5v16h-5M11 8l-4 4 4 4M7 12h10"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** A short message in the corner, without a box around the whole screen. */
+function Notice({
+  children,
+  tone = "var(--text-dim)",
+}: {
+  children: React.ReactNode;
+  tone?: string;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        background: "var(--surface)",
+        backdropFilter: "blur(8px)",
+        borderRadius: "var(--r-panel)",
+        padding: "12px 16px",
+        fontSize: "var(--t-sm)",
+        color: tone,
+        textAlign: "right",
+      }}
+    >
+      {children}
+    </div>
   );
 }
 

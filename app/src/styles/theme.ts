@@ -31,17 +31,17 @@ export const stagger = {
 /**
  * Seat positions around the felt, as percentages of the table box.
  *
- * Six seats spaced evenly on the rail. Seat 0 is bottom center because the
- * local player is rotated into it, so the person you are always sits nearest
- * the action bar, and the rest run clockwise from there.
+ * The table is an ellipse sitting on a rectangular panel, so the seats run
+ * evenly around that ellipse rather than along the panel's edges. Seat 0 is
+ * bottom centre because the local player is rotated into it, so the person you
+ * are always sits nearest the action bar, and the rest run clockwise.
  *
- * The felt is an ellipse inset 4 percent horizontally and 8 percent
- * vertically, so these come from that ellipse rather than being nudged by eye.
- * Keeping them symmetric matters: an uneven ring reads as a mistake even when
- * nobody can say why.
+ * The ring is a little tighter than the ellipse itself, which puts the plates
+ * astride the rim the way players sit at a real table. Keeping it symmetric
+ * matters: an uneven ring reads as a mistake even when nobody can say why.
  */
-const RAIL_X = 45;
-const RAIL_Y = 41;
+const RAIL_X = 40;
+const RAIL_Y = 40;
 const point = (deg: number) => ({
   x: Math.round((50 + RAIL_X * Math.cos((deg * Math.PI) / 180)) * 10) / 10,
   y: Math.round((50 + RAIL_Y * Math.sin((deg * Math.PI) / 180)) * 10) / 10,
@@ -57,7 +57,7 @@ export const SEAT_POSITIONS: { x: number; y: number }[] = [
 ];
 
 /** Where a seat's bet chips sit: the same ring, pulled in toward the pot. */
-const BET_PULL = 0.52;
+const BET_PULL = 0.5;
 const betPoint = (deg: number) => ({
   x: Math.round((50 + RAIL_X * BET_PULL * Math.cos((deg * Math.PI) / 180)) * 10) / 10,
   y: Math.round((50 + RAIL_Y * BET_PULL * Math.sin((deg * Math.PI) / 180)) * 10) / 10,
@@ -72,7 +72,7 @@ export const BET_POSITIONS: { x: number; y: number }[] = [
   betPoint(35),
 ];
 
-export const POT_POSITION = { x: 50, y: 58 };
+export const POT_POSITION = { x: 50, y: 56 };
 
 export const z = {
   felt: 0,

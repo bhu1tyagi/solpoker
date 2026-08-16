@@ -9,21 +9,18 @@ type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, React.CSSProperties> = {
   primary: {
-    background: "var(--grad-accent)",
+    background: "var(--accent)",
     color: "var(--on-accent)",
     fontWeight: 600,
-    boxShadow: "0 1px 0 rgba(255,255,255,0.22) inset, var(--shadow-1)",
   },
   ghost: {
-    background: "var(--surface-2)",
+    background: "var(--control)",
     color: "var(--text)",
-    border: "1px solid var(--line)",
   },
   danger: {
-    background: "var(--grad-danger)",
+    background: "var(--lose)",
     color: "var(--on-danger)",
-    fontWeight: 700,
-    boxShadow: "0 1px 0 rgba(255,255,255,0.18) inset, var(--shadow-1)",
+    fontWeight: 600,
   },
   quiet: {
     background: "transparent",
