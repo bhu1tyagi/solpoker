@@ -26,12 +26,17 @@ const stroke = {
   strokeLinejoin: "round" as const,
 };
 
-/** A poker table seen at an angle, on its pedestal. */
+/**
+ * A poker table from above: the rail and the felt inside it.
+ *
+ * Drawn flat rather than on a pedestal, because a pedestal version sits beside
+ * the trophy in the tab bar and the two become the same silhouette.
+ */
 export function TableIcon({ size = 20 }: Props) {
   return (
     <svg {...svg(size)}>
-      <ellipse cx="12" cy="9.5" rx="9" ry="5.5" {...stroke} />
-      <path d="M12 15v4M8.5 20h7" {...stroke} />
+      <ellipse cx="12" cy="12" rx="9.5" ry="6.5" {...stroke} />
+      <ellipse cx="12" cy="12" rx="5.5" ry="3" {...stroke} strokeWidth={1.6} />
     </svg>
   );
 }
@@ -108,13 +113,23 @@ export function RefreshIcon({ size = 20 }: Props) {
   );
 }
 
+/** A cup on a plinth: the leaderboard. */
+export function TrophyIcon({ size = 20 }: Props) {
+  return (
+    <svg {...svg(size)}>
+      <path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" {...stroke} />
+      <path d="M7 6H4.5v1.5A3.5 3.5 0 0 0 8 11M17 6h2.5v1.5A3.5 3.5 0 0 1 16 11" {...stroke} />
+      <path d="M12 14v3.5M8.5 20h7" {...stroke} />
+    </svg>
+  );
+}
+
 /** A table with a plus: start a new one. */
 export function NewTableIcon({ size = 20 }: Props) {
   return (
     <svg {...svg(size)}>
-      <ellipse cx="10.5" cy="9.5" rx="7.5" ry="4.6" {...stroke} />
-      <path d="M10.5 14.2V18M7.5 19h6" {...stroke} />
-      <path d="M18.5 3.5v5M16 6h5" {...stroke} strokeWidth={2.2} />
+      <ellipse cx="10.5" cy="13" rx="8" ry="5.5" {...stroke} />
+      <path d="M18.5 3v5.5M15.75 5.75h5.5" {...stroke} strokeWidth={2.2} />
     </svg>
   );
 }

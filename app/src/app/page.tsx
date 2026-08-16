@@ -18,8 +18,10 @@ import {
   PlusIcon,
   RefreshIcon,
   TableIcon,
+  TrophyIcon,
 } from "@/components/primitives/Icons";
 import { usePlayer } from "@/hooks/use-player";
+import { useLeaderboard } from "@/hooks/use-leaderboard";
 import { isJoinable, useTables, type LobbyTable } from "@/hooks/use-tables";
 import { spring, stagger } from "@/styles/theme";
 import { LAMPORTS_PER_CHIP, MAX_SEATS } from "@/lib/constants";
@@ -68,29 +70,30 @@ export default function Lobby() {
         }}
       >
         <section>
-          {/* Title and everything you carry, on one line. */}
-          <header
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 16,
-              marginBottom: 44,
-              flexWrap: "wrap",
-            }}
-          >
-            <h1
+          {/* The name, then what you carry with the wallet beside it, then the
+              things you can do, on their own line underneath. */}
+          <header style={{ marginBottom: 44 }}>
+            <div
               style={{
-                fontSize: "clamp(34px, 4vw, 52px)",
-                color: "var(--accent)",
-                letterSpacing: "-0.03em",
-                marginRight: "auto",
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                flexWrap: "wrap",
+                marginBottom: 20,
               }}
             >
-              Poker Rooms
-            </h1>
+              <h1
+                style={{
+                  fontSize: "clamp(34px, 4vw, 52px)",
+                  color: "var(--accent)",
+                  letterSpacing: "-0.03em",
+                  marginRight: "auto",
+                }}
+              >
+                SolPoker
+              </h1>
 
-            {connected && (
-              <>
+              {connected && (
                 <div
                   style={{
                     display: "flex",
@@ -122,29 +125,35 @@ export default function Lobby() {
                     {state ? state.chips.toLocaleString() : "..."}
                   </span>
                 </div>
+              )}
 
-                <IconButton title="Buy chips" solid onClick={() => setExchange("buy")}>
-                  <PlusIcon />
-                </IconButton>
-                <IconButton
-                  title="Cash out"
-                  disabled={!state || state.chips === 0}
-                  onClick={() => setExchange("sell")}
-                >
-                  <CashOutIcon />
-                </IconButton>
-                <IconButton title="New table" onClick={() => setCreating(true)}>
-                  <NewTableIcon />
-                </IconButton>
-              </>
-            )}
+              <WalletMultiButton />
+            </div>
 
-            <Link href="/trust" style={{ textDecoration: "none" }}>
-              <IconButton title="How this works">
-                <InfoIcon />
-              </IconButton>
-            </Link>
-            <WalletMultiButton />
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {connected && (
+                <>
+                  <IconButton title="Buy chips" solid onClick={() => setExchange("buy")}>
+                    <PlusIcon />
+                  </IconButton>
+                  <IconButton
+                    title="Cash out"
+                    disabled={!state || state.chips === 0}
+                    onClick={() => setExchange("sell")}
+                  >
+                    <CashOutIcon />
+                  </IconButton>
+                  <IconButton title="New table" onClick={() => setCreating(true)}>
+                    <NewTableIcon />
+                  </IconButton>
+                </>
+              )}
+              <Link href="/trust" style={{ textDecoration: "none" }}>
+                <IconButton title="How this works">
+                  <InfoIcon />
+                </IconButton>
+              </Link>
+            </div>
           </header>
 
           {/* Column headings, then a row per room. */}
@@ -212,20 +221,20 @@ export default function Lobby() {
           </div>
         </section>
 
-        {/* Who is playing, and where you are sitting. */}
+        {/* Who is winning, and where you are sitting. */}
         <aside>
           <div style={{ display: "flex", gap: 0, marginBottom: 2 }}>
-            <Tab active={tab === "players"} onClick={() => setTab("players")}>
-              <PlayersIcon size={22} />
+            <Tab active={tab === "players"} onClick={() => setTab("players")} title="Leaderboard">
+              <TrophyIcon size={22} />
             </Tab>
-            <Tab active={tab === "mine"} onClick={() => setTab("mine")}>
+            <Tab active={tab === "mine"} onClick={() => setTab("mine")} title="Your tables">
               <TableIcon size={22} />
             </Tab>
           </div>
           <div style={{ height: 1, background: "var(--control)", opacity: 0.48 }} />
 
           {tab === "players" ? (
-            <PlayerList tables={visible} me={me} />
+            <Leaderboard me={me} />
           ) : (
             <MyTables tables={myTables} />
           )}
@@ -351,67 +360,106 @@ function TableRow({ t }: { t: LobbyTable }) {
   );
 }
 
-/** Everyone currently sitting somewhere, richest first. */
-function PlayerList({ tables, me }: { tables: LobbyTable[]; me?: string }) {
-  const players = useMemo(() => {
-    const rows: { key: string; seat: number; tableId: number }[] = [];
-    for (const t of tables) {
-      t.table.seats.forEach((occupant, seat) => {
-        if (occupant) rows.push({ key: occupant, seat: seat + 1, tableId: t.table.tableId });
-      });
-    }
-    return rows;
-  }, [tables]);
+/**
+ * The leaderboard: every player on the program, deepest stack first.
+ *
+ * The figures are the ones the program already keeps, so nothing here is a
+ * separate scoreboard that could drift from the game. Chips sitting on a seat
+ * are not in a player's balance, so someone mid-hand shows only what they are
+ * not currently risking.
+ */
+function Leaderboard({ me }: { me?: string }) {
+  const { rows, loading } = useLeaderboard();
 
-  if (players.length === 0) {
-    return <SideEmpty icon={<PlayersIcon size={24} />} />;
+  if (loading && rows.length === 0) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 14 }}>
+        <Skeleton height={44} />
+        <Skeleton height={44} />
+        <Skeleton height={44} />
+      </div>
+    );
   }
+  if (rows.length === 0) return <SideEmpty icon={<TrophyIcon size={24} />} />;
 
   return (
     <div>
-      <SideHead cols={["Player", "", "#"]} />
-      {players.slice(0, 12).map((p, i) => (
-        <Link
-          key={`${p.tableId}-${p.seat}`}
-          href={`/table/${p.tableId}`}
-          style={{ textDecoration: "none" }}
-        >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "28px 1fr 36px auto",
+          gap: 12,
+          height: 52,
+          alignItems: "center",
+          color: "var(--text-dim)",
+          opacity: 0.64,
+          fontSize: 14,
+          letterSpacing: "0.02em",
+        }}
+      >
+        <span>#</span>
+        <span>Player</span>
+        <span />
+        <span style={{ textAlign: "right" }}>Chips</span>
+      </div>
+
+      {rows.slice(0, 12).map((r, i) => {
+        const mine = r.authority === me;
+        return (
           <motion.div
+            key={r.authority}
             initial={{ opacity: 0, x: 6 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ ...spring.gentle, delay: i * stagger.list }}
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 40px 40px",
-              gap: 14,
+              gridTemplateColumns: "28px 1fr 36px auto",
+              gap: 12,
               alignItems: "center",
               height: 52,
             }}
           >
             <span
+              className="tnum"
               style={{
-                fontWeight: 500,
-                fontSize: 17,
-                color: p.key === me ? "var(--accent)" : "var(--text-dim)",
+                fontWeight: 700,
+                fontSize: 15,
+                color: i < 3 ? "var(--accent)" : "var(--text-faint)",
               }}
             >
-              {p.key === me ? "you" : shortKey(p.key)}
+              {String(i + 1).padStart(2, "0")}
             </span>
-            <Avatar pubkey={p.key} size={34} square />
+            <span
+              style={{
+                fontWeight: 500,
+                fontSize: 16,
+                color: mine ? "var(--accent)" : "var(--text-dim)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {mine ? "you" : shortKey(r.authority)}
+            </span>
+            <Avatar pubkey={r.authority} size={30} square />
             <span
               className="tnum"
               style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
                 fontWeight: 500,
-                fontSize: 17,
-                color: "var(--text-dim)",
-                textAlign: "right",
+                fontSize: 16,
+                color: "var(--accent)",
+                justifyContent: "flex-end",
               }}
             >
-              {String(p.seat).padStart(2, "0")}
+              <ChipGlyph size={15} />
+              {r.chips.toLocaleString()}
             </span>
           </motion.div>
-        </Link>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -522,14 +570,18 @@ function Tab({
   active,
   onClick,
   children,
+  title,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  title: string;
 }) {
   return (
     <button
       onClick={onClick}
+      title={title}
+      aria-label={title}
       style={{
         flex: 1,
         height: 56,
