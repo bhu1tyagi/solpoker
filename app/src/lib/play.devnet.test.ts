@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { readFileSync, writeFileSync } from "node:fs";
 import {
   Connection,
   Keypair,
@@ -106,13 +107,38 @@ async function sendBase(
   return sig;
 }
 
+/**
+ * The two test players, kept between runs.
+ *
+ * Fresh keypairs each run left a new Player account on chain every time, each
+ * holding chips nobody can ever spend, and they accumulate on the leaderboard
+ * forever with no way to close them. Reusing two wallets means running this as
+ * often as we like costs nothing new.
+ */
+function testPlayers(): Keypair[] {
+  const path = "/tmp/solpoker-devnet-players.json";
+  try {
+    return (JSON.parse(readFileSync(path, "utf8")) as number[][]).map((s) =>
+      Keypair.fromSecretKey(Uint8Array.from(s)),
+    );
+  } catch {
+    const fresh = [Keypair.generate(), Keypair.generate()];
+    try {
+      writeFileSync(path, JSON.stringify(fresh.map((k) => Array.from(k.secretKey))));
+    } catch {
+      // Failing to save only costs the next run two more accounts.
+    }
+    return fresh;
+  }
+}
+
 describe("a real hand, through the app's modules", () => {
   it("creates, seats, plays and verifies", async () => {
     const base = new Connection(BASE_RPC, "confirmed");
     const funder = await readFunder();
     const program = makeProgram(base);
 
-    const players = [Keypair.generate(), Keypair.generate()];
+    const players = testPlayers();
     const tableId = new BN(Math.floor(Date.now() / 1000));
     const table = tablePda(tableId);
     const config = configPda(tableId);
