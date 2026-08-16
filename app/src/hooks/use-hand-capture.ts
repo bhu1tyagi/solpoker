@@ -5,6 +5,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { handId, saveHand } from "@/lib/history-db";
 import { pruneSalts } from "@/lib/salts";
 import { decodeHand } from "@/lib/decode";
+import { verify } from "@/lib/verifier/verify-shuffle";
 import { handPda } from "@/lib/pdas";
 import { useTableStore } from "@/stores/table-store";
 import { MAX_SEATS, SALT_REVEALED } from "@/lib/constants";
@@ -123,7 +124,7 @@ export function useHandCapture(
             // The shuffle state is NOT part of this, because the next hand's
             // request flips it while the settled data is still all here.
             if (h.dealtIn === 0 && h.street >= 4 && h.resultHash !== "0".repeat(64)) {
-              await saveHand({
+              const record = {
                 id: handId(tableId, n),
                 tableId,
                 handNumber: n,
@@ -142,7 +143,27 @@ export function useHandCapture(
                     revealed: h.revealedMask & (1 << i) ? h.revealed[i] : null,
                   };
                 }).filter((s) => s.dealtIn || s.salt),
-              }).catch(() => {
+              };
+
+              // Check it here, before it is stored. A record that cannot
+              // verify is a capture bug, and storing it turns that bug into an
+              // accusation against an honest hand. Keep retrying instead: the
+              // pieces arrive over separate account notifications, so an early
+              // read can be incomplete while a later one is whole.
+              const check = verify(record);
+              if (!check.ok) {
+                if (attempt < FETCH_TRIES - 1) {
+                  await new Promise((r) => setTimeout(r, FETCH_GAP_MS));
+                  continue;
+                }
+                console.warn(
+                  `hand ${n} was not recorded: the capture does not verify ` +
+                    `(${check.problems.join("; ")})`,
+                );
+                return;
+              }
+
+              await saveHand(record).catch(() => {
                 // Storage refused. The hand is lost to history, play continues.
               });
               pruneSalts(table.toBase58(), n);

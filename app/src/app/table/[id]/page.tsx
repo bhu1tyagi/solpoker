@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
@@ -16,6 +16,7 @@ import { useTee } from "@/hooks/use-tee";
 import { useTableSubscriptions } from "@/hooks/use-table-subscriptions";
 import { useCrank } from "@/hooks/use-crank";
 import { useHandCapture } from "@/hooks/use-hand-capture";
+import { useShowdownSequence } from "@/hooks/use-showdown-sequence";
 import { usePlayer } from "@/hooks/use-player";
 import { useTableActions } from "@/hooks/use-table-actions";
 import {
@@ -174,6 +175,20 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
 
   const capture = useHandCapture(tableView?.tableId ?? null, erConnection, table);
 
+  // The end of a hand, paced into reveal, compare, and pay.
+  const showdown = useShowdownSequence(hand, tableView, seats);
+
+  // The next hand waits for two things: the finished one to be written down,
+  // and the showdown to have played out. Dealing over the top of the animation
+  // is how a player misses the moment they won.
+  const stageRef = useRef(showdown.stage);
+  stageRef.current = showdown.stage;
+  const captureReady = capture.ready;
+  const readyForNextHand = useCallback(
+    () => captureReady() && stageRef.current === null,
+    [captureReady],
+  );
+
   // Read from whichever layer owns the accounts right now. Before delegation
   // the game lives on the base layer, and that is where seats fill up. Hole
   // cards only ever come over the player's own authenticated rollup
@@ -207,12 +222,14 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     enabled: Boolean(
       delegated && !outdated && session && sessionToken && erProgram && mySeat >= 0,
     ),
-    captureReady: capture.ready,
+    captureReady: readyForNextHand,
   });
 
   /** One prompt, then the table is silent for a day. */
+  const [authorising, setAuthorising] = useState(false);
   const authorise = useCallback(async () => {
     if (!publicKey || !signTransaction) return;
+    setAuthorising(true);
     try {
       const s = await ensureSession(getBaseConnection(), publicKey, signTransaction);
       setSession(s.keypair);
@@ -220,6 +237,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
       toast("Session key authorised. No more prompts while you play.", "good");
     } catch (e) {
       toast(friendlyError(e), "bad");
+    } finally {
+      setAuthorising(false);
     }
   }, [publicKey, signTransaction]);
 
@@ -247,7 +266,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const pot = potTotal(viewSeats);
 
   // Showdown highlighting: work out the winning five from what was shown.
-  const { winningCards, winnerSeats, myHandName } = useShowdown(
+  const { winningCards, winnerSeats, myHandName, handNames } = useShowdown(
     hand,
     seats,
     mySeat,
@@ -347,7 +366,12 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
               </Button>
             </Link>
             {connected && !session && (
-              <Button variant="primary" size="sm" onClick={authorise}>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={authorising}
+                onClick={authorise}
+              >
                 Authorise session key
               </Button>
             )}
@@ -417,6 +441,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           status={status}
           working={working}
           overlay={overlay}
+          showdown={showdown}
+          handNames={handNames}
           onSit={
             delegated === false && mySeat < 0 && connected
               ? (i) => {
@@ -494,7 +520,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
                 Authorise a session key to play without a wallet prompt on every
                 action. It can bet for you at this table and nothing else.
               </p>
-              <Button variant="primary" size="sm" onClick={authorise}>
+              <Button variant="primary" size="sm" loading={authorising} onClick={authorise}>
                 Authorise
               </Button>
             </Panel>
@@ -626,6 +652,9 @@ function LinkPill({ state, delegated }: { state: string; delegated: boolean | nu
   const tone =
     state === "live" ? "var(--win)" : state === "degraded" ? "var(--accent)" : "var(--text-faint)";
   const label = !delegated ? "on Solana" : state === "live" ? "live" : state;
+  // Anything short of a live link is a link still being made, so the dot
+  // breathes. A still dot beside the word "connecting" looks like a hang.
+  const settled = !delegated || state === "live";
   return (
     <span
       style={{
@@ -636,7 +665,9 @@ function LinkPill({ state, delegated }: { state: string; delegated: boolean | nu
         gap: 5,
       }}
     >
-      <span
+      <motion.span
+        animate={settled ? { opacity: 1, scale: 1 } : { opacity: [1, 0.25, 1], scale: [1, 0.8, 1] }}
+        transition={settled ? undefined : { repeat: Infinity, duration: 1.3 }}
         style={{
           width: 6,
           height: 6,
@@ -668,6 +699,7 @@ function useShowdown(
       winningCards: undefined as Set<number> | undefined,
       winnerSeats: undefined as Set<number> | undefined,
       myHandName: undefined as string | undefined,
+      handNames: undefined as Map<number, string> | undefined,
     };
     if (!hand) return empty;
 
@@ -693,12 +725,14 @@ function useShowdown(
     let best = -1;
     let bestSeats: number[] = [];
     const fives = new Map<number, number[]>();
+    const handNames = new Map<number, string>();
     for (let i = 0; i < MAX_SEATS; i++) {
       if (!(hand.revealedMask & (1 << i))) continue;
       const hole = hand.revealed[i];
       if (hole[0] === NO_CARD) continue;
       const { five, rank } = bestFive([...hole, ...board]);
       fives.set(i, five);
+      handNames.set(i, describe(evaluate([...hole, ...board])));
       if (rank > best) {
         best = rank;
         bestSeats = [i];
@@ -715,6 +749,7 @@ function useShowdown(
       winningCards,
       winnerSeats: new Set(bestSeats),
       myHandName,
+      handNames,
     };
   }, [hand, seats, mySeat, myHole, myHoleHandNumber]);
 }

@@ -38,28 +38,58 @@ function db() {
   return dbPromise;
 }
 
+/**
+ * Which build's capture logic wrote a record.
+ *
+ * Earlier builds could store a hand whose seed belonged to the hand before it,
+ * and such a record fails verification forever with no way to repair it. That
+ * is why old hands showed "Failed" while the newest one passed: the game was
+ * fine, the recording was not. Records without the current stamp are from those
+ * builds and are dropped on sight rather than shown as failures, which would
+ * accuse an honest hand of cheating. Bump this whenever capture changes in a way
+ * that makes older records untrustworthy.
+ */
+export const CAPTURE_VERSION = 2;
+
 export interface StoredHand extends HandHistory {
   /** `${tableId}:${handNumber}`, so a hand is written once however many clients saw it. */
   id: string;
   tableId: number;
   capturedAt: number;
+  /** Absent means an older build wrote it. See CAPTURE_VERSION. */
+  captureVersion?: number;
 }
 
 export async function saveHand(hand: StoredHand): Promise<void> {
   if (typeof window === "undefined") return;
   const database = await db();
-  const existing = await database.get(STORE, hand.id);
-  // First capture wins. A later one has the same content but a rewritten hand
-  // account behind it, so it can only be worse.
-  if (existing) return;
-  await database.put(STORE, hand);
+  const existing = (await database.get(STORE, hand.id)) as StoredHand | undefined;
+  // First good capture wins. A later one has the same content but a rewritten
+  // hand account behind it, so it can only be worse. A record from an older
+  // build is replaced, because this one is known to verify and that one is not.
+  if (existing && existing.captureVersion === CAPTURE_VERSION) return;
+  await database.put(STORE, { ...hand, captureVersion: CAPTURE_VERSION });
+}
+
+/** Drop records an older build wrote, which can never verify. */
+async function pruneStale(database: IDBPDatabase, hands: StoredHand[]) {
+  const stale = hands.filter((h) => h.captureVersion !== CAPTURE_VERSION);
+  if (stale.length === 0) return;
+  await Promise.all(stale.map((h) => database.delete(STORE, h.id).catch(() => {})));
+  console.warn(
+    `dropped ${stale.length} hand record(s) written by an earlier build; ` +
+      "they could not be verified because of a capture bug, not a shuffle problem",
+  );
 }
 
 export async function listHands(tableId: number): Promise<StoredHand[]> {
   if (typeof window === "undefined") return [];
   const database = await db();
   const all = (await database.getAllFromIndex(STORE, "byTable", tableId)) as StoredHand[];
-  return all.sort((a, b) => b.handNumber - a.handNumber);
+  void pruneStale(database, all);
+  return all
+    .filter((h) => h.captureVersion === CAPTURE_VERSION)
+    .sort((a, b) => b.handNumber - a.handNumber);
 }
 
 export async function getHand(id: string): Promise<StoredHand | undefined> {
@@ -69,8 +99,12 @@ export async function getHand(id: string): Promise<StoredHand | undefined> {
 
 export async function listAllHands(): Promise<StoredHand[]> {
   if (typeof window === "undefined") return [];
-  const all = (await (await db()).getAll(STORE)) as StoredHand[];
-  return all.sort((a, b) => b.capturedAt - a.capturedAt);
+  const database = await db();
+  const all = (await database.getAll(STORE)) as StoredHand[];
+  void pruneStale(database, all);
+  return all
+    .filter((h) => h.captureVersion === CAPTURE_VERSION)
+    .sort((a, b) => b.capturedAt - a.capturedAt);
 }
 
 export const handId = (tableId: number, handNumber: number) => `${tableId}:${handNumber}`;

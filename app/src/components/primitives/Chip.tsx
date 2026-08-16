@@ -34,14 +34,26 @@ export function ChipGlyph({ size = 16 }: { size?: number }) {
   );
 }
 
-/** How many coins an amount earns, split into columns of at most six. */
-function coinsFor(amount: number) {
-  const total = Math.min(18, Math.max(1, Math.floor(Math.log2(amount + 1) * 1.4)));
+/**
+ * How many coins an amount earns, split into columns.
+ *
+ * The count is proportional to a reference amount, normally the largest stack
+ * on the table, so the stacks read against each other the way real ones do: the
+ * chip leader's pile is visibly taller, and two even stacks look even. Without a
+ * reference every amount is measured against itself and every pile looks the
+ * same, which is worse than showing nothing.
+ */
+const MAX_COINS = 20;
+const PER_COLUMN = 5;
+
+function coinsFor(amount: number, reference: number) {
+  const ratio = reference > 0 ? amount / reference : 1;
+  const total = Math.min(MAX_COINS, Math.max(1, Math.round(ratio * MAX_COINS)));
   const columns: number[] = [];
   let left = total;
   while (left > 0) {
-    columns.push(Math.min(6, left));
-    left -= 6;
+    columns.push(Math.min(PER_COLUMN, left));
+    left -= PER_COLUMN;
   }
   return columns;
 }
@@ -67,14 +79,17 @@ export function ChipStack({
   size = 18,
   showAmount = true,
   compact = false,
+  reference,
 }: {
   amount: number;
   size?: number;
   showAmount?: boolean;
   compact?: boolean;
+  /** Amount that earns a full-height pile. Defaults to this stack itself. */
+  reference?: number;
 }) {
   if (amount <= 0) return null;
-  const columns = coinsFor(amount);
+  const columns = coinsFor(amount, reference ?? amount);
 
   return (
     <div

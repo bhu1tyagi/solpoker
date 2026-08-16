@@ -26,6 +26,17 @@ interface Props {
   timeoutSecs: number;
   /** A hand is actually running, so per-hand labels mean something. */
   handLive?: boolean;
+  /** Largest stack on the table, so piles are drawn to the same scale. */
+  stackReference?: number;
+  /** Which side the chip pile sits on, so it faces away from the felt. */
+  chipsOn?: "left" | "right";
+  /**
+   * Which side the cards sit on. Seats along the top of the table deal their
+   * cards downward, toward the felt, or the cards would run off the screen.
+   */
+  cardsOn?: "above" | "below";
+  /** This seat just won something, so the plate celebrates briefly. */
+  winner?: boolean;
   onSit?: (index: number) => void;
 }
 
@@ -42,6 +53,10 @@ export function SeatPod({
   deadline,
   timeoutSecs,
   handLive = false,
+  stackReference,
+  chipsOn = "right",
+  cardsOn = "above",
+  winner = false,
   onSit,
 }: Props) {
   const empty = !seat?.occupant;
@@ -81,20 +96,13 @@ export function SeatPod({
       transition={spring.snappy}
       style={{
         display: "flex",
-        flexDirection: "column",
+        flexDirection: cardsOn === "below" ? "column-reverse" : "column",
         alignItems: "center",
         gap: 4,
         position: "relative",
       }}
     >
-      {/* The physical stack: a quick read of how deep this seat is. */}
-      {seat.stack > 0 && (
-        <div style={{ position: "absolute", right: -8, top: -20, opacity: 0.9 }}>
-          <ChipStack amount={seat.stack} size={13} showAmount={false} />
-        </div>
-      )}
-
-      {/* Cards sit above the plate, tucked behind it slightly. */}
+      {/* Cards sit on the felt side of the plate, tucked behind it slightly. */}
       <div style={{ display: "flex", gap: 3, height: dealtIn ? undefined : 0 }}>
         <AnimatePresence>
           {dealtIn &&
@@ -122,14 +130,32 @@ export function SeatPod({
         </AnimatePresence>
       </div>
 
-      {/* The plate: an angular plaque. The hairline is the outer layer showing
-          through, because a real border would be sliced off at the cut corners. */}
+      {/* The plate, with the seat's pile beside it rather than over it. The
+          pile faces away from the felt so it never lands on the name, the
+          cards, or another seat's chips. */}
       <div
-        className="plaque"
         style={{
-          background: isTurn ? "var(--accent)" : "var(--line)",
+          display: "flex",
+          flexDirection: chipsOn === "left" ? "row-reverse" : "row",
+          alignItems: "flex-end",
+          gap: 6,
+        }}
+      >
+      <motion.div
+        className="plaque"
+        animate={{
+          scale: winner ? [1, 1.06, 1] : 1,
+        }}
+        transition={winner ? { duration: 0.6, times: [0, 0.4, 1] } : spring.snappy}
+        style={{
+          background: winner
+            ? "var(--accent)"
+            : isTurn
+              ? "var(--accent)"
+              : "var(--line)",
           padding: 1,
-          filter: isTurn ? "drop-shadow(0 0 10px var(--accent-glow))" : undefined,
+          filter:
+            isTurn || winner ? "drop-shadow(0 0 10px var(--accent-glow))" : undefined,
           transition: "filter 0.2s ease",
         }}
       >
@@ -185,6 +211,18 @@ export function SeatPod({
 
           {isButton && <DealerButton />}
         </div>
+      </motion.div>
+
+        {seat.stack > 0 && (
+          <div style={{ paddingBottom: 3, opacity: 0.92 }}>
+            <ChipStack
+              amount={seat.stack}
+              size={12}
+              showAmount={false}
+              reference={stackReference}
+            />
+          </div>
+        )}
       </div>
 
       <AnimatePresence>

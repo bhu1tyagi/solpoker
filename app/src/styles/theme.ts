@@ -40,8 +40,8 @@ export const stagger = {
  * Keeping them symmetric matters: an uneven ring reads as a mistake even when
  * nobody can say why.
  */
-const RAIL_X = 44;
-const RAIL_Y = 43;
+const RAIL_X = 45;
+const RAIL_Y = 41;
 const point = (deg: number) => ({
   x: Math.round((50 + RAIL_X * Math.cos((deg * Math.PI) / 180)) * 10) / 10,
   y: Math.round((50 + RAIL_Y * Math.sin((deg * Math.PI) / 180)) * 10) / 10,
