@@ -37,8 +37,21 @@ Why the deck cannot be steered:
    can re-request until they like the answer.
 4. Seed is `VRF XOR salt_1 XOR ... XOR salt_n`.
 
-Biasing it requires the VRF oracle **and every seated player** to collude. One
-honest player is enough to keep it fair.
+Biasing it requires the VRF oracle **and every player who contributed a salt**
+to collude. One honest contributor is enough to keep it fair.
+
+Read that precisely, because the code is weaker than the ideal and saying so is
+the point of this document. `request_shuffle` requires **two** revealed salts,
+not one from every seated player. If you sit at a table and do not reveal a
+salt, you are relying on the two players who did, plus the VRF, rather than on
+anything of your own. The client reveals for you on every hand, so in practice
+this only bites when a reveal fails.
+
+Raising the threshold to every dealt-in seat is deliberately not done yet.
+Without a deadline for revealing, one player who commits and then closes their
+laptop would freeze the table for everyone, which trades a fairness weakness
+that needs collusion for a denial of service that needs nobody. The threshold
+goes up when a reveal timeout goes in, and not before.
 
 **Chip conservation.** Chips only move between a player's balance and a seat
 stack on the base layer, while the table is undelegated. During a hand the
@@ -100,7 +113,8 @@ Individual players dropping is a different matter, and it is handled. See below.
 - **Anyone reading Solana** sees no cards. Card accounts are delegated and
   private during play, and the deck and all hole cards are zeroized at hand end
   before any commit can carry them back.
-- **The operator cannot rig the deck** without every player colluding, per above.
+- **The operator cannot rig the deck** without every salt contributor colluding,
+  per above, including the caveat about the two-salt threshold.
 - **A leaked session key** can make bad betting decisions at the one table it was
   scoped to. It cannot cash out, move chips to a balance, or join another table,
   because those paths are wallet-only.

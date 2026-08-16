@@ -48,6 +48,22 @@ pub fn create_history(ctx: Context<CreateHistory>) -> Result<()> {
 /// Takes the values as arguments rather than reading the committed hand account,
 /// because the action may run before or after that account is readable depending
 /// on strategy ordering.
+/// A hand number further ahead than this is not a late delivery, it is garbage.
+///
+/// The counter only has to survive gaps left by the commit budget, which is ten
+/// commits per delegation cycle, so any real jump is small. The cap exists
+/// because `last_hand_number` only ever moves forward: one absurd value would
+/// make every later hand look like a replay and stop recording for the life of
+/// the table, with no instruction able to undo it.
+///
+/// Be clear about what this does and does not buy. Since this instruction has
+/// no caller authentication (see [`RecordHandResult`]), it turns "one cheap
+/// transaction permanently bricks a table's history" into "brick it by a bounded
+/// amount per transaction, repeatedly". That is a real reduction in a one-shot
+/// attack and no defence at all against a determined one. It is a stopgap until
+/// the arguments stop being trusted.
+pub const MAX_HAND_ADVANCE: u64 = 100;
+
 pub fn record_hand_result(
     ctx: Context<RecordHandResult>,
     hand_number: u64,
@@ -58,6 +74,12 @@ pub fn record_hand_result(
     // failing action would be stripped and silently retried without.
     if hand_number <= h.last_hand_number {
         msg!("hand {} already recorded, skipping", hand_number);
+        return Ok(());
+    }
+    // Same reasoning for a number from the far future: refuse it, but refuse it
+    // quietly, so a single malformed delivery cannot strip the action either.
+    if hand_number > h.last_hand_number.saturating_add(MAX_HAND_ADVANCE) {
+        msg!("hand {} is implausibly far ahead, ignoring", hand_number);
         return Ok(());
     }
     h.last_hand_number = hand_number;
@@ -126,6 +148,25 @@ pub struct CreateHistory<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// # This instruction has no caller authentication, and cannot yet get any
+///
+/// `#[action]` appends `escrow_auth` and `escrow`, both as `UncheckedAccount`,
+/// and nothing else about the caller is available. So anyone can invoke this
+/// directly with two arbitrary addresses and write into any table's history.
+///
+/// The SDK documents `escrow` as "a `signer` in callback", which would be
+/// exactly the authentication needed. It is not one in practice: declaring it
+/// `Signer<'info>` compiles, deploys, and then silently stops every Magic
+/// Action from landing, because a failing action is stripped from its
+/// transaction strategy and the commit is retried without it. That was measured
+/// on devnet, not reasoned about, and it is why this is back to `UncheckedAccount`.
+///
+/// What remains is damage limitation rather than a fix, see [`MAX_HAND_ADVANCE`].
+/// The real repair is to stop trusting the arguments: pass the committed `Hand`
+/// account through the action's account list and record only values that match
+/// it, so a caller can write nothing that is not already true on chain. That
+/// costs the occasional record when the action runs ahead of the commit, which
+/// is the case `hands_recorded` is a counter rather than a flag for.
 #[action]
 #[derive(Accounts)]
 pub struct RecordHandResult<'info> {

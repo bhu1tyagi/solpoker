@@ -81,6 +81,10 @@ pub fn player_action(ctx: Context<PlayerAction>, action: PlayerMove) -> Result<(
     let table_key = hand.table;
     let authority = ctx.accounts.authority.key();
 
+    // The config decides the minimum raise and the turn clock, so a config from
+    // another table is as dangerous as a seat from another table.
+    check_config(&ctx.accounts.config, &table_key)?;
+
     let mut betting = {
         let seats = seats_ref!(ctx.accounts);
         check_seat_order(&seats, &table_key)?;

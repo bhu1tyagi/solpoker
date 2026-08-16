@@ -2332,7 +2332,8 @@
           "writable": true
         },
         {
-          "name": "seat"
+          "name": "seat",
+          "writable": true
         },
         {
           "name": "permission",
@@ -3185,6 +3186,21 @@
       "code": 6037,
       "name": "InsufficientVault",
       "msg": "The vault cannot cover that sale"
+    },
+    {
+      "code": 6038,
+      "name": "ConfigTableMismatch",
+      "msg": "That config account belongs to a different table"
+    },
+    {
+      "code": 6039,
+      "name": "CardsNotSecured",
+      "msg": "Cards are not locked down yet; the table must be secured before a hand can start"
+    },
+    {
+      "code": 6040,
+      "name": "SaltCommitClosed",
+      "msg": "Salts are already being revealed, so commitments are closed"
     }
   ],
   "types": [
@@ -3259,6 +3275,22 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "secured",
+            "docs": [
+              "Has `secure_deck` locked this deck to nobody yet?",
+              "",
+              "`start_hand` refuses without it. The VRF output lands here and the salts",
+              "are public, so a deck that is still world-readable when a hand starts is",
+              "the whole deck in the open: anyone can XOR the two together and deal the",
+              "board out ahead of the table. Nothing else on chain enforced the order of",
+              "these calls, so this is the bit that does.",
+              "",
+              "Not cleared by [`Deck::zeroize`]: the permission is created once and",
+              "outlives the hand, so re-securing every hand would be work with no effect."
+            ],
+            "type": "bool"
           }
         ]
       }
@@ -3664,6 +3696,20 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "cards_secured",
+            "docs": [
+              "Has this seat's hole-card permission been pointed at its current occupant?",
+              "",
+              "Set by `secure_hole`, which is the only instruction that writes the",
+              "permission, and cleared by every path that changes who is sitting here.",
+              "`start_hand` refuses to deal to a seat without it, so a table cannot play",
+              "a hand whose cards are still readable, or whose read right still belongs",
+              "to whoever sat here last. Before this, ordering the calls correctly was",
+              "the client's job, which meant privacy rested on a habit rather than a rule."
+            ],
+            "type": "bool"
           }
         ]
       }

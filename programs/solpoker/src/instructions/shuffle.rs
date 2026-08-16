@@ -2,7 +2,18 @@
 //!
 //! VRF alone would mean trusting the oracle. Player salts alone would mean
 //! trusting whoever reveals last. Combining them means the deck is unbiased
-//! unless the oracle *and* every seated player collude.
+//! unless the oracle *and* every player who contributed a salt collude.
+//!
+//! Read that last part precisely, because it is weaker than it sounds and the
+//! code is the honest version: [`request_shuffle`] requires **two** revealed
+//! salts, not one per seated player. A player who does not reveal is not
+//! protected by their own salt, only by the two that did reveal and by the VRF.
+//! Raising that threshold to every dealt-in seat is the obvious fix and is
+//! deliberately not done yet: without a deadline for revealing, one player who
+//! commits and then walks away would freeze the table for everyone, which
+//! trades a conditional fairness weakness for an unconditional denial of
+//! service. The threshold should go up at the same time a reveal timeout goes
+//! in, not before. See SPEC.md.
 //!
 //! The order matters and is the whole security argument:
 //!
@@ -58,6 +69,19 @@ pub fn commit_salt(ctx: Context<SaltCtx>, seat_index: u8, commitment: [u8; 32]) 
         ctx.accounts.hand.shuffle_state == SHUFFLE_IDLE,
         PokerError::HandInProgress
     );
+    // A commitment may be replaced, but only while it still commits to nothing
+    // anyone can see. Once the first salt is revealed, changing a commitment
+    // means choosing a salt with knowledge of someone else's, which is exactly
+    // what the commit phase exists to prevent: a player could otherwise commit,
+    // reveal, then commit and reveal again, and since a second reveal XORs in
+    // without XORing the first out, they would land on any `salt_xor` they
+    // liked after watching everyone else. First-time commits stay open either
+    // way, so a player who sits down late is not locked out of the hand.
+    require!(
+        ctx.accounts.hand.salt_mask == 0 || ctx.accounts.seat.salt_state == SALT_NONE,
+        PokerError::SaltCommitClosed
+    );
+
     let seat = &mut ctx.accounts.seat;
     require!(seat.seat_index == seat_index, PokerError::SeatOrderMismatch);
     require_keys_eq!(

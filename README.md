@@ -78,8 +78,12 @@ node tools/verify-shuffle.mjs hand-history.json
 
 Players commit to a salt, everyone reveals, and only then is VRF drawn with a seed derived
 from those salts. Nobody can pick a salt after seeing others, steer the draw, or re-request
-until they like the answer. Rigging the deck needs the oracle and every seated player to
-collude.
+until they like the answer. Rigging the deck needs the oracle and every player who
+contributed a salt to collude.
+
+The program requires two revealed salts rather than one per seated player, so a player who
+does not reveal is not protected by a salt of their own. TRUST_MODEL.md explains why the
+threshold is where it is and what has to happen before it moves.
 
 ## Phase 0 result
 
@@ -173,6 +177,24 @@ npm run test:base           # base layer, chip conservation
 npm run test:er             # one hand, privacy and shuffle verification
 HANDS=100 npm run test:session   # long session with random disconnects
 ```
+
+If you forked this, `npm run deploy` will not put your build at
+`4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9`. That program is owned by an
+upgrade authority you do not have, so you need an id of your own:
+
+```bash
+solana-keygen new -o target/deploy/solpoker-keypair.json --force
+anchor keys sync            # writes the new id into Anchor.toml and lib.rs
+anchor build && npm run deploy
+cp target/idl/solpoker.json app/src/lib/idl/solpoker.json
+cp target/types/solpoker.ts app/src/lib/idl/solpoker.ts
+```
+
+Re-vendoring both files is not optional. The program id is baked into the IDL
+twice, once as a raw byte array used to derive the delegation PDAs, and it is
+deliberately not an environment variable. An id in config that disagreed with
+the IDL would let tables be created and joined and then fail every attempt to
+start a hand. See `app/.env.example`.
 
 ## The client
 

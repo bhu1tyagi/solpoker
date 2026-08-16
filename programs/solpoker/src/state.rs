@@ -184,6 +184,15 @@ pub struct Seat {
     /// 0 none, 1 committed, 2 revealed.
     pub salt_state: u8,
     pub bump: u8,
+    /// Has this seat's hole-card permission been pointed at its current occupant?
+    ///
+    /// Set by `secure_hole`, which is the only instruction that writes the
+    /// permission, and cleared by every path that changes who is sitting here.
+    /// `start_hand` refuses to deal to a seat without it, so a table cannot play
+    /// a hand whose cards are still readable, or whose read right still belongs
+    /// to whoever sat here last. Before this, ordering the calls correctly was
+    /// the client's job, which meant privacy rested on a habit rather than a rule.
+    pub cards_secured: bool,
 }
 
 impl Seat {
@@ -192,6 +201,11 @@ impl Seat {
     }
 
     /// Reset the per-hand fields, leaving the occupant and stack alone.
+    ///
+    /// Also clears everything tied to *who* is sitting here, because every
+    /// caller of this is a seat changing hands. A permission still naming the
+    /// last occupant would let them read the next one's cards, and an inherited
+    /// salt commitment would belong to a player who is no longer at the table.
     pub fn reset_for_new_hand(&mut self, dealt_in: bool) {
         self.committed_street = 0;
         self.committed_total = 0;
@@ -200,6 +214,10 @@ impl Seat {
         self.needs_action = dealt_in;
         self.may_raise = dealt_in;
         self.in_hand = dealt_in;
+        self.cards_secured = false;
+        self.salt_state = 0;
+        self.salt_commit = [0u8; 32];
+        self.salt = [0u8; 32];
     }
 }
 
@@ -278,6 +296,17 @@ pub struct Deck {
     /// information about when the deck became computable inside the enclave.
     pub shuffle_state: u8,
     pub bump: u8,
+    /// Has `secure_deck` locked this deck to nobody yet?
+    ///
+    /// `start_hand` refuses without it. The VRF output lands here and the salts
+    /// are public, so a deck that is still world-readable when a hand starts is
+    /// the whole deck in the open: anyone can XOR the two together and deal the
+    /// board out ahead of the table. Nothing else on chain enforced the order of
+    /// these calls, so this is the bit that does.
+    ///
+    /// Not cleared by [`Deck::zeroize`]: the permission is created once and
+    /// outlives the hand, so re-securing every hand would be work with no effect.
+    pub secured: bool,
 }
 
 impl Deck {

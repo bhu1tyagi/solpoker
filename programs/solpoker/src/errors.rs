@@ -78,4 +78,13 @@ pub enum PokerError {
     TableNotAbandoned,
     #[msg("The vault cannot cover that sale")]
     InsufficientVault,
+    // Appended rather than inserted: Anchor numbers these in declaration order,
+    // so adding anywhere but the end would renumber every error after it and
+    // break clients that map codes to messages.
+    #[msg("That config account belongs to a different table")]
+    ConfigTableMismatch,
+    #[msg("Cards are not locked down yet; the table must be secured before a hand can start")]
+    CardsNotSecured,
+    #[msg("Salts are already being revealed, so commitments are closed")]
+    SaltCommitClosed,
 }

@@ -71,6 +71,9 @@ pub fn secure_deck(ctx: Context<SecureDeck>) -> Result<()> {
     }
     .invoke_signed(&[signers])?;
 
+    // Record it, so start_hand can refuse a deck nobody locked.
+    ctx.accounts.deck.secured = true;
+
     msg!("deck is now dealer-only");
     Ok(())
 }
@@ -136,6 +139,10 @@ pub fn secure_hole(ctx: Context<SecureHole>, seat_index: u8) -> Result<()> {
     }
     .invoke_signed(&[signers])?;
 
+    // The permission now names whoever is in the seat right now. Any path that
+    // changes that clears this again, so it can never vouch for a stale member.
+    ctx.accounts.seat.cards_secured = true;
+
     msg!("seat {} hole cards restricted to its occupant", seat_index);
     Ok(())
 }
@@ -169,7 +176,7 @@ pub struct SecureDeck<'info> {
 pub struct SecureHole<'info> {
     #[account(mut, seeds = [HOLE_SEED, hole.table.as_ref(), &[seat_index]], bump = hole.bump)]
     pub hole: Account<'info, HoleCards>,
-    #[account(seeds = [SEAT_SEED, hole.table.as_ref(), &[seat_index]], bump = seat.bump)]
+    #[account(mut, seeds = [SEAT_SEED, hole.table.as_ref(), &[seat_index]], bump = seat.bump)]
     pub seat: Account<'info, Seat>,
     /// CHECK: verified by the permission program; seeds match its layout
     #[account(

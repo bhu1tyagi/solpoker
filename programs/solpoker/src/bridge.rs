@@ -115,6 +115,34 @@ pub fn check_seat_order(seats: &[&Seat; MAX_SEATS], table: &Pubkey) -> Result<()
     Ok(())
 }
 
+/// Reject a config account that belongs to some other table.
+///
+/// Three instructions take a config without being able to constrain it the way
+/// `StartHand` and `SettleHand` do with `address = table.config`: they never load
+/// the table, because `Table` carries a 192-byte seat map and adding it to a
+/// context that already holds six seats overflows the BPF stack frame. That left
+/// the account entirely unchecked, and a config is not inert data. It carries the
+/// blinds the engine computes the minimum raise from, and the action timeout that
+/// becomes the turn clock, so anyone could create a table with a one-second
+/// timeout, pass its config while acting at someone else's table, and then time
+/// every opponent out before they could physically respond.
+///
+/// A config's `table_id` is fixed at creation and is the seed of its own PDA, so
+/// re-deriving the table address from it proves the pair belong together without
+/// loading the table itself. Same self-derivation trick as [`check_seat_order`].
+pub fn check_config(config: &TableConfig, table: &Pubkey) -> Result<()> {
+    let (expected_table, _) = Pubkey::find_program_address(
+        &[TABLE_SEED, &config.table_id.to_le_bytes()],
+        &crate::ID,
+    );
+    require_keys_eq!(
+        expected_table,
+        *table,
+        crate::errors::PokerError::ConfigTableMismatch
+    );
+    Ok(())
+}
+
 /// Borrow the six seat accounts of a context as an ordered array.
 ///
 /// Anchor exposes each seat as its own field, and Rust allows disjoint mutable
@@ -145,4 +173,59 @@ macro_rules! seats_mut {
             &mut *$accounts.seat_5,
         ]
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_for(table_id: u64) -> TableConfig {
+        TableConfig {
+            table_id,
+            creator: Pubkey::default(),
+            small_blind: 50,
+            big_blind: 100,
+            min_buy_in: 1_000,
+            max_buy_in: 10_000,
+            max_seats: MAX_SEATS as u8,
+            action_timeout_secs: 30,
+            bump: 255,
+        }
+    }
+
+    fn table_pda(table_id: u64) -> Pubkey {
+        Pubkey::find_program_address(&[TABLE_SEED, &table_id.to_le_bytes()], &crate::ID).0
+    }
+
+    #[test]
+    fn accepts_the_config_of_its_own_table() {
+        assert!(check_config(&config_for(7), &table_pda(7)).is_ok());
+    }
+
+    /// The attack this check exists for.
+    ///
+    /// `player_action`, `advance_street` and `force_timeout` all write
+    /// `now + config.action_timeout_secs` into the hand's deadline, and none of
+    /// them load the table, so before this the config was accepted unchecked.
+    /// Anyone could create a table with a one-second timeout, pass its config
+    /// while acting at someone else's table, and then call the permissionless
+    /// `force_timeout` on each opponent in turn before they could physically
+    /// respond, taking every pot uncontested.
+    #[test]
+    fn rejects_a_config_belonging_to_another_table() {
+        let attacker_config = config_for(1);
+        let victim_table = table_pda(2);
+        assert!(check_config(&attacker_config, &victim_table).is_err());
+    }
+
+    #[test]
+    fn rejects_a_config_for_every_other_table_id() {
+        let victim_table = table_pda(42);
+        for other in [0u64, 1, 41, 43, u64::MAX] {
+            assert!(
+                check_config(&config_for(other), &victim_table).is_err(),
+                "config for table {other} was accepted at table 42",
+            );
+        }
+    }
 }

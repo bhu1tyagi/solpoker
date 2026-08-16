@@ -32,6 +32,11 @@ pub fn force_timeout(ctx: Context<ForceTimeout>) -> Result<()> {
     let seat_index = hand.to_act as usize;
     let table_key = hand.table;
 
+    // See check_config. This instruction is permissionless and rewrites the
+    // deadline, so without this check one caller could hold the clock for the
+    // rest of the hand and time every other player out in turn.
+    check_config(&ctx.accounts.config, &table_key)?;
+
     let mut betting = {
         let seats = seats_ref!(ctx.accounts);
         check_seat_order(&seats, &table_key)?;

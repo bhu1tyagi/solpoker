@@ -79,6 +79,14 @@ pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
         check_seat_order(&seats, &table_key)?;
     }
 
+    // Nothing may be dealt until the cards are actually hidden. The deck holds
+    // the VRF output and the salts are public, so starting a hand against a deck
+    // that is still world-readable publishes the whole deal. The client has
+    // always locked these down first; this is what stops the hand when it does
+    // not, and what stops anyone else calling this permissionless instruction
+    // before it gets the chance.
+    require!(ctx.accounts.deck.secured, PokerError::CardsNotSecured);
+
     // Only seated players with chips are dealt in.
     let mut stacks = [0u64; MAX_SEATS];
     let mut dealt_in: u8 = 0;
@@ -86,6 +94,9 @@ pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
         let seats = seats_ref!(ctx.accounts);
         for (i, seat) in seats.iter().enumerate() {
             if seat.is_occupied() && seat.stack > 0 {
+                // A seat whose permission is missing or still names its previous
+                // occupant must not be dealt cards someone else can read.
+                require!(seat.cards_secured, PokerError::CardsNotSecured);
                 stacks[i] = seat.stack;
                 dealt_in |= 1 << i;
             }
@@ -200,6 +211,10 @@ pub fn deal_hole_cards(ctx: Context<DealHoleCards>) -> Result<()> {
 /// client cannot hold up the table.
 pub fn advance_street(ctx: Context<AdvanceStreet>) -> Result<()> {
     let table_key = ctx.accounts.hand.table;
+    // See check_config: this instruction sets the next turn deadline, so an
+    // unchecked config hands the caller the clock.
+    check_config(&ctx.accounts.config, &table_key)?;
+
     let mut betting = {
         let seats = seats_ref!(ctx.accounts);
         check_seat_order(&seats, &table_key)?;

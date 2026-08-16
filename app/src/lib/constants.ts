@@ -4,12 +4,49 @@ export const PROGRAM_ID = new PublicKey(
   "4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9",
 );
 
-export const BASE_RPC =
-  process.env.NEXT_PUBLIC_BASE_RPC ?? "https://rpc.magicblock.app/devnet";
-export const TEE_URL =
-  process.env.NEXT_PUBLIC_TEE_URL ?? "https://devnet-tee.magicblock.app";
-export const TEE_WS =
-  process.env.NEXT_PUBLIC_TEE_WS ?? "wss://devnet-tee.magicblock.app";
+/**
+ * Reject an endpoint that would put a credential on the wire in cleartext.
+ *
+ * The TEE auth token rides in the query string of both the http and websocket
+ * URLs, and that token is what reads hole cards. A deployer who typos `http://`
+ * into their Vercel config would hand it to every hop in between, and the app
+ * would look like it was working. Failing at module load is loud and immediate;
+ * silently downgrading is not something a poker client should ever do.
+ */
+function secureEndpoint(
+  value: string | undefined,
+  fallback: string,
+  name: string,
+  allowed: readonly string[],
+): string {
+  const url = value ?? fallback;
+  if (!allowed.some((scheme) => url.startsWith(scheme))) {
+    throw new Error(
+      `${name} must start with ${allowed.join(" or ")}, got "${url}". ` +
+        `Credentials travel in this URL, so an insecure scheme is refused rather than downgraded.`,
+    );
+  }
+  return url;
+}
+
+export const BASE_RPC = secureEndpoint(
+  process.env.NEXT_PUBLIC_BASE_RPC,
+  "https://rpc.magicblock.app/devnet",
+  "NEXT_PUBLIC_BASE_RPC",
+  ["https://"],
+);
+export const TEE_URL = secureEndpoint(
+  process.env.NEXT_PUBLIC_TEE_URL,
+  "https://devnet-tee.magicblock.app",
+  "NEXT_PUBLIC_TEE_URL",
+  ["https://"],
+);
+export const TEE_WS = secureEndpoint(
+  process.env.NEXT_PUBLIC_TEE_WS,
+  "wss://devnet-tee.magicblock.app",
+  "NEXT_PUBLIC_TEE_WS",
+  ["wss://"],
+);
 
 /**
  * The validator is pinned rather than left to float. A table that landed on a
@@ -150,6 +187,9 @@ export const ERROR_NAMES: Record<number, string> = {
   6035: "TableNotEmpty",
   6036: "TableNotAbandoned",
   6037: "InsufficientVault",
+  6038: "ConfigTableMismatch",
+  6039: "CardsNotSecured",
+  6040: "SaltCommitClosed",
 };
 
 /** What to show a player when one of these comes back. */
@@ -168,6 +208,10 @@ export const ERROR_MESSAGES: Record<string, string> = {
   InsufficientVault:
     "The vault cannot cover that sale right now. This should not happen, please report it.",
   InsufficientChips: "Not enough chips for that.",
+  ConfigTableMismatch:
+    "That action carried the settings of a different table and was refused. An honest client never does this, so if you are seeing it, report it.",
+  CardsNotSecured:
+    "This table's cards are not locked down yet. Wait a moment; the hand will not start until they are.",
   // Raised by the session key program, not this one. Its numbers overlap ours,
   // so these are matched by name.
   InvalidToken: "Your session key is no longer valid. Authorise a new one.",
@@ -207,4 +251,12 @@ export const RACE_LOST = new Set([
   "NotEnoughSalts",
   "ShuffleNotReady",
   "OutOfTurn",
+  // The table is delegated but not locked down yet. Every client cranks
+  // start_hand on a cadence, and the program now refuses until secure_deck and
+  // secure_hole have run, so this is the same "not yet, try again" state as
+  // ShuffleNotReady rather than anything a player should read about.
+  "CardsNotSecured",
+  // Someone else revealed first, which closes commitments. The client's own
+  // retry loop can hit this benignly.
+  "SaltCommitClosed",
 ]);

@@ -6,13 +6,20 @@ dist/
 .DS_Store
 
 # Never commit wallet material. keys/ holds throwaway devnet test wallets only.
+# target/deploy/*-keypair.json is the program's upgrade authority and is covered
+# by the target/ rule above. There used to be a re-inclusion rule here; it was
+# inert (git cannot re-include under an excluded directory) but it was one edit
+# away from publishing the deploy key, which is not a line worth keeping.
 keys/
 *.pem
-!target/deploy/*-keypair.json
 
 # Rust build artifacts and local bench state
 program-id.json
 hand-history.json
+
+# Local security reports. These list unfixed weaknesses; publishing them
+# alongside the source would hand an attacker the roadmap.
+.superstack/
 
 # Next.js app
 app/.next/
