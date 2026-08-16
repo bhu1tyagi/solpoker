@@ -23,13 +23,44 @@ import { NO_CARD } from "@/lib/engine/cards";
  * replaced by a cyan square with a plus in it, which is the invitation to sit.
  */
 
-const PLATE_W = 220;
-const BAND_HI = 38;
-const BAND_LO = 26;
-const PLATE_H = BAND_HI + BAND_LO;
-const AVATAR = 56;
-/** How far the avatar tile stands above the plate. */
-const PROUD = 20;
+/**
+ * Two sizes of the same plate. The full one is the desktop seat; the compact
+ * one is for phones, where six full plates would bury the felt. The compact
+ * numbers are load-bearing: a portrait side seat sits at 21% of the table box,
+ * so its half-width must stay under that 21% on the smallest screen served.
+ */
+const DIMS = {
+  full: {
+    plateW: 220,
+    bandHi: 38,
+    bandLo: 26,
+    avatar: 56,
+    proud: 20,
+    gutter: 12,
+    stackFont: 17,
+    nameFont: 11,
+    seatFont: 13,
+    tagFont: 11,
+    glyph: 14,
+    ringPad: 6,
+    ringAvatar: 20,
+  },
+  compact: {
+    plateW: 104,
+    bandHi: 26,
+    bandLo: 17,
+    avatar: 32,
+    proud: 11,
+    gutter: 7,
+    stackFont: 11,
+    nameFont: 9,
+    seatFont: 9,
+    tagFont: 9,
+    glyph: 10,
+    ringPad: 4,
+    ringAvatar: 12,
+  },
+} as const;
 
 interface Props {
   seat: SeatView | null;
@@ -58,6 +89,8 @@ interface Props {
   cardsOn?: "above" | "below";
   /** This seat just won something, so the plate celebrates briefly. */
   winner?: boolean;
+  /** The phone-sized plate. */
+  compact?: boolean;
   onSit?: (index: number) => void;
 }
 
@@ -78,8 +111,10 @@ export function SeatPod({
   avatarOn = "left",
   cardsOn = "above",
   winner = false,
+  compact = false,
   onSit,
 }: Props) {
+  const d = DIMS[compact ? "compact" : "full"];
   const empty = !seat?.occupant;
   const lit = isTurn || winner;
   // Text runs away from the avatar, so both mirrorings read the same way.
@@ -87,23 +122,23 @@ export function SeatPod({
 
   // The avatar tile overlaps the plate's end and stands above its top edge, so
   // the two read as one object. The bands keep clear of it with padding.
-  const clearance = AVATAR + 12;
+  const clearance = d.avatar + d.gutter;
 
   const plate = (
     <div
       style={{
         position: "relative",
-        width: PLATE_W,
-        height: PLATE_H,
+        width: d.plateW,
+        height: d.bandHi + d.bandLo,
       }}
     >
       <div
         style={{
           position: "absolute",
           [avatarOn]: 4,
-          top: -PROUD,
-          width: AVATAR,
-          height: AVATAR,
+          top: -d.proud,
+          width: d.avatar,
+          height: d.avatar,
           background: empty ? "var(--accent)" : "var(--avatar)",
           color: empty ? "var(--on-accent)" : "var(--accent)",
           // An open seat is a bubble inviting you in, with its tail pointing
@@ -123,11 +158,16 @@ export function SeatPod({
         {empty ? (
           <PlusMark />
         ) : isTurn ? (
-          <ClockRing deadline={deadline} totalSecs={timeoutSecs} size={AVATAR - 6} thickness={3}>
-            <Avatar pubkey={seat!.occupant!} size={AVATAR - 20} square />
+          <ClockRing
+            deadline={deadline}
+            totalSecs={timeoutSecs}
+            size={d.avatar - d.ringPad}
+            thickness={compact ? 2.5 : 3}
+          >
+            <Avatar pubkey={seat!.occupant!} size={d.avatar - d.ringAvatar} square />
           </ClockRing>
         ) : (
-          <Avatar pubkey={seat!.occupant!} size={AVATAR} square />
+          <Avatar pubkey={seat!.occupant!} size={d.avatar} square />
         )}
       </div>
 
@@ -139,50 +179,50 @@ export function SeatPod({
             avatar, so the plate stays one unbroken bar behind it. */}
         <div
           style={{
-            height: BAND_HI,
+            height: d.bandHi,
             background: bandColor(empty, lit, "hi"),
             display: "flex",
             alignItems: "center",
             justifyContent: textAlign,
-            gap: 7,
-            paddingLeft: avatarOn === "left" ? clearance : 12,
-            paddingRight: avatarOn === "right" ? clearance : 12,
+            gap: compact ? 5 : 7,
+            paddingLeft: avatarOn === "left" ? clearance : d.gutter,
+            paddingRight: avatarOn === "right" ? clearance : d.gutter,
           }}
         >
-          {avatarOn === "right" && <ChipGlyph size={14} />}
+          {avatarOn === "right" && <ChipGlyph size={d.glyph} />}
           <span
             className="tnum"
             style={{
               fontFamily: "var(--font-display)",
-              fontSize: 17,
+              fontSize: d.stackFont,
               color: "var(--accent)",
               lineHeight: 1.32,
             }}
           >
             {empty ? "-" : <AnimatedNumber value={seat!.stack} />}
           </span>
-          {avatarOn === "left" && <ChipGlyph size={14} />}
+          {avatarOn === "left" && <ChipGlyph size={d.glyph} />}
         </div>
 
         {/* Lower band: who it is, and which seat. */}
         <div
           style={{
-            height: BAND_LO,
+            height: d.bandLo,
             background: bandColor(empty, lit, "lo"),
             display: "flex",
             alignItems: "center",
             flexDirection: avatarOn === "left" ? "row" : "row-reverse",
             justifyContent: "space-between",
             gap: 8,
-            paddingLeft: avatarOn === "left" ? clearance : 12,
-            paddingRight: avatarOn === "right" ? clearance : 12,
+            paddingLeft: avatarOn === "left" ? clearance : d.gutter,
+            paddingRight: avatarOn === "right" ? clearance : d.gutter,
             position: "relative",
           }}
         >
           <span
             style={{
               fontWeight: 700,
-              fontSize: 13,
+              fontSize: d.seatFont,
               color: "var(--text-dim)",
               opacity: 0.88,
             }}
@@ -192,7 +232,7 @@ export function SeatPod({
           <span
             style={{
               fontFamily: "var(--font-display)",
-              fontSize: 11,
+              fontSize: d.nameFont,
               letterSpacing: "0.04em",
               textTransform: "uppercase",
               color: isMe ? "var(--accent)" : "var(--text-dim)",
@@ -219,9 +259,9 @@ export function SeatPod({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: avatarOn === "left" ? "flex-end" : "flex-start",
-                  padding: "0 12px",
+                  padding: compact ? "0 8px" : "0 12px",
                   fontFamily: "var(--font-display)",
-                  fontSize: 11,
+                  fontSize: d.tagFont,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
                   color: statusOf(seat!, dealtIn, handLive)!.fg,
@@ -235,7 +275,9 @@ export function SeatPod({
         </div>
       </div>
 
-      {isButton && <DealerButton on={avatarOn === "left" ? "right" : "left"} />}
+      {isButton && (
+        <DealerButton on={avatarOn === "left" ? "right" : "left"} small={compact} />
+      )}
     </div>
   );
 
@@ -254,7 +296,7 @@ export function SeatPod({
           border: "none",
           background: "none",
           padding: 0,
-          paddingTop: PROUD,
+          paddingTop: d.proud,
           cursor: onSit ? "pointer" : "default",
         }}
       >
@@ -273,7 +315,7 @@ export function SeatPod({
         display: "flex",
         flexDirection: cardsOn === "below" ? "column-reverse" : "column",
         alignItems: "center",
-        paddingTop: PROUD,
+        paddingTop: d.proud,
         position: "relative",
       }}
     >
@@ -287,10 +329,10 @@ export function SeatPod({
           display: "flex",
           gap: 3,
           height: dealtIn ? undefined : 0,
-          marginBottom: cardsOn === "above" ? -14 : 0,
-          marginTop: cardsOn === "below" ? -10 : 0,
-          marginLeft: avatarOn === "left" ? AVATAR + 8 : 0,
-          marginRight: avatarOn === "right" ? AVATAR + 8 : 0,
+          marginBottom: cardsOn === "above" ? (compact ? -10 : -14) : 0,
+          marginTop: cardsOn === "below" ? (compact ? -8 : -10) : 0,
+          marginLeft: avatarOn === "left" ? d.avatar + (compact ? 4 : 8) : 0,
+          marginRight: avatarOn === "right" ? d.avatar + (compact ? 4 : 8) : 0,
           zIndex: 0,
         }}
       >
@@ -310,7 +352,7 @@ export function SeatPod({
                   <PlayingCard
                     card={known ? card : undefined}
                     faceDown={!known}
-                    size={isMe ? "md" : "sm"}
+                    size={isMe && !compact ? "md" : "sm"}
                     highlighted={known && winning?.has(card)}
                     dimmed={dimmed}
                   />
@@ -332,7 +374,9 @@ export function SeatPod({
         }}
       >
         {plate}
-        {seat!.stack > 0 && (
+        {/* The physical pile is a desktop luxury; on a phone the plate's
+            figure carries the same fact in a tenth of the width. */}
+        {!compact && seat!.stack > 0 && (
           <div style={{ paddingBottom: 2, opacity: 0.92 }}>
             <ChipStack
               amount={seat!.stack}
@@ -409,21 +453,22 @@ function PlusMark() {
   );
 }
 
-function DealerButton({ on }: { on: "left" | "right" }) {
+function DealerButton({ on, small = false }: { on: "left" | "right"; small?: boolean }) {
+  const size = small ? 16 : 20;
   return (
     <motion.div
       layoutId="dealer-button"
       transition={spring.gentle}
       style={{
         position: "absolute",
-        [on]: -9,
-        bottom: -9,
-        width: 20,
-        height: 20,
+        [on]: small ? -7 : -9,
+        bottom: small ? -7 : -9,
+        width: size,
+        height: size,
         borderRadius: "50%",
         background: "var(--accent)",
         color: "var(--on-accent)",
-        fontSize: 10,
+        fontSize: small ? 9 : 10,
         fontWeight: 700,
         display: "grid",
         placeItems: "center",

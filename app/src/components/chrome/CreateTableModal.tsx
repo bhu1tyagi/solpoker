@@ -151,7 +151,7 @@ export function CreateTableModal({
       </p>
 
       <Field label="Stakes">
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {STAKES.map((s, i) => (
             <Button
               key={s.label}
@@ -166,7 +166,7 @@ export function CreateTableModal({
       </Field>
 
       <Field label="Time to act">
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {[15, 30, 60].map((t) => (
             <Button
               key={t}
@@ -180,7 +180,7 @@ export function CreateTableModal({
         </div>
       </Field>
 
-      <div style={{ marginTop: 22, display: "flex", gap: 10, alignItems: "center" }}>
+      <div style={{ marginTop: 22, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <Button variant="primary" onClick={create} disabled={!publicKey} loading={busy}>
           Create table
         </Button>

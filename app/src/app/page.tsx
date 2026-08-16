@@ -31,9 +31,6 @@ const WalletMultiButton = dynamic(
   { ssr: false, loading: () => <div style={{ width: 150, height: 48 }} /> },
 );
 
-/** Stakes, buy-in, seats, players, action. One room per row. */
-const COLUMNS = "1.1fr 1.2fr 0.9fr 0.7fr 118px";
-
 export default function Lobby() {
   const { connected, publicKey } = useWallet();
   const { state, buy, sell, busy, affordable } = usePlayer();
@@ -61,18 +58,9 @@ export default function Lobby() {
 
   return (
     <>
-      <main
-        style={{
-          minHeight: "100dvh",
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) 380px",
-          gap: 48,
-          maxWidth: 1720,
-          margin: "0 auto",
-          padding: "48px 40px 64px",
-          alignItems: "start",
-        }}
-      >
+      {/* The class carries the shape: content beside the side column on a
+          desktop, one column on anything narrower. */}
+      <main className="lobby-shell">
         <section>
           {/* The name, then what you carry with the wallet beside it, then the
               things you can do, on their own line underneath. */}
@@ -102,6 +90,7 @@ export default function Lobby() {
                   {/* Your chips, with the way to get more built into the same
                       control, then the way to take them out, then the wallet. */}
                   <div
+                    className="m-pill"
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -120,6 +109,7 @@ export default function Lobby() {
                       {state ? state.chips.toLocaleString() : "..."}
                     </span>
                     <motion.button
+                      className="m-plus"
                       title="Buy chips"
                       aria-label="Buy chips"
                       onClick={() => setExchange("buy")}
@@ -154,7 +144,7 @@ export default function Lobby() {
               <WalletMultiButton />
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               {connected && (
                 <LabelButton
                   title="Create a table"
@@ -189,12 +179,13 @@ export default function Lobby() {
             </div>
           </header>
 
-          {/* Column headings, then a row per room. */}
+          {/* Column headings, then a row per room. On a phone the buy-in folds
+              under the stakes and the seat count goes without saying. */}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: COLUMNS,
-              gap: 24,
+              gridTemplateColumns: "var(--lobby-cols)",
+              gap: "var(--lobby-gap)",
               padding: "0 8px 14px",
               color: "var(--text-dim)",
               opacity: 0.64,
@@ -203,8 +194,8 @@ export default function Lobby() {
             }}
           >
             <span>Stakes</span>
-            <span>Buy-in</span>
-            <span>Seats</span>
+            <span className="m-hide">Buy-in</span>
+            <span className="m-hide">Seats</span>
             <span>Players</span>
             <span style={{ textAlign: "right" }}>Action</span>
           </div>
@@ -301,32 +292,52 @@ function TableRow({ t }: { t: LobbyTable }) {
   return (
     <Link href={`/table/${t.table.tableId}`} style={{ textDecoration: "none" }}>
       <motion.div
+        className="lobby-row"
         whileHover={{ backgroundColor: "rgba(64, 82, 94, 0.16)" }}
         transition={spring.snappy}
         style={{
           display: "grid",
-          gridTemplateColumns: COLUMNS,
-          gap: 24,
+          gridTemplateColumns: "var(--lobby-cols)",
+          gap: "var(--lobby-gap)",
           alignItems: "center",
-          height: 64,
           padding: "0 8px",
           borderRadius: "var(--r-panel)",
         }}
       >
-        <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <span
             className="tnum"
             style={{ fontWeight: 500, fontSize: 18, color: "var(--text-dim)" }}
           >
             {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "-"}
           </span>
-          <span className="tnum" style={{ fontSize: 11, color: "var(--text-faint)" }}>
+          <span
+            className="tnum m-hide"
+            style={{ fontSize: 11, color: "var(--text-faint)" }}
+          >
             {t.table.tableId}
+          </span>
+          {/* The phone's buy-in line, standing in for the hidden column. */}
+          <span
+            className="tnum m-only"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: 12,
+              color: "var(--accent)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <ChipGlyph size={12} />
+            {t.config
+              ? `${t.config.minBuyIn.toLocaleString()} - ${t.config.maxBuyIn.toLocaleString()}`
+              : "-"}
           </span>
         </span>
 
         <span
-          className="tnum"
+          className="tnum m-hide"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -343,6 +354,7 @@ function TableRow({ t }: { t: LobbyTable }) {
         </span>
 
         <span
+          className="m-hide"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -375,9 +387,9 @@ function TableRow({ t }: { t: LobbyTable }) {
         </span>
 
         <span
+          className="row-cta"
           style={{
-            justifySelf: "end",
-            width: 118,
+            justifySelf: "stretch",
             height: 48,
             display: "grid",
             placeItems: "center",
@@ -711,6 +723,7 @@ function LabelButton({
 }) {
   return (
     <motion.button
+      className="m-btn"
       title={title}
       aria-label={title}
       onClick={onClick}
@@ -756,6 +769,7 @@ function IconButton({
 }) {
   return (
     <motion.button
+      className="m-icon"
       title={title}
       aria-label={title}
       onClick={disabled ? undefined : onClick}
@@ -808,7 +822,7 @@ function ExchangeModal({
 
   return (
     <Modal open={mode !== null} onClose={onClose} title={buying ? "Buy chips" : "Cash out"}>
-      <div style={{ display: "flex", gap: 8, margin: "4px 0 14px" }}>
+      <div style={{ display: "flex", gap: 8, margin: "4px 0 14px", flexWrap: "wrap" }}>
         {[1_000, 10_000, 50_000].map((v) => (
           <Button
             key={v}

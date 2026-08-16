@@ -189,6 +189,377 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 0 0 1px var(--accent-deep);
 }
 
+/* ------------------------------------------------------------------ */
+/* Responsive layout.                                                  */
+/*                                                                     */
+/* Components carry their look inline; anything that must change with  */
+/* the screen lives here, because inline styles cannot hear a media    */
+/* query. Two widths matter: 720px, under which phones get their own   */
+/* arrangements, and 1080px, under which the lobby drops its side      */
+/* column. The table page also watches orientation, because a phone    */
+/* held upright needs a tall table, not a shrunken wide one.           */
+/* ------------------------------------------------------------------ */
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* A tap on a control is a press, never a double-tap zoom. Pinch zoom on the
+   page as a whole still works, so nothing is taken away from anyone. */
+button,
+a,
+[role="button"],
+input[type="range"] {
+  touch-action: manipulation;
+}
+
+/* Fingers are wider than pointers. */
+@media (pointer: coarse) {
+  button {
+    min-height: 36px;
+  }
+  /* The wallet modal's little round close button sizes itself. */
+  button.wallet-adapter-modal-button-close {
+    min-height: 0;
+  }
+  input[type="range"] {
+    height: 34px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    width: 22px;
+    height: 22px;
+    margin-top: -9px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* Shown or hidden by width. The !important is the point: these override the
+   inline styles components carry. */
+@media (max-width: 719px) {
+  .m-hide {
+    display: none !important;
+  }
+}
+@media (min-width: 720px) {
+  .m-only {
+    display: none !important;
+  }
+}
+
+/* The raise readout drops out wherever the bar is short of room: the raise
+   button repeats the figure anyway. */
+@media (max-width: 719px), (max-height: 520px) {
+  .bar-readout {
+    display: none !important;
+  }
+}
+
+/* Phone-size chrome: the same controls drawn smaller, so the room keeps its
+   space. The !important is what lets a width rule outvote an inline style;
+   the felt's own controls (verbs, seats) are not touched. */
+@media (max-width: 719px) {
+  .m-btn {
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 0 10px !important;
+    font-size: 11px !important;
+    gap: 6px !important;
+  }
+  .m-icon {
+    width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+  }
+  .m-pill {
+    height: 36px !important;
+  }
+  .m-plus {
+    width: 28px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+  .row-cta {
+    height: 38px !important;
+    font-size: 12px !important;
+  }
+  .wallet-adapter-button {
+    height: 36px !important;
+    font-size: 11px !important;
+    padding: 0 12px !important;
+  }
+  .wallet-adapter-button-start-icon,
+  .wallet-adapter-button-start-icon img,
+  .wallet-adapter-button-start-icon svg {
+    width: 14px !important;
+    height: 14px !important;
+    margin-right: 7px !important;
+  }
+}
+
+/* The lobby: content beside a 380px side column, which folds underneath on
+   anything narrower than a laptop. The room list keeps five columns on a wide
+   screen and three on a phone: stakes (with the buy-in tucked under), players,
+   and the action. */
+:root {
+  --lobby-cols: 1.1fr 1.2fr 0.9fr 0.7fr 118px;
+  --lobby-gap: 24px;
+}
+.lobby-shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 48px;
+  max-width: 1720px;
+  margin: 0 auto;
+  padding: 48px 40px 64px;
+  align-items: start;
+}
+@media (max-width: 1079px) {
+  .lobby-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+    padding: 28px 20px 64px;
+  }
+}
+.lobby-row {
+  height: 64px;
+}
+@media (max-width: 719px) {
+  :root {
+    --lobby-cols: minmax(0, 1.5fr) minmax(0, 0.8fr) 84px;
+    --lobby-gap: 12px;
+  }
+  .lobby-shell {
+    gap: 32px;
+    padding: 16px 14px calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+  .lobby-row {
+    height: 54px;
+  }
+}
+
+/* The table room. The felt sits centred in whatever the HUD leaves free, and
+   the container units let it size against that space in both axes, so it never
+   slides under the controls. The first width is the fallback for a browser
+   without container units. */
+.felt-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 76px 24px 96px;
+  container-type: size;
+}
+.felt-sizer {
+  width: min(1108px, 94vw, 168vh);
+  width: min(1108px, 100cqw, 173.125cqh);
+}
+
+/* The four corners of the room. On a desktop they are corners; on a phone
+   they become rows: table facts across the top, then the balance and the
+   table controls, and the decision pinned across the bottom. */
+.hud-tl,
+.hud-tr,
+.hud-bl,
+.hud-br {
+  position: absolute;
+  z-index: 40;
+}
+.hud-tl {
+  top: 22px;
+  left: 26px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.hud-tr {
+  top: 22px;
+  right: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.hud-bl {
+  bottom: 22px;
+  left: 26px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hud-br {
+  bottom: 22px;
+  right: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: min(560px, 52vw);
+  z-index: 41;
+}
+.hud-fields {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+/* The action bar fills its corner on a desktop and the whole width of a
+   phone, where the three verbs need to be thumb-sized. */
+.action-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 560px;
+}
+
+/* A phone on its side: the same wide room, pulled in tight. The action bar
+   flattens into one row along the bottom edge, or its full column would stand
+   in front of half the table. */
+@media (max-height: 520px) {
+  .felt-stage {
+    padding: 68px 12px 118px;
+  }
+  .hud-tl {
+    top: 10px;
+    left: 14px;
+  }
+  /* Sideways there is no room for a second line of buttons, so the row stays
+     on one and scrolls within its own bounds if the table's state ever offers
+     more than fits. Wrapping here would drop them onto the felt. */
+  .hud-tr {
+    top: 10px;
+    right: 14px;
+    left: 14px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .hud-bl {
+    bottom: 10px;
+    left: 14px;
+  }
+  .hud-br {
+    bottom: 10px;
+    right: 14px;
+    max-width: min(720px, 82vw);
+  }
+  .action-bar {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 10px;
+    max-width: none;
+  }
+  /* The slider soaks up whatever the verbs leave; the verbs keep the width
+     their words need. */
+  .action-bar > div {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .action-bar > div:last-child {
+    flex: 0 1 auto;
+  }
+  .bar-presets {
+    display: none !important;
+  }
+}
+
+/* A phone held upright: the table turns on end. Seats run down both sides,
+   you sit at the bottom above your controls, and every strip keeps clear of
+   the notch and the home bar.
+
+   Here the room stops being four corners over a felt and becomes four stacked
+   rows, because the button row grows and shrinks with the table's state: cash
+   out, delete, start and pause come and go, and any fixed offset that clears
+   one of them is wrong for the next. As grid rows the felt simply takes what
+   is left, so nothing can ever land on top of it. Rows are assigned
+   explicitly, so the felt keeps its place in the markup. */
+@media (max-width: 719px) and (orientation: portrait) {
+  .table-room {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    row-gap: 8px;
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px
+      calc(env(safe-area-inset-bottom, 0px) + 12px);
+  }
+  .table-room > .hud-tl,
+  .table-room > .hud-tr,
+  .table-room > .hud-br,
+  .table-room > .felt-stage {
+    position: static;
+  }
+  .hud-tl {
+    grid-row: 1;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .hud-fields {
+    gap: 14px;
+  }
+  .hud-tr {
+    grid-row: 2;
+    gap: 6px;
+  }
+  /* The felt's own row. The padding keeps the seats that straddle the top and
+     bottom of the table box from touching the rows either side. */
+  .felt-stage {
+    grid-row: 3;
+    padding: 14px 0;
+  }
+  .felt-sizer {
+    width: min(430px, 92vw, 55vh);
+    width: min(430px, 100cqw, 73.68cqh);
+  }
+  .hud-bl {
+    display: none;
+  }
+  .hud-br {
+    grid-row: 4;
+    max-width: none;
+    align-items: stretch;
+  }
+  .action-bar {
+    max-width: none;
+  }
+}
+
+/* Toasts sit at the bottom of a desktop and the top of a phone, where the
+   bottom belongs to the action bar. */
+.toast-viewport {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+  pointer-events: none;
+}
+@media (max-width: 719px) {
+  .toast-viewport {
+    bottom: auto;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    width: calc(100vw - 24px);
+    align-items: center;
+  }
+}
+
+/* The header on the reading pages. */
+.topbar {
+  padding: 16px 24px;
+}
+@media (max-width: 719px) {
+  .topbar {
+    padding: 10px 12px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

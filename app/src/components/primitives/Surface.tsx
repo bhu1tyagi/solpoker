@@ -107,7 +107,10 @@ export function Modal({
             display: "grid",
             placeItems: "center",
             zIndex: z.modal,
-            padding: 20,
+            // Keep clear of notches and home bars; dvh keeps the box inside
+            // the screen a phone actually shows once its bars settle.
+            padding:
+              "max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px))",
           }}
         >
           <motion.div
@@ -119,8 +122,9 @@ export function Modal({
             style={{
               width: "100%",
               maxWidth: width,
-              maxHeight: "85vh",
+              maxHeight: "min(85dvh, 720px)",
               overflowY: "auto",
+              overscrollBehavior: "contain",
               background: "var(--surface)",
               border: "1px solid var(--line)",
               borderRadius: "var(--r-modal)",

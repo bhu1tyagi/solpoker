@@ -43,6 +43,7 @@ import {
 import { friendlyError, isRaceLost } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
 import { spring } from "@/styles/theme";
+import { useTableLayout } from "@/hooks/use-viewport";
 import { isDelegated } from "@/lib/instructions";
 import { applyPending, applyPendingHand, pendingApplies } from "@/lib/optimistic";
 
@@ -344,6 +345,13 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     working,
   });
 
+  // Which room to build: the desktop corners, the portrait phone's stacked
+  // rows, or the landscape phone's tightened corners. The CSS moves the HUD on
+  // the same media queries; this moves the seats and sizes.
+  const tableLayout = useTableLayout();
+  const portrait = tableLayout === "portrait";
+  const compact = tableLayout !== "desktop";
+
   // Long operations narrate themselves over the felt.
   const overlay =
     actions.busy === "start:funding"
@@ -368,23 +376,19 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           controls live in the four corners, the way a real client is laid out,
           so nothing floats in a panel and nothing competes with the felt. */}
       <main
+        className="table-room"
         style={{
           position: "fixed",
           inset: 0,
           overflow: "hidden",
           background: "var(--panel-grad)",
+          // A long press on a phone must not start selecting the table.
+          userSelect: "none",
+          WebkitUserSelect: "none",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "grid",
-            placeItems: "center",
-            padding: "76px 24px 96px",
-          }}
-        >
-          <div style={{ width: "min(1108px, 94vw, 168vh)" }}>
+        <div className="felt-stage">
+          <div className="felt-sizer">
             <TableFelt
               table={tableView}
               hand={viewHand}
@@ -401,6 +405,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
               overlay={overlay}
               showdown={showdown}
               handNames={handNames}
+              portrait={portrait}
+              compact={compact}
               onSit={
                 delegated === false && mySeat < 0 && connected
                   ? (i) => {
@@ -414,54 +420,70 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         </div>
 
         {/* Top left: which table this is and how it is connected. Two tidy
-            lines, label above value, with the controls in a row beside them. */}
-        <div
-          style={{
-            position: "absolute",
-            top: 22,
-            left: 26,
-            display: "flex",
-            alignItems: "center",
-            gap: 18,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+            lines, label above value, with the controls in a row beside them.
+            On a phone this strip runs the full width of the screen. */}
+        <div className="hud-tl">
+          <div className="hud-fields">
             <Field label="Blinds">
               {tableConfig
                 ? `${tableConfig.smallBlind} / ${tableConfig.bigBlind}`
                 : "-"}
             </Field>
             <Field label="Hand">{tableView?.handNumber ?? 0}</Field>
-            <Field label="Table">{String(id).slice(-6)}</Field>
+            {/* The id matters when comparing tables, which is a desk job. */}
+            <span className="m-hide">
+              <Field label="Table">{String(id).slice(-6)}</Field>
+            </span>
             <Field label="Link">
               <LinkPill state={link} delegated={delegated} />
             </Field>
           </div>
 
-          <Link href={`/history/${id}`} style={{ textDecoration: "none" }}>
-            <IconButton title="Hand history">
-              <HistoryIcon />
-            </IconButton>
-          </Link>
-          {connected && link === "offline" && (
-            <Button variant="quiet" size="sm" onClick={() => void connectTee()}>
-              Retry connection
-            </Button>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Link href={`/history/${id}`} style={{ textDecoration: "none" }}>
+              <IconButton title="Hand history">
+                <HistoryIcon />
+              </IconButton>
+            </Link>
+            {/* On a phone the room's own controls join the history button up
+                here, so the row below carries only the table's state and does
+                not strand two icons on a line of their own. */}
+            <span className="m-only" style={{ display: "flex", gap: 8 }}>
+              <MuteButton muted={muted} setMuted={setMuted} />
+              <Link href="/" style={{ textDecoration: "none" }}>
+                <IconButton title="Leave table">
+                  <ExitIcon />
+                </IconButton>
+              </Link>
+            </span>
+            {connected && link === "offline" && (
+              <Button variant="quiet" size="sm" onClick={() => void connectTee()}>
+                Retry connection
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Top right: everything that changes the table's state, ending in the
-            way out. */}
-        <div
-          style={{
-            position: "absolute",
-            top: 22,
-            right: 26,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
+            way out. On a phone this is the second row, and it also carries
+            your balance, whose desktop corner does not exist there. */}
+        <div className="hud-tr">
+          <div
+            className="m-only"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginRight: "auto",
+            }}
+          >
+            <BalancePill chips={player.state?.chips} small />
+            <Link href="/" style={{ textDecoration: "none" }}>
+              <IconButton title="Buy more chips" solid>
+                <PlusIcon />
+              </IconButton>
+            </Link>
+          </div>
           {connected && !session && (
             <Button variant="primary" size="sm" loading={authorising} onClick={authorise}>
               Authorise session key
@@ -516,53 +538,20 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
               Delete table
             </Button>
           )}
-          <IconButton
-            title={muted ? "Unmute" : "Mute"}
-            onClick={() => {
-              const next = !muted;
-              sfx.setMuted(next);
-              setMuted(next);
-              // Unmuting is itself a gesture, so the browser will let the
-              // context start; a small sound confirms it worked.
-              if (!next) sfx.chip();
-            }}
-          >
-            {muted ? <MutedIcon /> : <SoundIcon />}
-          </IconButton>
-          <Link href="/" style={{ textDecoration: "none" }}>
-            <IconButton title="Leave table">
-              <ExitIcon />
-            </IconButton>
-          </Link>
+          <span className="m-hide" style={{ display: "flex", gap: 8 }}>
+            <MuteButton muted={muted} setMuted={setMuted} />
+            <Link href="/" style={{ textDecoration: "none" }}>
+              <IconButton title="Leave table">
+                <ExitIcon />
+              </IconButton>
+            </Link>
+          </span>
         </div>
 
-        {/* Bottom left: what you are carrying. */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 22,
-            left: 26,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              background: "var(--surface)",
-              backdropFilter: "blur(8px)",
-              borderRadius: "var(--r-panel)",
-              padding: "12px 18px",
-            }}
-          >
-            <ChipGlyph size={20} />
-            <span className="tnum" style={{ fontWeight: 700, fontSize: 15, color: "var(--text-dim)" }}>
-              {player.state ? player.state.chips.toLocaleString() : "..."}
-            </span>
-          </div>
+        {/* Bottom left: what you are carrying. On a phone this corner is gone
+            and the balance lives in the top strip instead. */}
+        <div className="hud-bl">
+          <BalancePill chips={player.state?.chips} />
           <Link href="/" style={{ textDecoration: "none" }}>
             <IconButton title="Buy more chips" solid>
               <PlusIcon />
@@ -570,19 +559,9 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           </Link>
         </div>
 
-        {/* Bottom right: the decision in front of you. */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 22,
-            right: 26,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: 10,
-            maxWidth: "min(560px, 52vw)",
-          }}
-        >
+        {/* Bottom right: the decision in front of you. On a phone it spans the
+            whole bottom edge, above the home bar. */}
+        <div className="hud-br">
           <AnimatePresence>
             {myHandName && (
               <motion.div
@@ -779,6 +758,64 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/**
+ * The sound switch. It appears in one corner on a desktop and another on a
+ * phone, so it lives here rather than being written out twice.
+ */
+function MuteButton({
+  muted,
+  setMuted,
+}: {
+  muted: boolean;
+  setMuted: (v: boolean) => void;
+}) {
+  return (
+    <IconButton
+      title={muted ? "Unmute" : "Mute"}
+      onClick={() => {
+        const next = !muted;
+        sfx.setMuted(next);
+        setMuted(next);
+        // Unmuting is itself a gesture, so the browser will let the context
+        // start; a small sound confirms it worked.
+        if (!next) sfx.chip();
+      }}
+    >
+      {muted ? <MutedIcon /> : <SoundIcon />}
+    </IconButton>
+  );
+}
+
+/** Your chip balance, worn as a quiet pill. */
+function BalancePill({ chips, small = false }: { chips?: number; small?: boolean }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: small ? 6 : 10,
+        background: "var(--surface)",
+        backdropFilter: "blur(8px)",
+        borderRadius: "var(--r-panel)",
+        padding: small ? "0 10px" : "12px 18px",
+        height: small ? 36 : undefined,
+      }}
+    >
+      <ChipGlyph size={small ? 14 : 20} />
+      <span
+        className="tnum"
+        style={{
+          fontWeight: 700,
+          fontSize: small ? 12 : 15,
+          color: "var(--text-dim)",
+        }}
+      >
+        {chips !== undefined ? chips.toLocaleString() : "..."}
+      </span>
+    </div>
+  );
+}
+
 /** A square icon button, the shape the corners of the room are built from. */
 function IconButton({
   children,
@@ -793,6 +830,7 @@ function IconButton({
 }) {
   return (
     <motion.span
+      className="m-icon"
       title={title}
       aria-label={title}
       role="button"
@@ -909,7 +947,7 @@ function Notice({
         padding: "12px 16px",
         fontSize: "var(--t-sm)",
         color: tone,
-        textAlign: "right",
+        textAlign: "left",
       }}
     >
       {children}

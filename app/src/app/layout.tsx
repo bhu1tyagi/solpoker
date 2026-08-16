@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Dela_Gothic_One, Poppins } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -24,6 +24,15 @@ export const metadata: Metadata = {
   title: "SolPoker",
   description:
     "Real-time Texas Hold'em on Solana. Buy chips with SOL, play, sell back. Provably fair shuffle, TEE-protected hole cards.",
+};
+
+// cover lets the room paint behind the notch and home bar; the HUD then keeps
+// itself out of those areas with safe-area insets rather than a letterbox.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#131f25",
 };
 
 export default function RootLayout({

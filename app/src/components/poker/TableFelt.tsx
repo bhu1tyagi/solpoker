@@ -6,7 +6,7 @@ import { ChipStack } from "@/components/primitives/Chip";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { SeatPod } from "./SeatPod";
 import { ShuffleLoop } from "./ShuffleLoop";
-import { BET_POSITIONS, POT_POSITION, SEAT_POSITIONS, spring, stagger } from "@/styles/theme";
+import { TABLE_GEOMETRY, spring, stagger } from "@/styles/theme";
 import { MAX_SEATS, STREET_NAMES } from "@/lib/constants";
 import { NO_CARD } from "@/lib/engine/cards";
 import type { HandView, SeatView, TableView } from "@/stores/table-store";
@@ -41,6 +41,10 @@ interface Props {
   };
   /** Named hands at showdown, by seat, shown under each pod. */
   handNames?: Map<number, string>;
+  /** Stand the table on end, for a phone held upright. */
+  portrait?: boolean;
+  /** Phone-sized seats and cards, whichever way the table stands. */
+  compact?: boolean;
 }
 
 export function TableFelt({
@@ -60,10 +64,18 @@ export function TableFelt({
   overlay,
   showdown,
   handNames,
+  portrait = false,
+  compact = false,
 }: Props) {
   // Rotate the table so the local player sits at the bottom. Spectators get the
   // natural order.
   const view = (i: number) => (mySeat >= 0 ? (i - mySeat + MAX_SEATS) % MAX_SEATS : i);
+
+  // Which way the table stands decides where everything around it sits. A
+  // compact table also deals the small board: full-size cards would leave no
+  // clear lane between the board and the seats for bets to sit in.
+  const geo = TABLE_GEOMETRY[portrait ? "portrait" : "wide"];
+  const boardSize = compact ? "sm" : "lg";
 
   const stage = showdown?.stage ?? null;
   const handLive = table?.state === 1;
@@ -133,8 +145,8 @@ export function TableFelt({
       style={{
         position: "relative",
         width: "100%",
-        maxWidth: 1108,
-        aspectRatio: "1108 / 640",
+        maxWidth: geo.maxWidth,
+        aspectRatio: geo.aspect,
         margin: "0 auto",
       }}
     >
@@ -144,7 +156,7 @@ export function TableFelt({
       <div
         style={{
           position: "absolute",
-          inset: "13% 11%",
+          inset: geo.ellipseInset,
           borderRadius: "50% / 50%",
           background:
             "radial-gradient(ellipse at 50% 34%, #46596a 0%, #354653 34%, #26333d 68%, #1b242c 100%)",
@@ -163,17 +175,20 @@ export function TableFelt({
         />
       </div>
 
-      {/* Board and pot, centred. */}
+      {/* Board and pot, centred. Absolute centring shrink-wraps to half the
+          felt, so the column takes its content's width or the status line
+          would fold under a small board. */}
       <div
         style={{
           position: "absolute",
           left: "50%",
-          top: "44%",
+          top: geo.boardTop,
           transform: "translate(-50%, -50%)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 12,
+          gap: compact ? 10 : 12,
+          width: "max-content",
         }}
       >
         {/* Settlement zeroes the live pot, so through the reveal and the
@@ -196,7 +211,7 @@ export function TableFelt({
               <span
                 style={{
                   fontFamily: "var(--font-display)",
-                  fontSize: 15,
+                  fontSize: compact ? 12 : 15,
                   color: "var(--text-dim)",
                   textTransform: "uppercase",
                   letterSpacing: "-0.01em",
@@ -208,7 +223,7 @@ export function TableFelt({
                 className="tnum"
                 style={{
                   fontFamily: "var(--font-display)",
-                  fontSize: 17,
+                  fontSize: compact ? 14 : 17,
                   color: "var(--text)",
                 }}
               >
@@ -223,11 +238,11 @@ export function TableFelt({
             <ShuffleLoop />
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 6 }}>
+          <div style={{ display: "flex", gap: compact ? 4 : 6 }}>
             {board.map((card, i) => (
               <div key={i}>
                 {card === NO_CARD ? (
-                  <CardSlot size="lg" />
+                  <CardSlot size={boardSize} />
                 ) : (
                   <motion.div
                     initial={{ opacity: 0, y: -14, rotateY: 180 }}
@@ -236,7 +251,7 @@ export function TableFelt({
                   >
                     <PlayingCard
                       card={card}
-                      size="lg"
+                      size={boardSize}
                       highlighted={highlight?.has(card)}
                     />
                   </motion.div>
@@ -254,7 +269,7 @@ export function TableFelt({
 
       {/* Seats. */}
       {Array.from({ length: MAX_SEATS }, (_, i) => {
-        const pos = SEAT_POSITIONS[view(i)];
+        const pos = geo.seats[view(i)];
         const isMe = i === mySeat;
         const cards = isMe ? myCards() : revealed(i);
         return (
@@ -291,6 +306,7 @@ export function TableFelt({
               avatarOn={pos.x > 50 ? "left" : "right"}
               cardsOn={pos.y < 50 ? "below" : "above"}
               winner={awardBySeat.has(i)}
+              compact={compact}
               onSit={onSit}
             />
 
@@ -305,12 +321,12 @@ export function TableFelt({
                     position: "absolute",
                     left: "50%",
                     transform: "translateX(-50%)",
-                    bottom: -30,
+                    bottom: compact ? -24 : -30,
                     background: winners?.has(i) ? "var(--accent)" : "var(--surface-2)",
                     color: winners?.has(i) ? "var(--on-accent)" : "var(--text)",
                     borderRadius: "var(--r-panel)",
                     fontFamily: "var(--font-display)",
-                    fontSize: 10,
+                    fontSize: compact ? 9 : 10,
                     letterSpacing: "0.04em",
                     textTransform: "uppercase",
                     padding: "4px 10px",
@@ -335,7 +351,7 @@ export function TableFelt({
             transition={{ duration: 0.25 }}
             style={{
               position: "absolute",
-              inset: "13% 11%",
+              inset: geo.ellipseInset,
               borderRadius: "50% / 50%",
               background: "rgba(7, 12, 15, 0.76)",
               backdropFilter: "blur(3px)",
@@ -354,27 +370,27 @@ export function TableFelt({
         Array.from({ length: MAX_SEATS }, (_, i) => {
           const seat = seats[i];
           if (!seat || seat.committedStreet <= 0) return null;
-          const pos = BET_POSITIONS[view(i)];
+          const pos = geo.bets[view(i)];
           return (
             <motion.div
               key={`bet-${i}`}
               layoutId={`bet-${i}`}
               initial={{
-                left: `${SEAT_POSITIONS[view(i)].x}%`,
-                top: `${SEAT_POSITIONS[view(i)].y}%`,
+                left: `${geo.seats[view(i)].x}%`,
+                top: `${geo.seats[view(i)].y}%`,
                 opacity: 0,
               }}
               animate={{ left: `${pos.x}%`, top: `${pos.y}%`, opacity: 1 }}
               exit={{
-                left: `${POT_POSITION.x}%`,
-                top: `${POT_POSITION.y}%`,
+                left: `${geo.pot.x}%`,
+                top: `${geo.pot.y}%`,
                 opacity: 0,
                 scale: 0.6,
               }}
               transition={spring.snappy}
               style={{ position: "absolute", transform: "translate(-50%, -50%)", zIndex: 20 }}
             >
-              <ChipStack amount={seat.committedStreet} size={15} compact />
+              <ChipStack amount={seat.committedStreet} size={compact ? 12 : 15} compact />
             </motion.div>
           );
         })}
@@ -383,13 +399,13 @@ export function TableFelt({
       <AnimatePresence>
         {stage === "award" &&
           (showdown?.awards ?? []).map((award) => {
-            const pos = SEAT_POSITIONS[view(award.seat)];
+            const pos = geo.seats[view(award.seat)];
             return (
               <motion.div
                 key={`award-${award.seat}`}
                 initial={{
-                  left: `${POT_POSITION.x}%`,
-                  top: `${POT_POSITION.y}%`,
+                  left: `${geo.pot.x}%`,
+                  top: `${geo.pot.y}%`,
                   opacity: 0,
                   scale: 0.8,
                 }}

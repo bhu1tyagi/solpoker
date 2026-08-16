@@ -15,12 +15,13 @@ const WalletMultiButton = dynamic(
 export function TopBar({ chips }: { chips?: number }) {
   return (
     <header
+      className="topbar"
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         gap: 16,
-        padding: "16px 24px",
+        flexWrap: "wrap",
         borderBottom: "none",
         backgroundImage:
           "linear-gradient(180deg, rgba(11, 15, 22, 0.92), rgba(11, 15, 22, 0.55))",

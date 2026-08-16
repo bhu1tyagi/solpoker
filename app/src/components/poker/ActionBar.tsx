@@ -66,21 +66,22 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
     <AnimatePresence>
       {myTurn && (
         <motion.div
+          // The class carries the width: a corner panel on a desktop, the
+          // whole bottom edge on a phone.
+          className="action-bar"
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 12 }}
           transition={spring.gentle}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            width: "100%",
-            maxWidth: 560,
-          }}
         >
           {la.canRaise && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {/* Sideways on a phone there is no row to spare; the slider
+                  covers the same range the presets shortcut. */}
+              <div
+                className="bar-presets"
+                style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}
+              >
                 {presets.map((p) => (
                   <PresetButton
                     key={p.label}
@@ -90,8 +91,10 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
                     {p.label}
                   </PresetButton>
                 ))}
+                {/* On a phone this readout would wrap the row; the raise
+                    button already repeats the figure. */}
                 <span
-                  className="tnum"
+                  className="tnum bar-readout"
                   style={{
                     marginLeft: "auto",
                     fontFamily: "var(--font-display)",

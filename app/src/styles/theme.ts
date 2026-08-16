@@ -74,6 +74,66 @@ export const BET_POSITIONS: { x: number; y: number }[] = [
 
 export const POT_POSITION = { x: 50, y: 56 };
 
+/**
+ * The same table stood on end, for a phone held upright.
+ *
+ * These are placed by hand rather than by the ellipse formula, because on a
+ * narrow screen the constraint is the screen edge, not the rim: side seats sit
+ * exactly as far in as a compact plate needs to stay whole, you sit at the
+ * bottom above your controls, and one seat takes the top. The order still runs
+ * clockwise from the bottom, so the rotation that puts you at the bottom works
+ * unchanged.
+ */
+export const SEAT_POSITIONS_PORTRAIT: { x: number; y: number }[] = [
+  { x: 50, y: 84 },
+  { x: 21, y: 68 },
+  { x: 21, y: 25 },
+  { x: 50, y: 8 },
+  { x: 79, y: 25 },
+  { x: 79, y: 68 },
+];
+
+/**
+ * Bets sit in the clear band between the seats' cards and the board: below it
+ * for the bottom half, above it for the top. Each pair is pulled toward the
+ * middle so a wide stack-plus-label never reaches back over its own seat.
+ */
+export const BET_POSITIONS_PORTRAIT: { x: number; y: number }[] = [
+  { x: 50, y: 64 },
+  { x: 42, y: 56 },
+  { x: 40, y: 30 },
+  { x: 50, y: 26 },
+  { x: 60, y: 30 },
+  { x: 58, y: 56 },
+];
+
+export const POT_POSITION_PORTRAIT = { x: 50, y: 55 };
+
+/**
+ * Everything about the table's shape that depends on which way it stands.
+ * TableFelt picks one of these; nothing else needs to know there are two.
+ */
+export const TABLE_GEOMETRY = {
+  wide: {
+    aspect: "1108 / 640",
+    maxWidth: 1108,
+    ellipseInset: "13% 11%",
+    boardTop: "44%",
+    seats: SEAT_POSITIONS,
+    bets: BET_POSITIONS,
+    pot: POT_POSITION,
+  },
+  portrait: {
+    aspect: "560 / 760",
+    maxWidth: 430,
+    ellipseInset: "9% 6%",
+    boardTop: "44%",
+    seats: SEAT_POSITIONS_PORTRAIT,
+    bets: BET_POSITIONS_PORTRAIT,
+    pot: POT_POSITION_PORTRAIT,
+  },
+} as const;
+
 export const z = {
   felt: 0,
   seat: 10,

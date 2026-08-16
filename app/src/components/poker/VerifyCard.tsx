@@ -63,7 +63,7 @@ export function VerifyCard({ hand }: { hand: StoredHand }) {
           flexWrap: "wrap",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
           <div>
             <div style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>
               hand

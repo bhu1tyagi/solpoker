@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useUiStore } from "@/stores/ui-store";
-import { spring, z } from "@/styles/theme";
+import { spring } from "@/styles/theme";
 
 const TONE_COLOR = {
   info: "var(--info)",
@@ -14,20 +14,10 @@ export function ToastViewport() {
   const toasts = useUiStore((s) => s.toasts);
   const dismiss = useUiStore((s) => s.dismiss);
 
+  // The class places it: bottom centre on a desktop, top centre on a phone,
+  // where the bottom edge belongs to the action bar.
   return (
-    <div
-      style={{
-        position: "fixed",
-        bottom: 20,
-        left: "50%",
-        transform: "translateX(-50%)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        zIndex: z.toast,
-        pointerEvents: "none",
-      }}
-    >
+    <div className="toast-viewport">
       <AnimatePresence initial={false}>
         {toasts.map((t) => (
           <motion.div
@@ -49,7 +39,7 @@ export function ToastViewport() {
               padding: "9px 14px",
               fontSize: "var(--t-sm)",
               color: "var(--text)",
-              maxWidth: 460,
+              maxWidth: "min(460px, calc(100vw - 24px))",
             }}
           >
             {t.message}
