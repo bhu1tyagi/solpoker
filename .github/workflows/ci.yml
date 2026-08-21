@@ -1,0 +1,140 @@
+# Continuous integration.
+#
+# A public repository handling real money should not be able to merge a change
+# that fails to build. Everything here runs offline — no devnet, no keypair, no
+# funded wallet — so it is fast and cannot flake on someone else's RPC.
+#
+# What it deliberately does NOT cover, because it cannot without a chain:
+#   * `npm run test:er` and `npm run test:session`, the devnet integration and
+#     multi-hand session runs. The session run is the only thing that proves a
+#     Magic Action still reaches the base layer, and that has already shipped a
+#     silent regression once.
+#   * `npm run gate`, the two-browser test.
+# Both stay manual, before a deploy. See STATUS.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  program:
+    name: Program and engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89.0
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The rules engine and every unit test in the program, including the
+      # regression tests named after the attacks they pin: the cross-table
+      # config swap, and the one-second turn clock.
+      - name: cargo test
+        run: cargo test --workspace --locked
+
+      # Denies warnings so dead code and obvious mistakes fail rather than
+      # accumulate — a dead security helper is worse than no helper, because it
+      # reads like a control that is in force somewhere.
+      #
+      # Two lints are allowed, and both come entirely out of Anchor's own macro
+      # expansion rather than anything in this repo:
+      #   deprecated       — `#[delegate]` and `#[commit]` generate `AccountInfo`
+      #                      fields, and `#[del]` requires them, so the suggested
+      #                      `UncheckedAccount` is not available here.
+      #   unexpected_cfgs  — `#[program]` emits `cfg(target_os = "solana")`,
+      #                      which cargo does not know about on a host build.
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings -A deprecated -A unexpected_cfgs
+
+  client:
+    name: Client
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Loads every page in a real browser and fails on any console error. This
+      # is the one that catches what a clean build and a clean typecheck miss:
+      # an infinite render loop, a Content Security Policy that blocks the app's
+      # own bundle. Runs against a production build, because that is the policy
+      # that actually ships.
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Page-load check
+        run: |
+          npx next start -p 3111 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:3111/ && break
+            sleep 1
+          done
+          node scripts/ui-check.mjs 3111
+
+  # The account layouts and the error list live in the IDL, and a stale copy
+  # makes the client send the wrong accounts and decode the wrong bytes. This
+  # has bitten this project before, so it is checked rather than remembered.
+  idl:
+    name: Vendored IDL is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89.0
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Solana
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.9/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install Anchor
+        run: cargo install --git https://github.com/coral-xyz/anchor --tag v1.0.2 anchor-cli --locked
+
+      - name: Build
+        run: anchor build
+
+      - name: Compare against the vendored copy
+        run: |
+          if ! diff -u target/idl/solpoker.json app/src/lib/idl/solpoker.json; then
+            echo "::error::The vendored IDL is stale. Re-run: cp target/idl/solpoker.json app/src/lib/idl/solpoker.json && cp target/types/solpoker.ts app/src/lib/idl/solpoker.ts"
+            exit 1
+          fi
