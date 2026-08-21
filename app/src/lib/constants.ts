@@ -161,7 +161,6 @@ export const NO_CARD = 0xff;
  * they exist only because someone paid this rate, and selling pays it back.
  */
 export const LAMPORTS_PER_CHIP = 1_000;
-export const CHIPS_PER_SOL = 1_000_000_000 / LAMPORTS_PER_CHIP;
 
 /** Salt protocol states, on Seat. */
 export const SALT_NONE = 0;

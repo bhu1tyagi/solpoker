@@ -72,13 +72,3 @@ export function ClockRing({
     </div>
   );
 }
-
-/** Seconds left, for a compact readout next to the ring. */
-export function useCountdown(deadline: number) {
-  const [now, setNow] = useState(() => Date.now() / 1000);
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now() / 1000), 250);
-    return () => clearInterval(id);
-  }, []);
-  return Math.max(0, Math.ceil(deadline - now));
-}

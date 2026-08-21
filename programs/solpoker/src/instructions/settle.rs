@@ -6,7 +6,7 @@
 //! undelegation path can run. A commit writes account contents back to public
 //! Solana state permanently, so a deck committed mid-hand would publish every
 //! card forever. Zeroizing at settlement is what makes the undelegate path in
-//! [`crate::instructions::delegation`] safe. See SPEC.md §4.
+//! [`crate::instructions::delegation`] safe. See docs/SPEC.md §4.
 //!
 //! Hole-card accounts arrive as `remaining_accounts` rather than named accounts.
 //! Adding six more `Account<HoleCards>` fields to a context that already holds six

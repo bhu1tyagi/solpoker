@@ -30,8 +30,8 @@ Measured on devnet:
 | Undelegating mid-hand to expose cards | refused by the program |
 | Two browsers, two wallets, a real hand through the UI | passes |
 
-See [SPEC.md](SPEC.md) for the design and why it is shaped this way, [TRUST_MODEL.md](TRUST_MODEL.md) for what is
-and is not guaranteed, and [DECISIONS.md](DECISIONS.md) for the decision log.
+See [SPEC.md](docs/SPEC.md) for the design and why it is shaped this way, [TRUST_MODEL.md](docs/TRUST_MODEL.md) for what is
+and is not guaranteed, and [DECISIONS.md](docs/DECISIONS.md) for the decision log.
 
 ## Why this design
 
@@ -70,7 +70,7 @@ public too.
 
 One nuance worth knowing: `verifyTeeRpcIntegrity` proves you are talking to genuine TDX
 hardware over a fresh challenge, but it does not check what code is running inside the
-enclave. [TRUST_MODEL.md](TRUST_MODEL.md) covers this and the rest in full.
+enclave. [TRUST_MODEL.md](docs/TRUST_MODEL.md) covers this and the rest in full.
 
 ## Verifying a hand yourself
 

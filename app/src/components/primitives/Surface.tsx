@@ -38,45 +38,6 @@ export function Panel({
   );
 }
 
-/** A labelled value. Numbers get tabular figures so they do not shift. */
-export function Stat({
-  label,
-  value,
-  tone,
-  size = "md",
-}: {
-  label: string;
-  value: ReactNode;
-  tone?: string;
-  size?: "sm" | "md" | "lg";
-}) {
-  const sizes = { sm: "var(--t-base)", md: "var(--t-md)", lg: "var(--t-lg)" };
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span
-        style={{
-          fontSize: "var(--t-xs)",
-          color: "var(--text-faint)",
-          textTransform: "uppercase",
-          letterSpacing: "0.07em",
-        }}
-      >
-        {label}
-      </span>
-      <span
-        className="tnum"
-        style={{
-          fontSize: sizes[size],
-          color: tone ?? "var(--text)",
-          fontFamily: "var(--font-display)",
-        }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 export function Modal({
   open,
   onClose,

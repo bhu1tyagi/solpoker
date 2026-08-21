@@ -1,7 +1,7 @@
 # SolPoker: design
 
-Why the system is shaped the way it is. `STATUS.md` covers what is built and
-what is verified; `TRUST_MODEL.md` covers what is and is not guaranteed. This
+Why the system is shaped the way it is. `docs/STATUS.md` covers what is built and
+what is verified; `docs/TRUST_MODEL.md` covers what is and is not guaranteed. This
 covers the decisions underneath both, and the invariants the code exists to
 hold.
 
@@ -28,7 +28,7 @@ six chances per hand for somebody's laptop to close.
 Making the enclave the dealer turns a disconnect into an ordinary auto-fold.
 Nothing needs the absent player's key, because they never held one. That is the
 trade: a hardware and operator assumption in exchange for a game that finishes.
-`TRUST_MODEL.md` states the assumption plainly rather than burying it.
+`docs/TRUST_MODEL.md` states the assumption plainly rather than burying it.
 
 ### The chip economy
 

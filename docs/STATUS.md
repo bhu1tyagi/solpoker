@@ -293,7 +293,7 @@ now close at the first reveal. First-time commits stay open, so a player who
 sits down late is not shut out.
 
 **The documented fairness guarantee was stronger than the code.** README and
-`TRUST_MODEL.md` both said the deck could only be biased by the oracle *and
+`docs/TRUST_MODEL.md` both said the deck could only be biased by the oracle *and
 every seated player*. `request_shuffle` requires two revealed salts. The docs
 now say two, and say what has to change before the threshold moves.
 
@@ -671,7 +671,7 @@ What this costs is real and worth stating: **a shown hand can no longer be
 proven to be the hand the deck dealt.** The verifier still checks the board
 against the seed, and checks that a shown card is a real card, is not on the
 board, and was not also shown by someone else — but there is no derivation left
-to pin it to. The guarantee is now exactly what `TRUST_MODEL.md` always claimed
+to pin it to. The guarantee is now exactly what `docs/TRUST_MODEL.md` always claimed
 it was: provably fair shuffle of the board, TEE-protected hole cards. Before, it
 was quietly stronger on fairness and quietly weaker on privacy than the document
 said.
@@ -1066,7 +1066,7 @@ and decode the wrong bytes.
 Provably fair shuffle, TEE-protected hole cards. Not "provably fair poker", and
 not "trustless". The shuffle is checkable by anyone with no trust required. The
 hole cards rest on Intel's hardware isolation and on MagicBlock operating the
-enclave honestly. `TRUST_MODEL.md` covers what an enclave compromise would
+enclave honestly. `docs/TRUST_MODEL.md` covers what an enclave compromise would
 expose and why mental poker was not used instead.
 
 Two qualifications, both worth stating before someone else does.
@@ -1081,7 +1081,7 @@ And **the seed that proves the shuffle was fair also reveals every folded hand.*
 "Provably fair" and "your mucked cards stay yours" are in direct tension here,
 and this design currently resolves it entirely in favour of the first. A player
 should know that before they sit down, which is why it is now the first thing in
-`TRUST_MODEL.md` rather than something a careful reader could derive.
+`docs/TRUST_MODEL.md` rather than something a careful reader could derive.
 
 The base-layer record is no longer a qualification: as of 20 August
 `record_hand_result` will only write what is already true on chain.

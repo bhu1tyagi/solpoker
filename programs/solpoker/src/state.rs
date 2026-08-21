@@ -1,8 +1,7 @@
 //! On-chain account layouts.
 //!
-//! The whole layout is defined here up front, including accounts that only come
-//! alive in later phases, because account layout is the thing that is painful to
-//! change once anything is deployed.
+//! Defined up front and in one place, because account layout is the thing that
+//! is painful to change once anything is deployed.
 //!
 //! Which layer each account lives on matters:
 //!
@@ -13,7 +12,7 @@
 //! | [`Table`]     | delegated to ER              | Seat map and button move every hand. |
 //! | [`Seat`]      | delegated to ER              | Stack and per-street state change on every action. |
 //! | [`Hand`]      | delegated to ER              | Street, board, and betting state change constantly. |
-//! | [`Deck`]      | delegated to ER, private in Phase 4 | Card order must never be publicly readable. |
+//! | [`Deck`]      | delegated to ER, TEE-private | Card order must never be publicly readable. |
 //!
 //! Card bytes use the `poker-engine` encoding directly (`rank = card / 4`,
 //! `suit = card % 4`, `0xFF` = none), so no conversion layer is needed.
@@ -36,9 +35,6 @@ pub const VRF_HOLE_BIT: u8 = 1 << 1;
 // The faucet is retired: chips are bought with SOL and sold back for SOL, and
 // nothing may mint an unbacked one. The Player field `last_faucet_ts` remains
 // in the layout so existing accounts keep their shape.
-
-/// How long a player has to act before anyone may time them out.
-pub const ACTION_TIMEOUT_SECS: i64 = 30;
 
 /// The narrowest and widest turn clock a table may be created with.
 ///
@@ -503,7 +499,7 @@ impl Deck {
 
     /// Overwrite every secret. Called at hand end so neither card data nor the
     /// seed that generates it can ever ride a commit back to the public base
-    /// layer. See SPEC.md §4. Undelegation refuses a deck in any other state.
+    /// layer. See docs/SPEC.md §4. Undelegation refuses a deck in any other state.
     pub fn zeroize(&mut self) {
         self.cards = [NO_CARD; 52];
         self.next_index = 0;
@@ -518,15 +514,6 @@ impl Deck {
         self.fulfilled_mask = 0;
     }
 
-    /// Is this deck safe to publish? True only when zeroize has run (or the
-    /// deck has never held a shuffle at all).
-    pub fn holds_no_secrets(&self) -> bool {
-        self.cards.iter().all(|c| *c == NO_CARD)
-            && self.board.iter().all(|c| *c == NO_CARD)
-            && self.vrf_randomness.iter().all(|b| *b == 0)
-            && self.shuffle_seed.iter().all(|b| *b == 0)
-            && self.hole_randomness.iter().all(|b| *b == 0)
-    }
 
     /// Both randomness draws have landed and the deck can be dealt.
     pub fn fully_fulfilled(&self) -> bool {

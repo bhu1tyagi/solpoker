@@ -13,7 +13,7 @@
 //! commits and then walks away would freeze the table for everyone, which
 //! trades a conditional fairness weakness for an unconditional denial of
 //! service. The threshold should go up at the same time a reveal timeout goes
-//! in, not before. See SPEC.md.
+//! in, not before. See docs/SPEC.md.
 //!
 //! The order matters and is the whole security argument:
 //!

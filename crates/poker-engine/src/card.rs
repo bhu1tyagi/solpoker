@@ -159,7 +159,7 @@ impl Deck {
     ///
     /// Called at hand end before any undelegation path can touch the account, so
     /// a committed `Deck` can never carry card data back to the public base
-    /// layer. See SPEC.md §4.
+    /// layer. See docs/SPEC.md §4.
     pub fn zeroize(&mut self) {
         self.cards = [NO_CARD; DECK_SIZE];
         self.next_index = 0;

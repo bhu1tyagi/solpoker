@@ -33,7 +33,7 @@ privacy back off after total lockdown.
 
 **`verifyTeeRpcIntegrity` proves hardware, not code.** It verifies a fresh genuine TDX
 quote but does not compare measurements against a workload allowlist. So it cannot prove
-which validator build is running. `TRUST_MODEL.md` must not claim otherwise.
+which validator build is running. `docs/TRUST_MODEL.md` must not claim otherwise.
 
 **Validator pinning uses `DelegateConfig`,** not `remaining_accounts` as the spec says.
 The intent (pin it, never let it float) is preserved.

@@ -39,28 +39,3 @@ export function makeErConnection(token: string): Connection {
   });
 }
 
-/** Attestation state, fetched from the server route that can load the verifier. */
-export interface AttestationState {
-  ok: boolean;
-  checkedAt: number | null;
-  detail: string;
-  /** See the attest route: a failed check and an absent one are different. */
-  reason?: "failed" | "unavailable";
-}
-
-export async function fetchAttestation(): Promise<AttestationState> {
-  try {
-    const res = await fetch("/api/attest");
-    if (!res.ok) {
-      return {
-        ok: false,
-        checkedAt: null,
-        reason: "unavailable",
-        detail: `The attestation check could not be reached (${res.status}).`,
-      };
-    }
-    return (await res.json()) as AttestationState;
-  } catch (e) {
-    return { ok: false, checkedAt: null, reason: "unavailable", detail: String(e) };
-  }
-}

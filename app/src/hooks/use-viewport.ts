@@ -9,7 +9,7 @@ import { useSyncExternalStore } from "react";
  * the CSS moves the HUD and the hook moves the seats; if they ever disagreed,
  * a phone would get a portrait table inside a desktop room.
  */
-export function useMediaQuery(query: string): boolean {
+function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     (onChange) => {
       const m = window.matchMedia(query);

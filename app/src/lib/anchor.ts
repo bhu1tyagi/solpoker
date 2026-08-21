@@ -49,8 +49,3 @@ export function makeProgram(
   });
   return new Program(idl as Solpoker, provider);
 }
-
-/** The IDL's account coder, for decoding raw account bytes off a subscription. */
-export function makeCoder(program: SolpokerProgram) {
-  return program.coder.accounts;
-}
