@@ -4,7 +4,8 @@ Real-time on-chain Texas Hold'em on Solana. Built on MagicBlock Ephemeral Rollup
 sub-second play, with Private Ephemeral Rollups (Intel TDX) for hole-card secrecy.
 
 Chips are bought with SOL and sold back for SOL at a fixed rate, backed one to one by a
-program vault. Devnet only, so the SOL involved is test currency; see TRUST_MODEL.md for
+program vault. The house takes 2.5% of a pot that sees a flop, capped at three big
+blinds; a hand won before the flop is never raked. Devnet only, so the SOL involved is test currency; see TRUST_MODEL.md for
 what would have to change before that could ever be otherwise.
 
 ## Status
@@ -52,16 +53,20 @@ ordinary auto-fold. That is what makes this buildable.
 
 **This is not trustless.** It trusts Intel TDX and MagicBlock's TEE validator.
 
-Two things follow from that and are enforced rather than assumed. The shuffle
-seed and the raw VRF output live on the deck, the one account nobody can read,
-until settlement publishes them for the verifier: the deal is a deterministic
-function of that seed, so a readable seed mid-hand would be every player's
-cards. And undelegation, which permanently publishes account contents and which
-anyone may call, refuses to run on a deck or a hole account that still holds
-cards.
+Three things follow from that and are enforced rather than assumed. The board's
+seed and raw VRF output live on the deck, the one account nobody can read, until
+settlement publishes them for the verifier: the board is a deterministic function
+of that seed, so a readable seed mid-hand would be the whole board in advance.
+The hole cards come from a **second, independent VRF draw that is never
+published at all**, which is what keeps a folded hand folded. And undelegation,
+which permanently publishes account contents and which anyone may call, refuses
+to run on a deck or a hole account that still holds cards or either seed.
 
 The accurate claim is "provably fair shuffle, TEE-protected hole cards". Not "provably
-fair hole cards", and not "trustless".
+fair hole cards", and not "trustless". Read it precisely: the *board* is provable
+by anyone, and the hole cards rest on the enclave. One draw could not do both —
+proving a seed was fair means publishing it, and everything derived from it goes
+public too.
 
 One nuance worth knowing: `verifyTeeRpcIntegrity` proves you are talking to genuine TDX
 hardware over a fresh challenge, but it does not check what code is running inside the
@@ -69,8 +74,9 @@ enclave. [TRUST_MODEL.md](TRUST_MODEL.md) covers this and the rest in full.
 
 ## Verifying a hand yourself
 
-Every hand publishes the VRF output, each player's salt, their prior commitment, and the
-final seed. Recompute the deck with a script that shares no code with the program:
+Every hand publishes the board's VRF output, each player's salt, their prior commitment,
+and the final board seed. Recompute the board with a script that shares no code with the
+program:
 
 ```bash
 node tools/verify-shuffle.mjs hand-history.json

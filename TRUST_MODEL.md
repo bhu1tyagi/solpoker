@@ -63,6 +63,62 @@ with no Solana dependencies, covered by property tests asserting chips are
 conserved across any legal action sequence and that pots always sum to
 contributions.
 
+## Your mucked cards stay yours
+
+They did not always. Until 20 August the deal was a single deterministic
+function of one shuffle seed, and settlement published that seed so anyone could
+check the shuffle. Those two facts together meant anyone could recompute every
+card a finished hand dealt, **including the hole cards of players who folded and
+never showed** — a permanent public record of what you fold and what you three-bet.
+
+That is fixed, and the fix is worth understanding because it changes what the
+verifier can tell you.
+
+**Two independent randomness draws, not one.** Every hand asks the VRF oracle
+for two values:
+
+| Draw | Decides | Published |
+| --- | --- | --- |
+| board | the five community cards | yes, at settlement |
+| hole | which cards each player is dealt | **never** |
+
+The board is the top five cards of a deck shuffled from `VRF_board XOR salts`.
+That seed is published when the hand ends, so anyone can recompute the community
+cards and confirm they were not rigged. The hole cards are dealt from the other
+forty-seven, ordered by a seed derived from `VRF_hole`, which is written to the
+private deck and wiped at hand end. Undelegation refuses to let a deck leave the
+rollup while it still holds one.
+
+One draw genuinely cannot do both jobs. Proving the board was fair means
+publishing the value it came from, and anything else derived from that same
+value is published along with it — XOR is reversible, and hashing the two apart
+does not help, because a verifier who cannot see the input cannot check the
+output either. Two draws is the only arrangement where one half is provable and
+the other stays secret.
+
+**What you can and cannot check now.** You can verify the board came from the
+published seed and the players' salts, exactly as before. You cannot verify a
+shown hand was the hand the deck dealt — there is no derivation to check it
+against. The verifier still confirms a shown card is a real card, is not on the
+board, and was not also shown by someone else, but a determined operator inside
+a compromised enclave could substitute one and nothing on chain would contradict
+it.
+
+That is the honest shape of the trade: **the shuffle of the board is provably
+fair; the hole cards rest on the enclave.** Which is what this document has
+always said the guarantee was — it is now what the code actually does, rather
+than being quietly stronger on fairness and quietly weaker on privacy.
+
+## The rake
+
+The house takes 2.5% of the pot, capped at three big blinds, and only on hands
+that see a flop. A hand that ends before the flop is never raked. Pots at or
+below one big blind are never raked. The chips come out of the pot at showdown,
+in proportion to what each winner is owed, and go to a house balance that cashes
+out through the same `sell_chips` you use, backed by the same vault.
+
+No chip is created to pay it. It is the pot, redistributed.
+
 ## What you are trusting
 
 ### Intel TDX
