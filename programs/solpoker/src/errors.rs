@@ -87,4 +87,12 @@ pub enum PokerError {
     CardsNotSecured,
     #[msg("Salts are already being revealed, so commitments are closed")]
     SaltCommitClosed,
+    #[msg("A table's turn clock must be between 10 and 300 seconds")]
+    TimeoutOutOfRange,
+    #[msg("The outstanding shuffle request is not stale enough to clear yet")]
+    ShuffleNotStale,
+    #[msg("That account belongs to a different table")]
+    TableMismatch,
+    #[msg("This rollup is not the pinned TEE validator")]
+    ValidatorNotPinned,
 }

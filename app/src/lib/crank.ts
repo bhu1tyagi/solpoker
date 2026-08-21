@@ -34,6 +34,7 @@ import {
   dealHoleCardsIx,
   forceTimeoutIx,
   requestShuffleIx,
+  resetShuffleIx,
   revealSaltIx,
   secureHoleIx,
   settleHandIx,
@@ -288,38 +289,79 @@ export class Crank {
     // permission still naming the previous occupant would let them read the new
     // player's cards.
     //
-    // Best effort, and deliberately so. A hole-card permission can only be
-    // updated by the member it already names, so a seat that was secured while
-    // empty names nobody and this will fail forever with InvalidAccountData.
-    // That is why it does not `return`: an earlier version blocked every later
-    // step on this succeeding, which stopped the table dead on a seat that had
-    // simply changed hands. The deal itself no longer depends on it.
+    // Best effort, but it now matters: `start_hand` deals only to seats whose
+    // permission names their current occupant, and sits the rest out. A seat
+    // that stays unsecured is a player who does not get dealt in, so this is
+    // the repair path, not a nicety.
+    //
+    // It is also reachable again. A permission can only be updated by the
+    // member it already names, and the program now refuses to create one for an
+    // empty seat, so every permission that exists names somebody and can be
+    // re-pointed by them. Every occupied seat is tried each hand rather than
+    // just the first, because one seat failing must not hide the others.
     if (table.state === 0) {
-      const unsecured = seats.findIndex((s) => s?.occupant && !s.cardsSecured);
-      if (unsecured >= 0 && !this.securedTried.has(`${unsecured}:${nHand}`)) {
-        this.securedTried.add(`${unsecured}:${nHand}`);
+      for (let i = 0; i < MAX_SEATS; i++) {
+        const s = seats[i];
+        if (!s?.occupant || s.cardsSecured) continue;
+        if (this.securedTried.has(`${i}:${nHand}`)) continue;
+        this.securedTried.add(`${i}:${nHand}`);
         try {
           const ix = await secureHoleIx(
             this.ctx.program,
             this.ctx.table,
-            unsecured,
+            i,
             this.ctx.session.publicKey,
           );
-          await this.send(ix, `secure seat ${unsecured}`);
+          await this.send(ix, `secure seat ${i}`);
         } catch {
-          // Locked out, or someone else got there first. Either way the hand
-          // can still be dealt, so carry on rather than stalling the table.
+          // Someone else got there first, or this client cannot update that
+          // seat's permission. Either way the hand can still be dealt to
+          // everyone else, so carry on rather than stalling the table.
         }
       }
+    }
+
+    // Clear a shuffle request the oracle never answered, or one whose
+    // randomness can no longer be used.
+    //
+    // This is the way out of the worst stall in the game. A fulfilled deck that
+    // `start_hand` keeps refusing — the ordinary end of a heads-up session,
+    // where one player busts and there is no longer a second funded seat —
+    // cannot be published, so the table cannot be paused, so nobody can cash
+    // out. Chips sat on the rollup with no route back. The instruction is
+    // permissionless and time-gated, so every client tries and the early ones
+    // bounce off harmlessly.
+    if (
+      table.state === 0 &&
+      hand.shuffleState !== SHUFFLE_IDLE &&
+      hand.deadline > 0 &&
+      Date.now() / 1000 > hand.deadline
+    ) {
+      await this.armed(`reset-shuffle:${nHand}`, shared, async () => {
+        const ix = await resetShuffleIx(
+          this.ctx.program,
+          this.ctx.table,
+          this.ctx.session.publicKey,
+        );
+        await this.send(ix, "clear stale shuffle");
+      });
+      return;
     }
 
     // Ask for randomness once enough salts are in and the protocol has gone
     // quiet. Waiting for every committed seat to reveal is polite, but a seat
     // that committed and vanished must not stall the table forever, so after
     // long enough the shuffle goes on without it.
+    // Never draw a shuffle for a hand that cannot start. `start_hand` needs two
+    // seats with chips, and randomness drawn for a hand that never begins is
+    // exactly what strands a table: the deck holds a secret it cannot publish,
+    // so it cannot leave the rollup. Cheaper not to ask than to clean up after.
+    const funded = seats.filter((s) => s?.occupant && s.stack > 0).length;
+
     const saltQuietFor = Date.now() - this.lastSaltProgress;
     if (
       table.state === 0 &&
+      funded >= 2 &&
       hand.shuffleState === SHUFFLE_IDLE &&
       countBits(hand.saltMask) >= 2 &&
       saltQuietFor > SALT_QUIET_MS &&

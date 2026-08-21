@@ -46,14 +46,19 @@ export default function RootLayout({
         {/*
           Page views, from the /next entry point rather than /react: it reads
           route changes out of next/navigation, so a client-side move between
-          the lobby and a table counts as a view. It does nothing off Vercel,
-          so local development stays quiet.
+          the lobby and a table counts as a view.
+
+          Rendered only when Vercel is actually serving. A production build run
+          anywhere else — `next start` locally, which is what the page-load
+          check drives — still injected the script tag, got a 404 for it, and
+          logged a console error, which is exactly what that check fails on.
+          The comment here used to claim it stayed quiet off Vercel; it did not.
 
           It sees URLs, not players. A table id is in the path, and a wallet
           address is never in one. Nothing here touches the cards, the shuffle,
           or anything the trust page makes a claim about.
         */}
-        <Analytics />
+        {process.env.VERCEL_ENV ? <Analytics /> : null}
       </body>
     </html>
   );

@@ -1,8 +1,11 @@
 //! SolPoker, real-time on-chain Texas Hold'em.
 //!
-//! Play money only. Chips enter through a rate-limited faucet and there is no
-//! instruction in this program that converts them to SOL, a token, or anything
-//! else of value.
+//! **Not play money.** Chips are bought with SOL and sold back for SOL at a
+//! fixed rate, backed one to one by lamports in the program vault, so every
+//! instruction that touches one is handling somebody's money. The faucet this
+//! comment used to describe was removed; nothing here can mint an unbacked
+//! chip. The house takes a percentage of raked pots, which redistributes chips
+//! that already existed rather than creating any.
 //!
 //! Execution is split across two layers:
 //!
@@ -42,6 +45,12 @@ pub mod solpoker {
 
     pub fn buy_chips(ctx: Context<BuyChips>, chips: u64) -> Result<()> {
         instructions::player::buy_chips(ctx, chips)
+    }
+
+    /// Move a table's accrued rake into the treasury balance. Permissionless;
+    /// the destination is fixed.
+    pub fn sweep_rake(ctx: Context<SweepRake>) -> Result<()> {
+        instructions::player::sweep_rake(ctx)
     }
 
     pub fn sell_chips(ctx: Context<SellChips>, chips: u64) -> Result<()> {
@@ -143,6 +152,21 @@ pub mod solpoker {
         instructions::shuffle::shuffle_callback(ctx, randomness)
     }
 
+    /// The second oracle callback: randomness for the hole cards, which is
+    /// stored on the private deck and never published.
+    pub fn hole_callback(
+        ctx: Context<HoleCallback>,
+        randomness: [u8; 32],
+    ) -> Result<()> {
+        instructions::shuffle::hole_callback(ctx, randomness)
+    }
+
+    /// Permissionless escape hatch for a shuffle request the oracle never
+    /// answered. Time-gated, like `force_timeout`.
+    pub fn reset_shuffle(ctx: Context<ResetShuffle>) -> Result<()> {
+        instructions::shuffle::reset_shuffle(ctx)
+    }
+
     pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
         instructions::hand::start_hand(ctx)
     }
@@ -169,8 +193,21 @@ pub mod solpoker {
         instructions::privacy::secure_hole(ctx, seat_index)
     }
 
+    /// Give up your own hole-card read right so the next occupant of the seat
+    /// can be named. Runs on the rollup, between hands.
+    pub fn release_hole(ctx: Context<ReleaseHole>, seat_index: u8) -> Result<()> {
+        instructions::privacy::release_hole(ctx, seat_index)
+    }
+
     pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
         instructions::settle::settle_hand(ctx)
+    }
+
+    /// Break-glass for a hand that can never settle: refunds every
+    /// contribution and frees the table. Permissionless, and only an hour past
+    /// the deadline.
+    pub fn abandon_hand(ctx: Context<AbandonHand>) -> Result<()> {
+        instructions::settle::abandon_hand(ctx)
     }
 
     /// Permissionless turn clock. Anyone may call it once the deadline passes.

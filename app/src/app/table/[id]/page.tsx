@@ -328,7 +328,9 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   // A seat with no chips left cannot be dealt in, so it does not count toward
   // the two players a hand needs.
   const fundedCount = seats.filter((s) => s?.occupant && s.stack > 0).length;
-  const status = useStatusLine(delegated, tableView, hand, seats, fundedCount);
+  const status = useStalledStatus(
+    useStatusLine(delegated, tableView, hand, seats, fundedCount, mySeat),
+  );
 
   // The table is doing invisible work: salts, the enclave drawing randomness,
   // the deal being prepared. Show it shuffling rather than showing nothing.
@@ -499,7 +501,44 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
               Start playing
             </Button>
           )}
-          {session && mySeat >= 0 && delegated && tableView?.state === 0 && (
+          {/*
+            One button, whatever the table is doing.
+
+            Cashing out is a base-layer move, so the table does have to come off
+            the rollup for a moment — but that is our problem, not the player's.
+            They used to have to know it: press "Pause table", which stops
+            everyone and reads like an admin action, and only then cash out.
+            Now they press this, stop being dealt in immediately, and the rest
+            happens on its own once the current hand ends.
+          */}
+          {mySeat >= 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={actions.busy?.startsWith("cashout") || actions.busy === "leave"}
+              onClick={async () => {
+                await actions.cashOut(mySeat);
+                await player.refresh();
+                await refreshDelegation();
+              }}
+            >
+              {actions.busy === "cashout:pausing"
+                ? "Closing the table…"
+                : actions.busy === "cashout:leaving"
+                  ? "Cashing out…"
+                  : actions.busy === "cashout:resuming"
+                    ? "Resuming for the others…"
+                    : actions.busy === "cashout"
+                      ? "Finishing this hand…"
+                      : "Cash out"}
+            </Button>
+          )}
+          {/*
+            Pause stays for the creator alone, because deleting a table needs it
+            off the rollup first. It is maintenance, not something a player at
+            the table should ever have to reach for.
+          */}
+          {isCreator && session && delegated && tableView?.state === 0 && (
             <Button
               variant="ghost"
               size="sm"
@@ -510,19 +549,6 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
               }}
             >
               Pause table
-            </Button>
-          )}
-          {delegated === false && mySeat >= 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              loading={actions.busy === "leave"}
-              onClick={async () => {
-                await actions.leave(mySeat);
-                await player.refresh();
-              }}
-            >
-              Cash out
             </Button>
           )}
           {isCreator && delegated === false && (
@@ -952,6 +978,58 @@ function Notice({
   );
 }
 
+/**
+ * How long a table may sit on the same waiting line before it is stuck.
+ *
+ * Setup normally takes a few seconds. Half a minute of no progress at all is
+ * not a slow shuffle, it is something that is not going to finish.
+ */
+const STALLED_AFTER_MS = 35_000;
+
+/**
+ * Say when a wait has stopped being a wait.
+ *
+ * Every between-hands state here is driven by some other client doing its part,
+ * and the errors that come back while waiting are all in `RACE_LOST` — they are
+ * the normal case, so they are swallowed. That is right, and it means a table
+ * that genuinely cannot continue shows exactly the same reassuring line as one
+ * that is a second from dealing, forever.
+ *
+ * This is not hypothetical. A commit-phase change once let whichever browser
+ * revealed its salt first lock the other one out; two players sat looking at
+ * "waiting for players to shuffle in" with no way to tell it would never
+ * change. The underlying bug is fixed, and the class of bug is not: anything
+ * that stops one player's client contributing lands here. So after half a
+ * minute the line stops reassuring and starts describing.
+ */
+function useStalledStatus(status: string | undefined): string | undefined {
+  const [stalled, setStalled] = useState(false);
+
+  useEffect(() => {
+    setStalled(false);
+    if (!status) return;
+    const id = setTimeout(() => setStalled(true), STALLED_AFTER_MS);
+    return () => clearTimeout(id);
+  }, [status]);
+
+  if (!stalled || !status) return status;
+
+  // Only the states that depend on someone else finishing something. "waiting
+  // for players" really can last all day and is not a fault.
+  switch (status) {
+    case "waiting for players to shuffle in":
+      return "a player has not shuffled in — try reloading, or pause the table";
+    case "shuffling":
+      return "the shuffle is taking longer than it should — it will retry, or pause the table";
+    case "starting the next hand":
+      return "the next hand has not started — try reloading, or pause the table";
+    case "connecting":
+      return "still connecting to the game validator — try reloading";
+    default:
+      return status;
+  }
+}
+
 /** A short line explaining what the table is waiting for. */
 function useStatusLine(
   delegated: boolean | null,
@@ -959,6 +1037,7 @@ function useStatusLine(
   hand: HandView | null,
   seats: (SeatView | null)[],
   funded: number,
+  mySeat: number,
 ): string | undefined {
   if (delegated === null) return "loading";
   if (!delegated) {
@@ -971,6 +1050,21 @@ function useStatusLine(
   // Between hands. Say what is actually being waited on, and in particular
   // say when the table cannot continue at all, rather than showing a
   // reassuring "shuffling" forever.
+  // Your own seat could not be locked down, so the program will deal you out.
+  //
+  // This is the one failure a player would otherwise experience as the game
+  // ignoring them: the hand starts, everyone else gets cards, and nothing
+  // explains why they did not. It happens when the previous occupant of the
+  // seat left without handing back their read right — a permission names one
+  // member, only that member may update it, and it outlives a pause. Sitting
+  // the seat out is the safe response (the alternative is dealing cards that
+  // player could read), but it has to be said out loud, and the way out is to
+  // take a different chair.
+  const mine = mySeat >= 0 ? seats[mySeat] : null;
+  if (mine?.occupant && !mine.cardsSecured) {
+    return "this seat cannot be locked down — you will sit out; take another seat";
+  }
+
   if (funded < 2) return "not enough players with chips";
   if (hand.shuffleState === SHUFFLE_REQUESTED) return "shuffling";
   const committed = seats.filter((s) => s?.occupant && s.saltState > 0).length;

@@ -58,7 +58,7 @@ pub fn force_timeout(ctx: Context<ForceTimeout>) -> Result<()> {
         let mut seats = seats_mut!(ctx.accounts);
         store_betting(&betting, &mut ctx.accounts.hand, &mut seats);
     }
-    ctx.accounts.hand.deadline = now + ctx.accounts.config.action_timeout_secs;
+    ctx.accounts.hand.deadline = now + clamped_timeout(ctx.accounts.config.action_timeout_secs);
 
     msg!(
         "seat {} timed out and was {}",

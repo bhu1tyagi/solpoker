@@ -22,6 +22,7 @@ import {
   ORACLE_QUEUE,
   PERMISSION_PROGRAM,
   PROGRAM_ID,
+  TREASURY_AUTHORITY,
   VALIDATOR,
 } from "./constants";
 import {
@@ -226,6 +227,28 @@ export async function vacateSeatIx(
 }
 
 /**
+ * Move a table's accrued rake into the house's balance.
+ *
+ * Base layer only: settlement takes the rake on the rollup, where a `Player`
+ * balance cannot be written, so it waits on the table until the table comes
+ * back. `close_table` refuses while any is unswept — deleting the table would
+ * destroy chips the vault is still backing — so this runs before a delete.
+ *
+ * Permissionless, and the destination is fixed to the treasury, so whoever is
+ * tidying the table can run it.
+ */
+export async function sweepRakeIx(
+  program: SolpokerProgram,
+  table: PublicKey,
+  payer: PublicKey,
+) {
+  return program.methods
+    .sweepRake()
+    .accountsPartial({ table, treasury: playerPda(TREASURY_AUTHORITY), payer })
+    .instruction();
+}
+
+/**
  * Delete a table you created and reclaim its rent.
  *
  * Every seat must be empty first, so nothing with chips in it can be deleted.
@@ -326,6 +349,37 @@ export async function secureHoleIx(
       seat: seatPda(table, i),
       permission: permissionPda(hole),
       payer,
+      ...permAccounts,
+    })
+    .instruction();
+}
+
+/**
+ * Give up your own hole-card read right, so the next player to take this seat
+ * can be secured.
+ *
+ * Without this, a seat whose occupant changes while the table is paused is dead
+ * for the life of the table: the permission still names whoever left, only a
+ * member may update one, so nobody can point it at the new player and
+ * `start_hand` excludes them from every deal. Called as part of standing up,
+ * signed by the session key so it costs no extra prompt.
+ */
+export async function releaseHoleIx(
+  program: SolpokerProgram,
+  table: PublicKey,
+  i: number,
+  signer: SessionSigner,
+) {
+  const hole = holePda(table, i);
+  return program.methods
+    .releaseHole(i)
+    .accountsPartial({
+      hole,
+      seat: seatPda(table, i),
+      permission: permissionPda(hole),
+      payer: signer.payer,
+      authority: signer.authority,
+      sessionToken: signer.sessionToken,
       ...permAccounts,
     })
     .instruction();
@@ -521,6 +575,37 @@ export async function settleHandIx(
     .instruction();
 }
 
+/**
+ * Unwind a hand that can never finish, refunding every contribution.
+ *
+ * The break-glass, and the last thing to reach for. It only works an hour past
+ * the hand's deadline, by which point `force_timeout` has had the whole hour to
+ * end the hand properly and did not. Nobody wins the pot; every seat gets back
+ * exactly what it put in, and the table returns to waiting so people can stand
+ * up and cash out.
+ */
+export async function abandonHandIx(
+  program: SolpokerProgram,
+  table: PublicKey,
+  payer: PublicKey,
+) {
+  const seats = Array.from({ length: MAX_SEATS }, (_, i) => seatPda(table, i));
+  const holes = Array.from({ length: MAX_SEATS }, (_, i) => holePda(table, i));
+  return program.methods
+    .abandonHand()
+    .accountsPartial({
+      table,
+      hand: handPda(table),
+      deck: deckPda(table),
+      ...seatAccountsMap(seats),
+      payer,
+    })
+    .remainingAccounts(
+      holes.map((pubkey) => ({ pubkey, isWritable: true, isSigner: false })),
+    )
+    .instruction();
+}
+
 export async function commitResultsIx(
   program: SolpokerProgram,
   table: PublicKey,
@@ -549,6 +634,16 @@ export async function undelegateCoreIx(
     .instruction();
 }
 
+/**
+ * Undelegate one seat.
+ *
+ * The table comes along so the program can refuse while a hand is live. Pulling
+ * a seat — any seat, including an empty one — off the rollup mid-hand freezes
+ * the table, because every instruction that drives a hand takes all six seats
+ * as writable. Note the ordering consequence: seats must now be undelegated
+ * *before* the core accounts, since once the table has left the rollup it is no
+ * longer there to be checked. See `pauseTable`.
+ */
 export async function undelegateSeatIx(
   program: SolpokerProgram,
   table: PublicKey,
@@ -557,7 +652,36 @@ export async function undelegateSeatIx(
 ) {
   return program.methods
     .undelegateSeat()
-    .accountsPartial({ payer, seat: seatPda(table, i), hole: holePda(table, i) })
+    .accountsPartial({
+      payer,
+      table,
+      seat: seatPda(table, i),
+      hole: holePda(table, i),
+    })
+    .instruction();
+}
+
+/**
+ * Clear a shuffle request the VRF oracle never answered.
+ *
+ * Permissionless and time-gated. Without it an unfulfilled request left the
+ * table with no way forward and no way out: it could not start a hand, could
+ * not settle, and could not undelegate, so every chip on its seats stayed
+ * there.
+ */
+export async function resetShuffleIx(
+  program: SolpokerProgram,
+  table: PublicKey,
+  payer: PublicKey,
+) {
+  return program.methods
+    .resetShuffle()
+    .accountsPartial({
+      payer,
+      table,
+      hand: handPda(table),
+      deck: deckPda(table),
+    })
     .instruction();
 }
 

@@ -69,6 +69,57 @@ pub fn record_hand_result(
     hand_number: u64,
     result_hash: [u8; 32],
 ) -> Result<()> {
+    // Nothing below ever returns `Err`. A Magic Action that fails is stripped
+    // from its transaction strategy and the commit is retried without it, so a
+    // refusal that fails loudly would silently disable history for the table
+    // instead of protecting it. Every rejection here is a quiet `Ok`.
+
+    // --- the arguments are no longer trusted ------------------------------
+    //
+    // This instruction still has no caller authentication and still cannot get
+    // any: `#[action]` supplies two `UncheckedAccount`s and nothing else, and
+    // declaring the escrow a `Signer` was measured on devnet to stop every
+    // action landing. So instead of authenticating the caller, this
+    // authenticates the *claim*: the base-layer `Hand` PDA for this history's
+    // own table is passed through the action's account list, and only values
+    // that already match it are recorded.
+    //
+    // An attacker can therefore write nothing that is not already true on
+    // chain. The cost is a skipped record when the action runs ahead of its
+    // commit and the account still holds the previous hand, which is precisely
+    // the case `hands_recorded` is a counter rather than a flag for.
+    let table = ctx.accounts.history.table;
+    let (expected_hand, _) =
+        Pubkey::find_program_address(&[HAND_SEED, table.as_ref()], &crate::ID);
+    if ctx.accounts.hand.key() != expected_hand {
+        msg!("hand account is not this table's hand, ignoring");
+        return Ok(());
+    }
+
+    // Read it raw rather than as `Account<Hand>`. While the table is delegated
+    // the base-layer hand is owned by the delegation program, so Anchor's owner
+    // check would reject it and take the whole action down with it.
+    // `try_deserialize` still checks the discriminator, and the address above
+    // proves whose account it is.
+    let on_chain = {
+        let data = ctx.accounts.hand.try_borrow_data()?;
+        match Hand::try_deserialize(&mut &data[..]) {
+            Ok(h) => h,
+            Err(_) => {
+                msg!("hand account is not readable yet, skipping");
+                return Ok(());
+            }
+        }
+    };
+    if on_chain.hand_number != hand_number || on_chain.result_hash != result_hash {
+        msg!(
+            "claimed hand {} does not match the committed hand {}, ignoring",
+            hand_number,
+            on_chain.hand_number
+        );
+        return Ok(());
+    }
+
     let h = &mut ctx.accounts.history;
     // Ignore replays and out-of-order deliveries rather than failing, since a
     // failing action would be stripped and silently retried without.
@@ -104,12 +155,23 @@ pub fn commit_results(ctx: Context<CommitResults>) -> Result<()> {
         result_hash,
     });
 
+    // The account list the action runs with is built here, by the program, from
+    // accounts this instruction has already constrained — which is the only
+    // reason `record_hand_result` can authenticate anything at all. `hand` is
+    // the same address on both layers, so passing its key gives the base-layer
+    // handler the committed copy to check the claim against.
     let action = CallHandler {
         destination_program: crate::ID,
-        accounts: vec![ShortAccountMeta {
-            pubkey: ctx.accounts.history.key().to_bytes().into(),
-            is_writable: true,
-        }],
+        accounts: vec![
+            ShortAccountMeta {
+                pubkey: ctx.accounts.history.key().to_bytes().into(),
+                is_writable: true,
+            },
+            ShortAccountMeta {
+                pubkey: ctx.accounts.hand.key().to_bytes().into(),
+                is_writable: false,
+            },
+        ],
         args: ActionArgs::new(data),
         escrow_authority: ctx.accounts.payer.to_account_info(),
         compute_units: 50_000,
@@ -161,30 +223,40 @@ pub struct CreateHistory<'info> {
 /// transaction strategy and the commit is retried without it. That was measured
 /// on devnet, not reasoned about, and it is why this is back to `UncheckedAccount`.
 ///
-/// What remains is damage limitation rather than a fix, see [`MAX_HAND_ADVANCE`].
-/// The real repair is to stop trusting the arguments: pass the committed `Hand`
-/// account through the action's account list and record only values that match
-/// it, so a caller can write nothing that is not already true on chain. That
-/// costs the occasional record when the action runs ahead of the commit, which
-/// is the case `hands_recorded` is a counter rather than a flag for.
+/// That is still true, and it no longer matters, because the caller no longer
+/// gets to decide what is written. `commit_results` builds this action's own
+/// account list, so it can hand over the base-layer `Hand` PDA alongside the
+/// history, and the handler records only values that already match it. An
+/// unauthenticated caller can still invoke this all day; the worst they can
+/// achieve is writing something that was already true.
 #[action]
 #[derive(Accounts)]
 pub struct RecordHandResult<'info> {
     #[account(mut, seeds = [HISTORY_SEED, history.table.as_ref()], bump = history.bump)]
     pub history: Account<'info, TableHistory>,
+    /// CHECK: address re-derived from `history.table` in the handler, and read
+    /// raw. It cannot be `Account<'info, Hand>`: while the table is delegated
+    /// this account is owned by the delegation program, so Anchor's owner check
+    /// would reject it and the action would be stripped rather than refused.
+    pub hand: UncheckedAccount<'info>,
 }
 
+// Declaration order matters: Anchor resolves accounts in the order they appear,
+// so `hand` has to come before anything whose seeds mention `hand.table`.
 #[commit]
 #[derive(Accounts)]
 pub struct CommitResults<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    /// CHECK: delegated PDA being committed
-    #[account(mut)]
-    pub table: AccountInfo<'info>,
     #[account(mut)]
     pub hand: Box<Account<'info, Hand>>,
-    /// CHECK: base-layer account written by the scheduled action
+    /// CHECK: delegated PDA being committed, bound to the hand it belongs to.
+    #[account(mut, address = hand.table @ crate::errors::PokerError::TableMismatch)]
+    pub table: AccountInfo<'info>,
+    /// CHECK: base-layer account written by the scheduled action. Derived from
+    /// the hand's own table so a commit at one table cannot aim its action at
+    /// another table's history.
+    #[account(seeds = [HISTORY_SEED, hand.table.as_ref()], bump)]
     pub history: UncheckedAccount<'info>,
     /// CHECK: destination program for the action, required in the outer context
     #[account(address = crate::ID)]

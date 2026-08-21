@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import BN from "bn.js";
@@ -8,6 +8,7 @@ import { getBaseConnection } from "@/lib/connection";
 import { makeProgram, type SolpokerProgram } from "@/lib/anchor";
 import {
   closeTableIx,
+  isDelegated,
   commitResultsIx,
   delegateCoreIx,
   delegateSeatIx,
@@ -16,14 +17,24 @@ import {
   leaveTableIx,
   playerActionIx,
   secureDeckIx,
+  abandonHandIx,
+  releaseHoleIx,
+  resetShuffleIx,
   secureHoleIx,
+  sweepRakeIx,
   undelegateCoreIx,
   undelegateSeatIx,
   MOVES,
   type Move,
 } from "@/lib/instructions";
-import { DELEGATION_PROGRAM, MAX_SEATS, PROGRAM_ID } from "@/lib/constants";
-import { seatPda } from "@/lib/pdas";
+import {
+  DELEGATION_PROGRAM,
+  MAX_SEATS,
+  PROGRAM_ID,
+  SHUFFLE_IDLE,
+} from "@/lib/constants";
+import { useTableStore } from "@/stores/table-store";
+import { handPda, seatPda } from "@/lib/pdas";
 import { friendlyError, sendEr, sleep } from "@/lib/net";
 import { tombstoneTable } from "@/hooks/use-tables";
 import { toast } from "@/stores/ui-store";
@@ -48,6 +59,8 @@ export function useTableActions(args: {
 }) {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
   const [busy, setBusy] = useState<string | null>(null);
+  /** Guards against a betting action being sent twice. See `act`. */
+  const actInFlight = useRef(false);
   const { erConnection, erProgram, table, config, tableId, session, sessionToken } = args;
 
   /** Sign and send on the base layer, where the wallet is required. */
@@ -148,6 +161,18 @@ export function useTableActions(args: {
               ),
             `vacate seat ${seat}`,
           );
+        }
+        // Any rake this table took has to reach the house before the table can
+        // go: `close_table` refuses while it is unswept, because deleting the
+        // table would destroy chips the vault is still backing. Best effort —
+        // a table that never raked a pot has nothing to sweep and refuses.
+        try {
+          await sendBase(
+            async (program) => new Transaction().add(await sweepRakeIx(program, table, publicKey)),
+            "sweep rake",
+          );
+        } catch {
+          // Nothing accrued, or somebody swept it already.
         }
         await sendBase(
           async (program) =>
@@ -280,17 +305,46 @@ export function useTableActions(args: {
           }
           throw last;
         };
+        // The deck is not optional. `start_hand` refuses without it, and a
+        // failure here has to stop the start rather than leave a table that
+        // knocks CardsNotSecured forever with nobody retrying.
         await secure(await secureDeckIx(erProgram, table, session.publicKey), "secure deck");
-        for (let i = 0; i < MAX_SEATS; i++) {
-          await secure(
-            await secureHoleIx(erProgram, table, i, session.publicKey),
-            `secure seat ${i}`,
-          );
+
+        // Only seats somebody is sitting in. Securing an empty one used to
+        // create a permission with no members, which is readable by nobody and
+        // — measured on devnet — updatable by nobody either, so whoever sat
+        // there next was dealt cards they could never read, permanently. The
+        // program now refuses an empty seat outright; this stops us asking.
+        //
+        // Failures no longer abort the loop. One seat's transaction failing
+        // used to skip every seat after it, which is how a table went live with
+        // world-readable hole cards. Now each seat is tried, the rest carry on,
+        // and the program sits an unsecured seat out of the hand instead of
+        // dealing into it.
+        const unsecured: number[] = [];
+        for (const i of occupiedSeats) {
+          try {
+            await secure(
+              await secureHoleIx(erProgram, table, i, session.publicKey),
+              `secure seat ${i}`,
+            );
+          } catch {
+            unsecured.push(i);
+          }
         }
         // Permissions take a couple of seconds to take effect.
         await sleep(2500);
 
-        toast("Table is live. Cards are locked down.", "good");
+        if (unsecured.length) {
+          toast(
+            `Table is live, but ${unsecured.length === 1 ? "seat" : "seats"} ` +
+              `${unsecured.join(", ")} could not be locked down and will sit out ` +
+              `until they can. Everyone else can play.`,
+            "bad",
+          );
+        } else {
+          toast("Table is live. Cards are locked down.", "good");
+        }
       } catch (e) {
         toast(friendlyError(e), "bad");
       } finally {
@@ -317,6 +371,36 @@ export function useTableActions(args: {
           label,
         });
       };
+      // Hand back this player's own hole-card read right before the table
+      // leaves the rollup.
+      //
+      // A permission names one member and only that member may update it, and
+      // it survives the round trip off the rollup and back. So a seat whose
+      // occupant changes while the table is paused could never be re-secured:
+      // the next player would be excluded from every deal, permanently, on a
+      // table that looked fine. Releasing it while we still can is what keeps
+      // the chair alive for whoever sits there next. Between hands the account
+      // holds no cards, so making it public costs nothing.
+      //
+      // Only our own seat: nobody else can release theirs, which is why the
+      // seat-stuck notice exists for the case where somebody simply closes
+      // their tab without pausing.
+      const mySeatNow = useTableStore.getState().mySeat;
+      if (mySeatNow !== null && mySeatNow >= 0 && sessionToken) {
+        try {
+          await send(
+            await releaseHoleIx(erProgram, table, mySeatNow, {
+              payer: session.publicKey,
+              authority: publicKey!,
+              sessionToken,
+            }),
+            "release hole permission",
+          );
+        } catch {
+          // Nothing to release, or a hand is still live on this seat.
+        }
+      }
+
       // Leave a fresh digest of the last hand on the base layer on the way
       // out. Best effort: a table with nothing new to record refuses this,
       // and that must not block the cash-out path.
@@ -328,13 +412,118 @@ export function useTableActions(args: {
       } catch {
         // Nothing new to record, or already recorded.
       }
-      await send(await undelegateCoreIx(erProgram, table, session.publicKey), "undelegate table");
+
+      // A deck holding randomness for a hand that never started cannot be
+      // published, so undelegation refuses it and the table — with every chip
+      // on its seats — is stuck. That is the ordinary end of a heads-up
+      // session: one player busts, the crank has already drawn the next
+      // shuffle, and `start_hand` can never run again with one funded seat.
+      // Clearing a drawn-but-unplayable shuffle is what makes the cash-out path
+      // work, and it is read fresh from the chain rather than from the store.
+      //
+      // Gating it on the client's cached hand was a mistake worth naming: it
+      // saved one wasted transaction on a healthy table and, when the store was
+      // stale, skipped the recovery entirely. A store is least trustworthy
+      // exactly when the table is stuck, which is the only time this matters.
+      const handOnChain = await erProgram.account.hand
+        .fetch(handPda(table))
+        .catch(() => null);
+      if (handOnChain && handOnChain.shuffleState !== SHUFFLE_IDLE) {
+        try {
+          await send(
+            await resetShuffleIx(erProgram, table, session.publicKey),
+            "clear stale shuffle",
+          );
+        } catch {
+          // Not stale enough yet. Handled by the check below.
+        }
+      }
+
+      // Do not take the table apart unless all of it can leave.
+      //
+      // Seats have to be undelegated before the core accounts, because
+      // `undelegate_seat` reads the table to refuse a mid-hand pull. But the
+      // deck refuses to leave while it holds randomness for a hand that never
+      // started, so undelegating the seats first and *then* failing on the core
+      // leaves the table split across two layers: seats on Solana, table and
+      // deck on the rollup, and no instruction able to operate across the gap.
+      // Checking first turns that into a message and an intact table.
+      const stillHeld = await erProgram.account.hand
+        .fetch(handPda(table))
+        .catch(() => null);
+      if (stillHeld && stillHeld.shuffleState !== SHUFFLE_IDLE) {
+        // Wait it out here rather than handing the player a countdown and a
+        // dead button. This is the state that looked like nothing happening:
+        // the click was refused for a good reason — better a message than a
+        // table split across two layers — but a toast is easy to miss, and the
+        // player is left staring at a table that will not close.
+        const waitFor = Math.max(0, stillHeld.deadline.toNumber() - Math.floor(Date.now() / 1000));
+        toast(
+          `The next hand's shuffle is still clearing. Closing the table in about ${waitFor + 5}s.`,
+          "good",
+        );
+        setBusy("pause:waiting");
+
+        // The shuffle clears itself once it is stale enough: any client may
+        // call `reset_shuffle`, and this one will if nobody else does.
+        for (let i = 0; i < 40; i++) {
+          await sleep(3000);
+          const h = await erProgram.account.hand.fetch(handPda(table)).catch(() => null);
+          if (!h) break;
+          if (h.shuffleState === SHUFFLE_IDLE) break;
+          if (h.deadline.toNumber() < Math.floor(Date.now() / 1000)) {
+            try {
+              await send(
+                await resetShuffleIx(erProgram, table, session.publicKey),
+                "clear stale shuffle",
+              );
+            } catch {
+              // Someone else cleared it, or it is not stale yet after all.
+            }
+          }
+        }
+
+        const cleared = await erProgram.account.hand.fetch(handPda(table)).catch(() => null);
+        if (cleared && cleared.shuffleState !== SHUFFLE_IDLE) {
+          toast(
+            "The table could not be closed yet. Your chips are safe on the table — try again in a minute.",
+            "bad",
+          );
+          return;
+        }
+        setBusy("pause");
+      }
+
+      // Last resort, for a hand that can never settle. Undelegation refuses a
+      // deck that still holds cards, so a stuck hand means nobody at the table
+      // can cash out at all. This unwinds it — every contribution back to whoever
+      // made it, nobody wins the pot — and only an hour past the deadline, by
+      // which point a permissionless force_timeout has had the whole hour to end
+      // the hand properly. Only attempted when a hand is actually in progress,
+      // for the same reason as above: a healthy table should not pay for a
+      // transaction that exists to refuse it.
+      const liveTable = useTableStore.getState().table;
+      if (liveTable?.state === 1) {
+        try {
+          await send(
+            await abandonHandIx(erProgram, table, session.publicKey),
+            "unwind stuck hand",
+          );
+        } catch {
+          // Not stuck long enough to unwind; the hand may still finish normally.
+        }
+      }
+      // Seats first, then the core accounts. `undelegate_seat` now carries the
+      // table so the program can refuse to pull a seat off the rollup while a
+      // hand is live — which means the table has to still be there to check.
+      // Undelegating the core first would leave every seat unable to follow.
       for (let i = 0; i < MAX_SEATS; i++) {
         await send(
           await undelegateSeatIx(erProgram, table, i, session.publicKey),
           `undelegate seat ${i}`,
         );
       }
+      await send(await undelegateCoreIx(erProgram, table, session.publicKey), "undelegate table");
 
       // Seats come back one at a time, so wait for all of them before saying so.
       const conn = getBaseConnection();
@@ -350,7 +539,114 @@ export function useTableActions(args: {
     } finally {
       setBusy(null);
     }
-  }, [table, session, erProgram, erConnection]);
+  }, [table, session, erProgram, erConnection, sessionToken, publicKey]);
+
+  /**
+   * Cash out, without stopping the game for everyone else.
+   *
+   * Leaving is a base-layer move — `leave_table` writes both the seat and the
+   * player balance, and `Player` is never delegated — so a seat genuinely has
+   * to come off the rollup before its chips can go home. That is the custody
+   * guarantee, not an oversight: it is exactly why the rollup can never reach
+   * anybody's balance.
+   *
+   * What used to be wrong was making the player carry that. They had to press
+   * "Pause table", which reads like an admin action, stops everyone, and only
+   * then offers a cash out. This does the whole sequence for them:
+   *
+   *   1. Sit out at once, so the next hand is dealt without them. That is what
+   *      `release_hole` already does — giving up the read right clears
+   *      `cards_secured`, and `start_hand` builds `dealt_in` from that. The
+   *      same instruction that keeps the chair alive for the next player is
+   *      also the honest way to say "deal me out".
+   *   2. Let the current hand finish. Nobody's pot is interrupted.
+   *   3. Bring the table back to Solana.
+   *   4. Move the chips into the balance.
+   *   5. Put the table back on the rollup for whoever is still playing.
+   *
+   * Only step 3 costs anything, and it is paid once per departure rather than
+   * once per hand, which is what makes this affordable at all.
+   */
+  const cashOut = useCallback(
+    async (seatIndex: number) => {
+      if (!table || !publicKey) return;
+      setBusy("cashout");
+      try {
+        const conn = getBaseConnection();
+        let onRollup = await isDelegated(conn, table);
+
+        if (onRollup) {
+          // 1. Stop being dealt in. Immediate, and it survives us closing the
+          //    tab, because it is on chain rather than in this component.
+          if (erProgram && erConnection && session && sessionToken) {
+            try {
+              const tx = new Transaction().add(
+                await releaseHoleIx(erProgram, table, seatIndex, {
+                  payer: session.publicKey,
+                  authority: publicKey,
+                  sessionToken,
+                }),
+              );
+              await sendEr(erConnection, tx, {
+                signers: [session],
+                feePayer: session.publicKey,
+                label: "sit out",
+              });
+            } catch {
+              // Already sitting out, or a hand is live on this seat. Either way
+              // the wait below handles it.
+            }
+          }
+
+          // 2. Wait out the current hand rather than cutting it short. Bounded,
+          //    because a hand that never ends is a different problem and the
+          //    turn clock is what solves that one.
+          const liveNow = useTableStore.getState().table?.state === 1;
+          if (liveNow) {
+            toast("Cashing out when this hand ends.", "good");
+            for (let i = 0; i < 180; i++) {
+              if (useTableStore.getState().table?.state !== 1) break;
+              await sleep(1000);
+            }
+          }
+
+          // 3. Bring the table home.
+          setBusy("cashout:pausing");
+          await pauseTable();
+          onRollup = await isDelegated(conn, table);
+        }
+
+        if (onRollup) {
+          // `pauseTable` has already said why and how long, so do not talk over it.
+          return;
+        }
+
+        // 4. Chips back into the balance.
+        setBusy("cashout:leaving");
+        await leave(seatIndex);
+
+        // 5. Hand the table back to whoever is still sitting, so cashing out
+        //    does not end their game. Best effort and deliberately last: if it
+        //    fails they simply see "Start playing" again, with their chips safe
+        //    on Solana either way.
+        const remaining = useTableStore
+          .getState()
+          .seats.filter((s, i) => i !== seatIndex && s?.occupant && s.stack > 0);
+        if (remaining.length >= 2 && tableId) {
+          try {
+            setBusy("cashout:resuming");
+            await startTable(remaining.map((s) => s!.index));
+          } catch {
+            // They can press Start themselves.
+          }
+        }
+      } finally {
+        setBusy(null);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [table, tableId, publicKey, erProgram, erConnection, session, sessionToken],
+  );
 
   /**
    * Bet, signed by the session key so there is no prompt.
@@ -365,31 +661,44 @@ export function useTableActions(args: {
         toast("Not connected to the game validator. Retry the connection first.", "bad");
         return;
       }
-      const move: Move =
-        kind === "fold"
-          ? MOVES.fold
-          : kind === "check"
-            ? MOVES.check
-            : kind === "call"
-              ? MOVES.call
-              : kind === "allin"
-                ? MOVES.allIn
-                : MOVES.raiseTo(toTotal);
+      // A ref, not the `busy` state, because state does not settle until React
+      // re-renders and two clicks can land in the same tick — a double-tap on a
+      // phone, or a stuck mouse button. Both would be sent. On a raise that is
+      // two bets; the second is refused on chain as `OutOfTurn`, but only after
+      // the first has already committed chips the player did not mean to
+      // commit twice, and the refusal surfaces as a failure they cannot
+      // explain. Cheaper to never send it.
+      if (actInFlight.current) return;
+      actInFlight.current = true;
+      try {
+        const move: Move =
+          kind === "fold"
+            ? MOVES.fold
+            : kind === "check"
+              ? MOVES.check
+              : kind === "call"
+                ? MOVES.call
+                : kind === "allin"
+                  ? MOVES.allIn
+                  : MOVES.raiseTo(toTotal);
 
-      const ix = await playerActionIx(erProgram, table, config, move, {
-        payer: session.publicKey,
-        authority: publicKey,
-        sessionToken,
-      });
-      const tx = new Transaction().add(ix);
-      await sendEr(erConnection, tx, {
-        signers: [session],
-        feePayer: session.publicKey,
-        label: kind,
-      });
+        const ix = await playerActionIx(erProgram, table, config, move, {
+          payer: session.publicKey,
+          authority: publicKey,
+          sessionToken,
+        });
+        const tx = new Transaction().add(ix);
+        await sendEr(erConnection, tx, {
+          signers: [session],
+          feePayer: session.publicKey,
+          label: kind,
+        });
+      } finally {
+        actInFlight.current = false;
+      }
     },
     [erProgram, erConnection, table, config, session, sessionToken, publicKey],
   );
 
-  return { join, leave, deleteTable, startTable, pauseTable, act, busy };
+  return { join, leave, cashOut, deleteTable, startTable, pauseTable, act, busy };
 }

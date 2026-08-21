@@ -10,6 +10,7 @@
 
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
+use sha2::{Digest, Sha256};
 use ephemeral_rollups_sdk::access_control::structs::EphemeralPermission;
 use poker_engine::betting::Betting;
 
@@ -91,31 +92,39 @@ pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
     // the first time it runs, which is also the only time the permission does
     // not yet exist. False therefore always means "creatable", never "locked".
     //
-    // The same is emphatically **not** true per seat, which is why there is no
-    // matching `seat.cards_secured` check here. A hole-card permission names
-    // exactly one member, and updating it means loading the account, which the
-    // enclave refuses to anyone who is not already that member. Secure a seat
-    // while it is empty and the member list is empty, so when someone sits down
-    // nobody on earth can point the permission at them: not the new occupant,
-    // not the crank, not the table creator. Gating the deal on that flag turned
-    // a seat changing hands into a table that could not start a hand, could not
-    // undelegate because the deck held randomness, and so could not be deleted
-    // either. It cost a table on devnet before it was understood.
-    //
-    // The residual risk is real and smaller: a seat whose permission still names
-    // a previous occupant lets that one player read the current occupant's hole
-    // cards. Closing it needs a way to update a permission you are locked out
-    // of, which is a MagicBlock question, not something this program can fix by
-    // refusing to deal. See STATUS.md.
+    // Per seat the argument is different, and the difference is why the deal
+    // gate below excludes a seat rather than refusing the hand. A hole-card
+    // permission names exactly one member and can only be updated by that
+    // member, so a permission created while the seat was empty named nobody and
+    // could never be re-pointed. `secure_hole` now refuses an empty seat
+    // outright, which means every hole permission that exists names somebody
+    // and is therefore always updatable by them — and that is what makes
+    // `seat.cards_secured` safe to consult again.
     require!(ctx.accounts.deck.secured, PokerError::CardsNotSecured);
 
-    // Only seated players with chips are dealt in.
+    // Only seated players with chips *and a hole account nobody else can read*
+    // are dealt in.
+    //
+    // The last condition is the one that came back. Without it the deck was
+    // hidden while the hole accounts were not: a seat whose `secure_hole` never
+    // landed has no permission at all, so its two card bytes are readable by
+    // anyone over the rollup RPC, and the program dealt into it regardless. A
+    // modified client could simply decline to secure one opponent's seat and
+    // then play every hand against a face-up opponent.
+    //
+    // It is an **exclusion**, not a refusal, and that distinction is the whole
+    // difference between this and the version reverted on 17 August. Refusing
+    // to start the hand turned one unsecured seat into a table that could not
+    // play, could not undelegate, and therefore could not be paused or deleted;
+    // it cost a table on devnet. Sitting the seat out costs that player a hand
+    // and leaves everyone else playing, and `secure_hole` can now always
+    // succeed for an occupied seat, so the seat heals on the next deal.
     let mut stacks = [0u64; MAX_SEATS];
     let mut dealt_in: u8 = 0;
     {
         let seats = seats_ref!(ctx.accounts);
         for (i, seat) in seats.iter().enumerate() {
-            if seat.is_occupied() && seat.stack > 0 {
+            if seat.is_occupied() && seat.stack > 0 && seat.cards_secured {
                 stacks[i] = seat.stack;
                 dealt_in |= 1 << i;
             }
@@ -132,14 +141,45 @@ pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
         }
     }
 
-    // Shuffle deterministically from the seed. Same seed, same deck, anywhere.
+    // Two shuffles, from two independent seeds, because the board and the hole
+    // cards have different fates. The board's seed is published at settlement
+    // so anyone can check the community cards were not rigged; the hole cards'
+    // seed is never published, which is what keeps a folded hand folded.
+    //
+    // The board is drawn first and set aside, then the hole cards are dealt
+    // from the fifty-two minus those five. Drawing them from the same ordering
+    // would put a board card in somebody's hand.
+    let next_hand_number = ctx.accounts.table.hand_number + 1;
     let deck = &mut ctx.accounts.deck;
-    let mut cards = [0u8; 52];
-    for (i, c) in cards.iter_mut().enumerate() {
+
+    let mut public_deck = [0u8; 52];
+    for (i, c) in public_deck.iter_mut().enumerate() {
         *c = i as u8;
     }
-    poker_engine::card::shuffle_in_place(&mut cards, &shuffle_seed);
-    deck.cards = cards;
+    poker_engine::card::shuffle_in_place(&mut public_deck, &shuffle_seed);
+    let mut board = [NO_CARD; 5];
+    board.copy_from_slice(&public_deck[..5]);
+    deck.board = board;
+
+    // The forty-seven that are not on the board, in ascending order so the
+    // starting arrangement carries no information, shuffled by the secret seed.
+    let hole_seed = {
+        let mut d = Sha256::new();
+        d.update(deck.hole_randomness);
+        d.update(next_hand_number.to_le_bytes());
+        let out: [u8; 32] = d.finalize().into();
+        out
+    };
+    let mut hole_pool = [NO_CARD; 52];
+    let mut n = 0usize;
+    for card in 0u8..52 {
+        if !board.contains(&card) {
+            hole_pool[n] = card;
+            n += 1;
+        }
+    }
+    poker_engine::card::shuffle_in_place(&mut hole_pool[..n], &hole_seed);
+    deck.cards = hole_pool;
     deck.next_index = 0;
 
     // The engine posts blinds and works out who acts first.
@@ -151,7 +191,7 @@ pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
     )
     .map_err(|_| error!(PokerError::NotEnoughPlayers))?;
 
-    let hand_number = ctx.accounts.table.hand_number + 1;
+    let hand_number = next_hand_number;
     {
         let hand = &mut ctx.accounts.hand;
         hand.hand_number = hand_number;
@@ -159,7 +199,16 @@ pub fn start_hand(ctx: Context<StartHand>) -> Result<()> {
         hand.dealt_in = dealt_in;
         hand.revealed = [[NO_CARD; 2]; MAX_SEATS];
         hand.revealed_mask = 0;
-        hand.deadline = Clock::get()?.unix_timestamp + ctx.accounts.config.action_timeout_secs;
+        // The previous hand's published seed and VRF output go with it. They
+        // are harmless — the deck's copies are wiped at settlement and this
+        // hand draws fresh randomness — but leaving them on a public account
+        // during a live hand means anything reading the hand sees a
+        // valid-looking seed for the wrong hand, which is exactly the confusion
+        // that once shipped history records against the previous deal.
+        hand.shuffle_seed = [0u8; 32];
+        hand.vrf_randomness = [0u8; 32];
+        hand.deadline = Clock::get()?.unix_timestamp
+            + clamped_timeout(ctx.accounts.config.action_timeout_secs);
     }
     {
         let mut seats = seats_mut!(ctx.accounts);
@@ -251,11 +300,18 @@ pub fn advance_street(ctx: Context<AdvanceStreet>) -> Result<()> {
     // Fill the board up to whatever the new street shows.
     let needed = betting.street.board_len();
     {
+        // Copied from the deck's private board rather than dealt off the top.
+        // The board was fixed at `start_hand` from the published seed, and the
+        // deck's own ordering now holds only hole cards, from the secret seed.
+        // Dealing the board off that ordering would both hand out a card
+        // somebody is holding and make the board unverifiable.
         let deck = &mut ctx.accounts.deck;
         let hand = &mut ctx.accounts.hand;
         for slot in 0..needed {
             if hand.board[slot] == NO_CARD {
-                hand.board[slot] = deck.deal().ok_or(PokerError::DeckExhausted)?;
+                let card = deck.board[slot];
+                require!(card != NO_CARD, PokerError::DeckExhausted);
+                hand.board[slot] = card;
             }
         }
     }
@@ -264,7 +320,8 @@ pub fn advance_street(ctx: Context<AdvanceStreet>) -> Result<()> {
         let mut seats = seats_mut!(ctx.accounts);
         store_betting(&betting, &mut ctx.accounts.hand, &mut seats);
     }
-    ctx.accounts.hand.deadline = Clock::get()?.unix_timestamp + ctx.accounts.config.action_timeout_secs;
+    ctx.accounts.hand.deadline =
+        Clock::get()?.unix_timestamp + clamped_timeout(ctx.accounts.config.action_timeout_secs);
 
     msg!(
         "street -> {}, to act {}",

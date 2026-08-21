@@ -23,7 +23,7 @@ import { Buffer } from "buffer";
 import bs58 from "bs58";
 import BN from "bn.js";
 import { sessionTokenPda } from "./pdas";
-import { PROGRAM_ID, SESSION_PROGRAM } from "./constants";
+import { CLUSTER, PROGRAM_ID, SESSION_PROGRAM } from "./constants";
 
 /** How long a session lasts before the player is asked again. */
 const VALIDITY_SECS = 24 * 60 * 60;
@@ -41,7 +41,13 @@ export interface StoredSession {
   validUntil: number;
 }
 
-const storageKey = (wallet: PublicKey) => `solpoker:session:${wallet.toBase58()}`;
+/**
+ * Keyed by cluster as well as wallet: a session token is a PDA on one chain and
+ * nothing at all on the other, so sharing a key between them means loading a
+ * session that cannot possibly work and having no way to tell why.
+ */
+const storageKey = (wallet: PublicKey) =>
+  `solpoker:session:${CLUSTER}:${wallet.toBase58()}`;
 
 export function loadSession(wallet: PublicKey): {
   keypair: Keypair;
@@ -50,9 +56,16 @@ export function loadSession(wallet: PublicKey): {
 } | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(storageKey(wallet));
-    if (!raw) return null;
-    const s = JSON.parse(raw) as StoredSession;
+    let raw: string | null = null;
+    try {
+      raw = window.localStorage.getItem(storageKey(wallet));
+    } catch {
+      // Blocked origin; fall through to the in-memory copy.
+    }
+    const s: StoredSession | undefined = raw
+      ? (JSON.parse(raw) as StoredSession)
+      : memorySessions.get(storageKey(wallet));
+    if (!s) return null;
     if (s.validUntil - Date.now() / 1000 < RENEW_WITHIN_SECS) return null;
 
     const keypair = Keypair.fromSecretKey(bs58.decode(s.secret));
@@ -75,21 +88,106 @@ export function loadSession(wallet: PublicKey): {
   }
 }
 
+/**
+ * Last resort when storage refuses.
+ *
+ * A session key is a funded keypair. If `localStorage.setItem` throws — Safari
+ * private mode, a full quota, a blocked origin — after the session has been
+ * created and topped up on chain, the only copy of that key is gone and the SOL
+ * with it, and the next attempt funds another one. Keeping it in memory means
+ * the tab still plays and the money is still reachable; it simply does not
+ * survive a reload.
+ */
+const memorySessions = new Map<string, StoredSession>();
+
+/**
+ * The stored keypair regardless of how close to expiry it is.
+ *
+ * `loadSession` deliberately reports null once a session is inside its renewal
+ * window, which is right for "may I still play with this" and wrong for "is
+ * there money in here to recover".
+ */
+function readStoredKeypair(wallet: PublicKey): Keypair | null {
+  if (typeof window === "undefined") return null;
+  try {
+    let raw: string | null = null;
+    try {
+      raw = window.localStorage.getItem(storageKey(wallet));
+    } catch {
+      // Blocked origin; fall through to the in-memory copy.
+    }
+    const s: StoredSession | undefined = raw
+      ? (JSON.parse(raw) as StoredSession)
+      : memorySessions.get(storageKey(wallet));
+    return s ? Keypair.fromSecretKey(bs58.decode(s.secret)) : null;
+  } catch {
+    return null;
+  }
+}
+
 function storeSession(wallet: PublicKey, keypair: Keypair, tokenPda: PublicKey, validUntil: number) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(
-    storageKey(wallet),
-    JSON.stringify({
-      secret: bs58.encode(keypair.secretKey),
-      tokenPda: tokenPda.toBase58(),
-      validUntil,
-    } satisfies StoredSession),
-  );
+  const value: StoredSession = {
+    secret: bs58.encode(keypair.secretKey),
+    tokenPda: tokenPda.toBase58(),
+    validUntil,
+  };
+  memorySessions.set(storageKey(wallet), value);
+  try {
+    window.localStorage.setItem(storageKey(wallet), JSON.stringify(value));
+  } catch {
+    // Held in memory instead. See `memorySessions`.
+  }
+}
+
+/**
+ * Send whatever is left on an expiring session key back to its owner.
+ *
+ * Sessions rotate daily and each one is topped up with real SOL, so without
+ * this every rotation abandons the remainder of yesterday's balance in a
+ * keypair that is about to be overwritten. On devnet that was invisible. On
+ * mainnet it is a slow leak of the player's own money, every single day.
+ *
+ * Best effort by design: it is not worth blocking a player from sitting down
+ * over a few thousand lamports, and the next rotation will try again.
+ */
+async function sweepOldSession(
+  connection: Connection,
+  old: { keypair: Keypair },
+  wallet: PublicKey,
+): Promise<void> {
+  try {
+    const balance = await connection.getBalance(old.keypair.publicKey);
+    // Leave the fee for the sweep itself; below that there is nothing to send.
+    const fee = 5_000;
+    if (balance <= fee) return;
+
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: old.keypair.publicKey,
+        toPubkey: wallet,
+        lamports: balance - fee,
+      }),
+    );
+    tx.feePayer = old.keypair.publicKey;
+    const bh = await connection.getLatestBlockhash();
+    tx.recentBlockhash = bh.blockhash;
+    tx.sign(old.keypair);
+    const sig = await connection.sendRawTransaction(tx.serialize());
+    await connection.confirmTransaction({ signature: sig, ...bh }, "confirmed");
+  } catch {
+    // Nothing to recover, or the network refused. Not worth surfacing.
+  }
 }
 
 export function clearSession(wallet: PublicKey) {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(storageKey(wallet));
+  memorySessions.delete(storageKey(wallet));
+  try {
+    window.localStorage.removeItem(storageKey(wallet));
+  } catch {
+    // Nothing stored there to begin with.
+  }
 }
 
 /**
@@ -160,6 +258,14 @@ export async function ensureSession(
     const info = await connection.getAccountInfo(existing.tokenPda);
     if (info) return existing;
     clearSession(wallet);
+  }
+
+  // A session that has aged out is still a funded keypair. Recover what is left
+  // of it before its only copy is overwritten. `loadSession` returns null for
+  // one inside its renewal window, so the stored record is read directly.
+  const expiring = readStoredKeypair(wallet);
+  if (expiring) {
+    await sweepOldSession(connection, { keypair: expiring }, wallet);
   }
 
   const keypair = Keypair.generate();

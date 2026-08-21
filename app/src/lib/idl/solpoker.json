@@ -8,6 +8,123 @@
   },
   "instructions": [
     {
+      "name": "abandon_hand",
+      "docs": [
+        "Break-glass for a hand that can never settle: refunds every",
+        "contribution and frees the table. Permissionless, and only an hour past",
+        "the deadline."
+      ],
+      "discriminator": [
+        224,
+        127,
+        130,
+        186,
+        47,
+        125,
+        109,
+        75
+      ],
+      "accounts": [
+        {
+          "name": "table",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  98,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table.table_id",
+                "account": "Table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hand",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  97,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "deck",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat_0",
+          "writable": true
+        },
+        {
+          "name": "seat_1",
+          "writable": true
+        },
+        {
+          "name": "seat_2",
+          "writable": true
+        },
+        {
+          "name": "seat_3",
+          "writable": true
+        },
+        {
+          "name": "seat_4",
+          "writable": true
+        },
+        {
+          "name": "seat_5",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone at all. Recovery must not depend on a particular caller."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "advance_street",
       "discriminator": [
         32,
@@ -232,15 +349,40 @@
           "signer": true
         },
         {
-          "name": "table",
-          "writable": true
-        },
-        {
           "name": "hand",
           "writable": true
         },
         {
-          "name": "history"
+          "name": "table",
+          "writable": true
+        },
+        {
+          "name": "history",
+          "docs": [
+            "the hand's own table so a commit at one table cannot aim its action at",
+            "another table's history."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  105,
+                  115,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "hand.table",
+                "account": "Hand"
+              }
+            ]
+          }
         },
         {
           "name": "program_id",
@@ -1181,7 +1323,17 @@
         },
         {
           "name": "validator",
-          "optional": true
+          "docs": [
+            "",
+            "The module header has always said the validator is pinned; until now the",
+            "only thing pinning it was a constant in the web client, and this",
+            "instruction is permissionless. Anyone could delegate a table nobody had",
+            "started yet to a rollup of their choosing — or to none in particular by",
+            "passing `None` — and every card in the game depends on the accounts",
+            "landing inside the enclave. Now the program will not delegate anywhere",
+            "else."
+          ],
+          "address": "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
         },
         {
           "name": "owner_program",
@@ -1496,7 +1648,7 @@
         },
         {
           "name": "validator",
-          "optional": true
+          "address": "MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo"
         },
         {
           "name": "owner_program",
@@ -1574,6 +1726,48 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "hole_callback",
+      "docs": [
+        "The second oracle callback: randomness for the hole cards, which is",
+        "stored on the private deck and never published."
+      ],
+      "discriminator": [
+        248,
+        137,
+        156,
+        191,
+        245,
+        152,
+        128,
+        235
+      ],
+      "accounts": [
+        {
+          "name": "vrf_program_identity",
+          "docs": [
+            "Scoped VRF identity PDA, bound to this program. Its presence as a signer proves",
+            "the callback was issued by the VRF program for this program."
+          ],
+          "signer": true
+        },
+        {
+          "name": "deck",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "init_player",
@@ -2027,6 +2221,14 @@
           }
         },
         {
+          "name": "hand",
+          "docs": [
+            "raw. It cannot be `Account<'info, Hand>`: while the table is delegated",
+            "this account is owned by the delegation program, so Anchor's owner check",
+            "would reject it and the action would be stripped rather than refused."
+          ]
+        },
+        {
           "name": "escrow_auth"
         },
         {
@@ -2046,6 +2248,134 @@
               32
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "release_hole",
+      "docs": [
+        "Give up your own hole-card read right so the next occupant of the seat",
+        "can be named. Runs on the rollup, between hands."
+      ],
+      "discriminator": [
+        182,
+        115,
+        147,
+        242,
+        64,
+        92,
+        237,
+        65
+      ],
+      "accounts": [
+        {
+          "name": "hole",
+          "writable": true
+        },
+        {
+          "name": "seat",
+          "writable": true
+        },
+        {
+          "name": "permission",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  114,
+                  109,
+                  105,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110,
+                  58
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "hole"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                136,
+                161,
+                10,
+                196,
+                33,
+                152,
+                1,
+                214,
+                246,
+                106,
+                29,
+                60,
+                6,
+                152,
+                192,
+                102,
+                169,
+                175,
+                212,
+                217,
+                180,
+                252,
+                231,
+                71,
+                151,
+                141,
+                209,
+                5,
+                168,
+                212,
+                103,
+                82
+              ]
+            }
+          }
+        },
+        {
+          "name": "permission_program",
+          "address": "ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1"
+        },
+        {
+          "name": "ephemeral_vault",
+          "writable": true,
+          "address": "MagicVau1t999999999999999999999999999999999"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Whoever pays: the player's wallet or their session key."
+          ],
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "and bound to `payer` by the session token when a session is used."
+          ]
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "seat_index",
+          "type": "u8"
         }
       ]
     },
@@ -2095,7 +2425,15 @@
         },
         {
           "name": "oracle_queue",
-          "writable": true
+          "docs": [
+            "rollup. Accepting the whole family let a caller aim a request at a queue",
+            "nobody operates — the base-layer queue, or the localnet test queue — and",
+            "the fulfilment would then never arrive. Before `reset_shuffle` existed",
+            "that was a one-transaction, permanent brick on any table; it is now a",
+            "recoverable stall, and there is still no reason to allow it."
+          ],
+          "writable": true,
+          "address": "5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc"
         },
         {
           "name": "program_identity",
@@ -2128,6 +2466,99 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "reset_shuffle",
+      "docs": [
+        "Permissionless escape hatch for a shuffle request the oracle never",
+        "answered. Time-gated, like `force_timeout`."
+      ],
+      "discriminator": [
+        225,
+        92,
+        88,
+        96,
+        208,
+        66,
+        7,
+        119
+      ],
+      "accounts": [
+        {
+          "name": "table",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  98,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table.table_id",
+                "account": "Table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hand",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  97,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "deck",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone at all. Recovery must not depend on a particular caller, for the",
+            "same reason `force_timeout` does not."
+          ],
+          "signer": true
         }
       ],
       "args": []
@@ -2721,6 +3152,115 @@
       "args": []
     },
     {
+      "name": "sweep_rake",
+      "docs": [
+        "Move a table's accrued rake into the treasury balance. Permissionless;",
+        "the destination is fixed."
+      ],
+      "discriminator": [
+        8,
+        64,
+        18,
+        95,
+        96,
+        177,
+        71,
+        195
+      ],
+      "accounts": [
+        {
+          "name": "table",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  98,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table.table_id",
+                "account": "Table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "docs": [
+            "The house's own balance, and the only account this can credit."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  215,
+                  141,
+                  165,
+                  153,
+                  179,
+                  14,
+                  56,
+                  150,
+                  219,
+                  250,
+                  15,
+                  96,
+                  148,
+                  190,
+                  166,
+                  176,
+                  234,
+                  171,
+                  213,
+                  171,
+                  49,
+                  62,
+                  93,
+                  120,
+                  191,
+                  61,
+                  235,
+                  109,
+                  17,
+                  196,
+                  200,
+                  120
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone at all: the destination is fixed, so there is nothing to gain."
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "undelegate_core",
       "discriminator": [
         5,
@@ -2779,6 +3319,14 @@
           "name": "payer",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "table",
+          "docs": [
+            "table the seat and hole account both name. Present so undelegation can",
+            "refuse while a hand is live; an already-undelegated table reads as idle,",
+            "which is what keeps a half-paused table recoverable."
+          ]
         },
         {
           "name": "seat",
@@ -3201,6 +3749,26 @@
       "code": 6040,
       "name": "SaltCommitClosed",
       "msg": "Salts are already being revealed, so commitments are closed"
+    },
+    {
+      "code": 6041,
+      "name": "TimeoutOutOfRange",
+      "msg": "A table's turn clock must be between 10 and 300 seconds"
+    },
+    {
+      "code": 6042,
+      "name": "ShuffleNotStale",
+      "msg": "The outstanding shuffle request is not stale enough to clear yet"
+    },
+    {
+      "code": 6043,
+      "name": "TableMismatch",
+      "msg": "That account belongs to a different table"
+    },
+    {
+      "code": 6044,
+      "name": "ValidatorNotPinned",
+      "msg": "This rollup is not the pinned TEE validator"
     }
   ],
   "types": [
@@ -3254,7 +3822,10 @@
           {
             "name": "shuffle_seed",
             "docs": [
-              "`vrf_randomness XOR salt_xor`, fixed when the hand starts."
+              "`vrf_randomness XOR salt_xor`, fixed when the hand starts.",
+              "",
+              "This seed governs the **board only**. It is published at settlement, and",
+              "everything it determines becomes public with it."
             ],
             "type": {
               "array": [
@@ -3264,11 +3835,64 @@
             }
           },
           {
+            "name": "hole_randomness",
+            "docs": [
+              "A second, independent VRF draw that decides who gets which hole cards,",
+              "and which is **never published**.",
+              "",
+              "One draw cannot do both jobs. Proving the board was fair means",
+              "publishing the value it came from, and any hole cards derived from that",
+              "same value are published along with it — XOR is reversible and hashing",
+              "the two apart does not help, because a verifier who cannot see the input",
+              "cannot check the output either. So the board gets a seed that is",
+              "published and the hole cards get one that never leaves this account.",
+              "",
+              "That split is exactly the trust model this project already states:",
+              "provably fair shuffle, TEE-protected hole cards. The board is checkable",
+              "by anyone with no trust required; the hole cards rest on the enclave,",
+              "as they always did. What changes is that a folded hand now stays folded."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "board",
+            "docs": [
+              "The five community cards, dealt at `start_hand` and revealed a street at",
+              "a time. They live here, on the private deck, rather than being dealt off",
+              "the top as each street opens: the board has to come from the published",
+              "seed while the hole cards come from the secret one, so the two are drawn",
+              "from different places and the board is settled before any hole card is."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                5
+              ]
+            }
+          },
+          {
             "name": "shuffle_state",
             "docs": [
               "The private half of the shuffle state machine. The public half on the",
               "hand only ever says \"requested\", because fulfillment arriving is itself",
-              "information about when the deck became computable inside the enclave."
+              "information about when the deck became computable inside the enclave.",
+              "",
+              "Two draws are outstanding at once, so `SHUFFLE_FULFILLED` means both",
+              "have landed. [`Deck::fulfilled_mask`] tracks them separately until then."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "fulfilled_mask",
+            "docs": [
+              "Which of the two randomness draws have arrived: bit 0 the board, bit 1",
+              "the hole cards. They are requested together and answered independently,",
+              "in either order."
             ],
             "type": "u8"
           },
@@ -3517,12 +4141,18 @@
     {
       "name": "Player",
       "docs": [
-        "A player's chip balance and faucet state. **Never delegated.**",
+        "A player's chip balance. **Never delegated.**",
         "",
         "This is the only account that holds chips at rest, and it stays on the base",
         "layer so a player's balance is always settled on Solana rather than living",
-        "inside a rollup. Chips are play money: they enter only through the faucet and",
-        "can never leave for anything of value."
+        "inside a rollup.",
+        "",
+        "Chips are **not** play money. They are bought with SOL and sold back for SOL",
+        "at a fixed rate, one to one against the program vault, so a chip is a claim",
+        "on real lamports and every instruction that touches one is handling",
+        "somebody's money. An earlier version of this comment said the opposite,",
+        "which was true when a faucet minted them and has been wrong since it was",
+        "removed. `last_faucet_ts` survives only so the layout does not move."
       ],
       "type": {
         "kind": "struct",
@@ -3806,6 +4436,23 @@
               "clock that lets anyone sweep one once it has been empty long enough."
             ],
             "type": "i64"
+          },
+          {
+            "name": "rake_accrued",
+            "docs": [
+              "Rake taken at this table and not yet moved to the treasury.",
+              "",
+              "It accumulates here rather than going straight to the house because",
+              "settlement runs on the rollup and the treasury balance is a base-layer",
+              "[`Player`] account, which the rollup cannot write. So the chips wait on",
+              "the table — which is delegated, and therefore writable at settlement —",
+              "and `sweep_rake` moves them once the table is back on Solana.",
+              "",
+              "Chips are conserved the whole way: they leave the seats at settlement,",
+              "sit here, and land in the treasury's balance. None are created, and the",
+              "vault backs them exactly as it backed them when a player bought them."
+            ],
+            "type": "u64"
           }
         ]
       }

@@ -128,35 +128,50 @@ export function verify(history) {
 
   const deck = shuffle(seed);
 
-  // Board and hole cards are dealt in a fixed order off the top of the deck:
-  // two per seat in seat order, then five board cards.
-  const dealtIn = history.seats?.filter((s) => s.dealtIn) ?? [];
-  let cursor = 0;
-  const expectedHoles = {};
-  for (const seat of dealtIn) {
-    expectedHoles[seat.index] = [deck[cursor++], deck[cursor++]];
-  }
-  const expectedBoard = Array.from({ length: 5 }, () => deck[cursor++]);
-
-  for (const seat of dealtIn) {
-    if (!seat.revealed) continue;
-    const got = seat.revealed;
-    const want = expectedHoles[seat.index];
-    if (got[0] !== want[0] || got[1] !== want[1]) {
-      problems.push(
-        `seat ${seat.index}: showed ${got.map(cardName).join(" ")} ` +
-          `but the deck gives ${want.map(cardName).join(" ")}`,
-      );
-    }
-  }
+  // The board is the top five cards of the deck this seed produces.
+  //
+  // Hole cards are deliberately not checkable here. They come from a second,
+  // independent randomness draw that is never published, dealt from the
+  // forty-seven cards the board did not take. Publishing the seed that proves
+  // the board would, if the hole cards came from it too, publish every folded
+  // hand along with it, permanently, for every hand ever played. So the deal is
+  // split: the community cards are provable by anyone, and the hole cards rest
+  // on the enclave — "provably fair shuffle, TEE-protected hole cards", which
+  // is what this project has always claimed and now actually does.
+  const expectedBoard = Array.from(deck.slice(0, 5));
 
   if (history.board) {
     const same = history.board.every((c, i) => c === expectedBoard[i]);
     if (!same) {
       problems.push(
         `board was ${history.board.map(cardName).join(" ")} ` +
-          `but the deck gives ${expectedBoard.map(cardName).join(" ")}`,
+          `but the seed gives ${expectedBoard.map(cardName).join(" ")}`,
       );
+    }
+  }
+
+  // A shown hand still has to be a real card, not on the board, and not one
+  // another seat also showed. Weaker than deriving it, and it is what remains
+  // checkable without the hole seed.
+  const seen = new Map();
+  for (const seat of history.seats ?? []) {
+    if (!seat.revealed) continue;
+    for (const card of seat.revealed) {
+      if (card < 0 || card > 51) {
+        problems.push(`seat ${seat.index}: showed a card outside the deck (${card})`);
+        continue;
+      }
+      if (expectedBoard.includes(card)) {
+        problems.push(
+          `seat ${seat.index}: showed ${cardName(card)}, which is on the board`,
+        );
+      }
+      if (seen.has(card)) {
+        problems.push(
+          `seat ${seat.index}: showed ${cardName(card)}, already shown by seat ${seen.get(card)}`,
+        );
+      }
+      seen.set(card, seat.index);
     }
   }
 
@@ -166,7 +181,8 @@ export function verify(history) {
     seed: hex(seed),
     deck: Array.from(deck),
     expectedBoard,
-    expectedHoles,
+    // Empty by design: hole cards are no longer derivable from published data.
+    expectedHoles: {},
   };
 }
 
@@ -193,11 +209,15 @@ if (!arg || arg === "--self-test") {
   console.log(`hand        ${history.handNumber ?? "?"}`);
   console.log(`seed        ${result.seed}`);
   console.log(`board       ${result.expectedBoard.map(cardName).join(" ")}`);
-  for (const [seat, cards] of Object.entries(result.expectedHoles)) {
-    console.log(`seat ${seat}      ${cards.map(cardName).join(" ")}`);
+  for (const seat of history.seats ?? []) {
+    if (seat.revealed) {
+      console.log(`seat ${seat.index}      ${seat.revealed.map(cardName).join(" ")} (shown)`);
+    }
   }
   if (result.ok) {
-    console.log("\nVERIFIED: the deal matches the published seed and salts.");
+    console.log("\nVERIFIED: the board matches the published seed and salts.");
+    console.log("Hole cards are dealt from a separate, unpublished draw and are");
+    console.log("not derivable here — which is what keeps a folded hand folded.");
   } else {
     console.log("\nFAILED:");
     for (const p of result.problems) console.log(`  - ${p}`);

@@ -120,26 +120,63 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
         }
     }
 
-    let dist = distribute(&pots, &ranks, betting.button);
+    let mut dist = distribute(&pots, &ranks, betting.button);
     // The engine reports chips it could not assign an owner to. In a real hand
     // this is always zero; refusing to proceed otherwise means a settlement bug
     // can never silently destroy chips.
     require!(dist.unclaimed == 0, PokerError::UnclaimedChips);
 
-    {
-        let mut seats = seats_mut!(ctx.accounts);
+    // --- the rake -------------------------------------------------------
+    //
+    // Taken here, after the engine has decided who won what and before any of
+    // it reaches a stack. No flop, no drop: a hand that ended before the flop
+    // was dealt is never raked, and the board is the honest test for that.
+    //
+    // Spread across the winners in proportion to what each is owed, so a split
+    // pot is raked once between them rather than once each, and a side-pot
+    // winner taking a tenth of the money pays a tenth of the rake. The
+    // remainder from the division goes to the largest payout, which is the same
+    // rule the engine already uses for an odd chip.
+    let saw_flop = board[0] != NO_CARD;
+    let paid = dist.total_paid();
+    let rake = rake_for(paid, ctx.accounts.config.big_blind, saw_flop);
+    let mut taken: u64 = 0;
+    if rake > 0 && paid > 0 {
+        let mut largest = 0usize;
         for i in 0..MAX_SEATS {
-            seats[i].stack += dist.payouts[i];
+            if dist.payouts[i] == 0 {
+                continue;
+            }
+            if dist.payouts[i] > dist.payouts[largest] {
+                largest = i;
+            }
+            let share = ((rake as u128 * dist.payouts[i] as u128) / paid as u128) as u64;
+            dist.payouts[i] = dist.payouts[i].saturating_sub(share);
+            taken = taken.saturating_add(share);
+        }
+        let remainder = rake.saturating_sub(taken);
+        if remainder > 0 && dist.payouts[largest] >= remainder {
+            dist.payouts[largest] -= remainder;
+            taken = taken.saturating_add(remainder);
+        }
+        ctx.accounts.table.rake_accrued =
+            ctx.accounts.table.rake_accrued.saturating_add(taken);
+    }
+
+    {
+        let seats = seats_mut!(ctx.accounts);
+        for (seat, payout) in seats.into_iter().zip(dist.payouts.iter()) {
+            seat.stack += payout;
             // Clear per-hand state so the next hand starts clean.
-            seats[i].committed_street = 0;
-            seats[i].committed_total = 0;
-            seats[i].needs_action = false;
-            seats[i].may_raise = false;
-            seats[i].in_hand = false;
-            seats[i].folded = false;
-            seats[i].all_in = false;
+            seat.committed_street = 0;
+            seat.committed_total = 0;
+            seat.needs_action = false;
+            seat.may_raise = false;
+            seat.in_hand = false;
+            seat.folded = false;
+            seat.all_in = false;
             // Salts are single use, so the next hand needs fresh commitments.
-            seats[i].salt_state = crate::instructions::shuffle::SALT_NONE;
+            seat.salt_state = crate::instructions::shuffle::SALT_NONE;
         }
     }
 
@@ -199,6 +236,7 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
     }
     ctx.accounts.table.state = TableState::Waiting;
 
+    msg!("hand {} rake {} (pot {})", hand_number, taken, paid);
     msg!(
         "hand {} settled: pot {}, payouts {:?}",
         hand_number,
@@ -206,6 +244,142 @@ pub fn settle_hand(ctx: Context<SettleHand>) -> Result<()> {
         dist.payouts
     );
     Ok(())
+}
+
+/// Unwind a hand that can no longer finish, returning every chip to whoever
+/// put it in.
+///
+/// The break-glass, and the only instruction here that does not decide a
+/// winner. If settlement itself cannot run — a hole account that will not
+/// deserialize, a distribution the engine refuses because it could not assign
+/// every chip an owner — then the pot is unreachable: `settle_hand` fails
+/// forever, the table never leaves `HandInProgress`, `leave_table` needs
+/// `Waiting`, and undelegation refuses a deck that still holds cards. Every
+/// chip on that table stops existing for its owner. On devnet that is an
+/// annoyance. With real money behind the chips it is theft by accident, and
+/// there was no route out of it at all.
+///
+/// This is the most conservative resolution available: nobody wins the pot,
+/// every seat gets back exactly what it contributed, and the table returns to
+/// `Waiting` so people can stand up and cash out. Chips are conserved to the
+/// lamport — `stack + committed_total` is what the seat had before the hand
+/// began.
+///
+/// Permissionless and time-gated, like `force_timeout` and `reset_shuffle`,
+/// because recovery must never depend on a particular client being awake.
+pub fn abandon_hand(ctx: Context<AbandonHand>) -> Result<()> {
+    require!(
+        ctx.accounts.table.state == TableState::HandInProgress,
+        PokerError::NoHandInProgress
+    );
+
+    let now = Clock::get()?.unix_timestamp;
+    require!(
+        now > ctx.accounts.hand.deadline.saturating_add(ABANDON_HAND_SECS),
+        PokerError::DeadlineNotReached
+    );
+
+    let table_key = ctx.accounts.table.key();
+    {
+        let seats = seats_ref!(ctx.accounts);
+        check_seat_order(&seats, &table_key)?;
+    }
+
+    // Give every contribution straight back. Checked rather than wrapping: this
+    // is the path that exists because something already went wrong, so it must
+    // not be the one that quietly destroys a stack.
+    let mut refunded: u64 = 0;
+    {
+        let seats = seats_mut!(ctx.accounts);
+        for seat in seats {
+            seat.stack = seat
+                .stack
+                .checked_add(seat.committed_total)
+                .ok_or(PokerError::InsufficientChips)?;
+            refunded = refunded.saturating_add(seat.committed_total);
+            seat.committed_street = 0;
+            seat.committed_total = 0;
+            seat.needs_action = false;
+            seat.may_raise = false;
+            seat.in_hand = false;
+            seat.folded = false;
+            seat.all_in = false;
+            seat.salt_state = crate::instructions::shuffle::SALT_NONE;
+        }
+    }
+
+    // Wipe the cards before anything can commit them to the base layer, exactly
+    // as settlement does. Nothing is published: an abandoned hand has no result
+    // to verify, and the seed stays secret because the deal never completed.
+    ctx.accounts.deck.zeroize();
+    require!(
+        ctx.remaining_accounts.len() == MAX_SEATS,
+        PokerError::SeatOrderMismatch
+    );
+    for (i, info) in ctx.remaining_accounts.iter().enumerate() {
+        let (expected, _) =
+            Pubkey::find_program_address(&[HOLE_SEED, table_key.as_ref(), &[i as u8]], &crate::ID);
+        require_keys_eq!(info.key(), expected, PokerError::SeatOrderMismatch);
+        require!(info.is_writable, PokerError::SeatOrderMismatch);
+        let mut data = info.try_borrow_mut_data()?;
+        let mut hole = HoleCards::try_deserialize(&mut &data[..])?;
+        hole.zeroize();
+        let mut cursor: &mut [u8] = &mut data;
+        hole.try_serialize(&mut cursor)?;
+    }
+
+    {
+        let hand = &mut ctx.accounts.hand;
+        hand.to_act = NO_SEAT;
+        hand.current_bet = 0;
+        hand.min_raise = 0;
+        hand.last_aggressor = NO_SEAT;
+        hand.dealt_in = 0;
+        hand.board = [NO_CARD; 5];
+        hand.revealed = [[NO_CARD; 2]; MAX_SEATS];
+        hand.revealed_mask = 0;
+        hand.street = street_to_u8(poker_engine::betting::Street::Showdown);
+        hand.shuffle_state = crate::instructions::shuffle::SHUFFLE_IDLE;
+        hand.salt_xor = [0u8; 32];
+        hand.salt_mask = 0;
+        // No result: this hand did not happen. A zero hash is what the history
+        // record already skips, so nothing downstream mistakes it for a result.
+        hand.result_hash = [0u8; 32];
+    }
+    ctx.accounts.table.state = TableState::Waiting;
+
+    msg!(
+        "hand {} abandoned, {} chips returned to their contributors",
+        ctx.accounts.hand.hand_number,
+        refunded
+    );
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct AbandonHand<'info> {
+    // Boxed for the same stack-frame reason as SettleHand.
+    #[account(mut, seeds = [TABLE_SEED, &table.table_id.to_le_bytes()], bump = table.bump)]
+    pub table: Box<Account<'info, Table>>,
+    #[account(mut, seeds = [HAND_SEED, table.key().as_ref()], bump = hand.bump)]
+    pub hand: Box<Account<'info, Hand>>,
+    #[account(mut, seeds = [DECK_SEED, table.key().as_ref()], bump = deck.bump)]
+    pub deck: Box<Account<'info, Deck>>,
+    #[account(mut)]
+    pub seat_0: Account<'info, Seat>,
+    #[account(mut)]
+    pub seat_1: Account<'info, Seat>,
+    #[account(mut)]
+    pub seat_2: Account<'info, Seat>,
+    #[account(mut)]
+    pub seat_3: Account<'info, Seat>,
+    #[account(mut)]
+    pub seat_4: Account<'info, Seat>,
+    #[account(mut)]
+    pub seat_5: Account<'info, Seat>,
+    /// Anyone at all. Recovery must not depend on a particular caller.
+    pub payer: Signer<'info>,
+    // remaining_accounts: the six HoleCards PDAs, in seat order, all writable.
 }
 
 #[derive(Accounts)]

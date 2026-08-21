@@ -13,11 +13,21 @@
 
 import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
-import { TEE_URL } from "./constants";
+import { CLUSTER, TEE_URL } from "./constants";
 
-/** Tokens last 30 days. Refresh well before that rather than on failure. */
-const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const REFRESH_AFTER_MS = 25 * 24 * 60 * 60 * 1000;
+/**
+ * How long a cached token is reused before a fresh handshake.
+ *
+ * This is the credential that reads hole cards, and it sits in `localStorage`
+ * where any script on the origin can take it. Retention is therefore the whole
+ * blast radius: a month of cached token is a month of somebody else reading
+ * your cards from anywhere, with no way for you to notice or revoke it.
+ *
+ * Twelve hours is about one sitting. The cost of shortening it is one extra
+ * wallet signature a day, which is a fair trade for that.
+ */
+const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+const REFRESH_AFTER_MS = 10 * 60 * 60 * 1000;
 
 export type SignMessage = (message: Uint8Array) => Promise<Uint8Array>;
 
@@ -27,7 +37,16 @@ interface CachedToken {
   expiresAt: number;
 }
 
-const cacheKey = (pubkey: PublicKey) => `solpoker:tee-token:${pubkey.toBase58()}`;
+/**
+ * Keyed by cluster as well as wallet.
+ *
+ * Without the cluster in the key, a token minted against devnet is handed to
+ * the mainnet validator on the next build — the same wallet, a different chain.
+ * It gets rejected, but the client cannot tell that from an expired token, so
+ * it retries the dead credential instead of asking for a fresh one.
+ */
+const cacheKey = (pubkey: PublicKey) =>
+  `solpoker:tee-token:${CLUSTER}:${pubkey.toBase58()}`;
 
 function readCache(pubkey: PublicKey): CachedToken | null {
   if (typeof window === "undefined") return null;

@@ -29,21 +29,87 @@ function secureEndpoint(
   return url;
 }
 
-export const BASE_RPC = secureEndpoint(
+/**
+ * Which chain this build talks to.
+ *
+ * Every endpoint below derives from this, so a deployment picks a cluster once
+ * rather than setting three URLs consistently and hoping. Defaulting to devnet
+ * is the safe direction: the failure of a missing variable is play money, not
+ * real money.
+ */
+export type Cluster = "devnet" | "mainnet";
+
+export const CLUSTER: Cluster =
+  process.env.NEXT_PUBLIC_CLUSTER === "mainnet" ? "mainnet" : "devnet";
+
+/**
+ * MagicBlock's endpoints per cluster.
+ *
+ * The TEE validator identity is deliberately absent: it is the same key on both
+ * clusters (`MTEWGuqx…`, pinned in the program as `TEE_VALIDATOR`), and only
+ * the host differs. Getting the cluster wrong therefore shows up as talking to
+ * the wrong chain, not as a delegation failure.
+ */
+const ENDPOINTS: Record<Cluster, { base: string; tee: string; ws: string }> = {
+  devnet: {
+    base: "https://rpc.magicblock.app/devnet",
+    tee: "https://devnet-tee.magicblock.app",
+    ws: "wss://devnet-tee.magicblock.app",
+  },
+  mainnet: {
+    base: "https://rpc.magicblock.app/mainnet",
+    tee: "https://mainnet-tee.magicblock.app",
+    ws: "wss://mainnet-tee.magicblock.app",
+  },
+};
+
+const DEFAULTS = ENDPOINTS[CLUSTER];
+
+/**
+ * Refuse a build that says mainnet and points somewhere else.
+ *
+ * A real-money deployment with one stale override — a `NEXT_PUBLIC_TEE_URL`
+ * left over from devnet in a Vercel project — would look completely healthy
+ * and be talking to the wrong chain, or worse, be reading hole cards from a
+ * validator the mainnet program never delegated to. There is no honest way to
+ * carry on from that, so it fails at module load.
+ */
+function assertClusterMatch(url: string, name: string) {
+  if (CLUSTER !== "mainnet") return;
+  if (/devnet/i.test(url)) {
+    throw new Error(
+      `${name} is "${url}", which is a devnet endpoint, but NEXT_PUBLIC_CLUSTER is "mainnet". ` +
+        `Real funds are involved, so this is refused rather than guessed at.`,
+    );
+  }
+}
+
+function endpoint(
+  value: string | undefined,
+  fallback: string,
+  name: string,
+  allowed: readonly string[],
+): string {
+  const url = secureEndpoint(value, fallback, name, allowed);
+  assertClusterMatch(url, name);
+  return url;
+}
+
+export const BASE_RPC = endpoint(
   process.env.NEXT_PUBLIC_BASE_RPC,
-  "https://rpc.magicblock.app/devnet",
+  DEFAULTS.base,
   "NEXT_PUBLIC_BASE_RPC",
   ["https://"],
 );
-export const TEE_URL = secureEndpoint(
+export const TEE_URL = endpoint(
   process.env.NEXT_PUBLIC_TEE_URL,
-  "https://devnet-tee.magicblock.app",
+  DEFAULTS.tee,
   "NEXT_PUBLIC_TEE_URL",
   ["https://"],
 );
-export const TEE_WS = secureEndpoint(
+export const TEE_WS = endpoint(
   process.env.NEXT_PUBLIC_TEE_WS,
-  "wss://devnet-tee.magicblock.app",
+  DEFAULTS.ws,
   "NEXT_PUBLIC_TEE_WS",
   ["wss://"],
 );
@@ -71,6 +137,16 @@ export const MAGIC_PROGRAM = new PublicKey(
 export const EPHEMERAL_VAULT = new PublicKey(
   "MagicVau1t999999999999999999999999999999999",
 );
+/**
+ * The house's own wallet. Its `Player` account is where rake lands, and it
+ * cashes out through the same `sell_chips` everyone else uses. Must match
+ * `TREASURY_AUTHORITY` in the program, which is the only account `sweep_rake`
+ * will credit.
+ */
+export const TREASURY_AUTHORITY = new PublicKey(
+  "FWRvqaezac9noSy2WsPSNoZZs2Vc2peA4TRLkjziS7Vq",
+);
+
 export const SESSION_PROGRAM = new PublicKey(
   "KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5",
 );
@@ -121,7 +197,19 @@ export const OFFSETS = {
  * this program, because the account no longer deserializes. Comparing the size
  * is how the client spots one before offering a game that would only fail.
  */
-export const DECK_ACCOUNT_SIZE = 8 + 32 + 52 + 1 + 32 + 32 + 1 + 1;
+export const DECK_ACCOUNT_SIZE =
+  8 + // discriminator
+  32 + // table
+  52 + // cards
+  1 + // next_index
+  32 + // vrf_randomness (the board's draw, published at settlement)
+  32 + // shuffle_seed
+  32 + // hole_randomness (never published)
+  5 + // board, held privately until each street reveals it
+  1 + // shuffle_state
+  1 + // fulfilled_mask
+  1 + // bump
+  1; // secured
 
 /**
  * How long a table must sit empty before anyone may sweep it away.
@@ -190,6 +278,10 @@ export const ERROR_NAMES: Record<number, string> = {
   6038: "ConfigTableMismatch",
   6039: "CardsNotSecured",
   6040: "SaltCommitClosed",
+  6041: "TimeoutOutOfRange",
+  6042: "ShuffleNotStale",
+  6043: "TableMismatch",
+  6044: "ValidatorNotPinned",
 };
 
 /** What to show a player when one of these comes back. */
@@ -212,6 +304,12 @@ export const ERROR_MESSAGES: Record<string, string> = {
     "That action carried the settings of a different table and was refused. An honest client never does this, so if you are seeing it, report it.",
   CardsNotSecured:
     "This table's cards are not locked down yet. Wait a moment; the hand will not start until they are.",
+  TimeoutOutOfRange:
+    "A table's turn clock has to be between 10 and 300 seconds.",
+  TableMismatch:
+    "That action carried an account belonging to a different table and was refused. An honest client never does this, so if you are seeing it, report it.",
+  ValidatorNotPinned:
+    "This table would have been sent to the wrong rollup, so it was refused. Cards are only private on the pinned TEE validator.",
   // Raised by the session key program, not this one. Its numbers overlap ours,
   // so these are matched by name.
   InvalidToken: "Your session key is no longer valid. Authorise a new one.",
@@ -259,4 +357,8 @@ export const RACE_LOST = new Set([
   // Someone else revealed first, which closes commitments. The client's own
   // retry loop can hit this benignly.
   "SaltCommitClosed",
+  // The stale-shuffle escape hatch is permissionless and time-gated, so every
+  // client tries it and all but one are early or late. Neither is a failure.
+  "ShuffleNotStale",
+  "NoShuffleRequested",
 ]);

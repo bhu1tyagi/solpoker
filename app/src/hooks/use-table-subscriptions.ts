@@ -148,16 +148,46 @@ export function useTableSubscriptions(
       // Polling below carries it.
     }
 
-    // Chase the current hand until our cards are for it.
-    const poller = setInterval(() => {
+    // Chase the current hand until our cards are for it, backing off as we go.
+    //
+    // The hole account is permission-gated, so its change notifications are not
+    // reliable and this poll is the fallback that makes your own cards appear.
+    // But a denied read looks exactly like a slow one, and a seat that is not
+    // in the hand at all — sitting out because its permission could not be
+    // pointed at it — never catches up. A flat 900ms retry then hammers the
+    // enclave for the whole hand, on every such client, forever.
+    //
+    // Backing off keeps the fast path fast (the first few tries are what
+    // actually deliver your cards) and turns the hopeless case into a trickle
+    // rather than a flood. The delay resets whenever the hand number moves, so
+    // the next hand starts responsive again.
+    let delay = 300;
+    let chasing = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const tick = () => {
       const s = store.getState();
       const handNumber = s.hand?.handNumber ?? 0;
-      if (handNumber > 0 && s.myHoleHandNumber !== handNumber) void read();
-    }, 900);
+      const caughtUp = handNumber === 0 || s.myHoleHandNumber === handNumber;
+
+      if (handNumber !== chasing) {
+        // A new hand: start eager again.
+        chasing = handNumber;
+        delay = 300;
+      }
+      if (!caughtUp) {
+        void read();
+        delay = Math.min(delay * 1.6, 8_000);
+      } else {
+        delay = 900;
+      }
+      timer = setTimeout(tick, delay);
+    };
+    timer = setTimeout(tick, delay);
 
     return () => {
       cancelled = true;
-      clearInterval(poller);
+      if (timer) clearTimeout(timer);
       if (subId !== null) {
         void holeConnection.removeAccountChangeListener(subId).catch(() => {});
       }

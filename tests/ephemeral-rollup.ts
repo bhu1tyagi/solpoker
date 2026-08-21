@@ -125,17 +125,29 @@ describe("SolPoker Phases 3-5: private cards and a verifiable shuffle", () => {
     throw new Error(`${label} failed after ${tries} attempts: ${last}`);
   }
 
-  async function sendEr(tx: Transaction, signers: Keypair[], label: string, record = false) {
+  /**
+   * @param conn Which authenticated connection to send over. The enclave decides
+   *   what a transaction may load from the token on the *connection*, not from
+   *   who signed it, so anything touching a private account has to go over that
+   *   member's own connection.
+   */
+  async function sendEr(
+    tx: Transaction,
+    signers: Keypair[],
+    label: string,
+    record = false,
+    conn: anchor.web3.Connection = erConnection,
+  ) {
     const started = Date.now();
     tx.feePayer = signers[0].publicKey;
-    const bh = await erConnection.getLatestBlockhash();
+    const bh = await conn.getLatestBlockhash();
     tx.recentBlockhash = bh.blockhash;
     tx.sign(...signers);
-    const sig = await erConnection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
     // confirmTransaction resolves for failed transactions too, so check the error.
-    const conf = await erConnection.confirmTransaction({ signature: sig, ...bh }, "confirmed");
+    const conf = await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
     if (conf.value.err) {
-      const d = await erConnection.getTransaction(sig, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+      const d = await conn.getTransaction(sig, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
       throw new Error(`${label} failed: ${JSON.stringify(conf.value.err)}\n${(d?.meta?.logMessages ?? []).join("\n")}`);
     }
     const ms = Date.now() - started;
@@ -257,13 +269,38 @@ describe("SolPoker Phases 3-5: private cards and a verifiable shuffle", () => {
       .transaction();
     await sendEr(tx, [wallet], "secure_deck");
 
-    for (let i = 0; i < MAX_SEATS; i++) {
+    // Occupied seats only. An empty seat used to be locked to an empty member
+    // list, which is readable by nobody and updatable by nobody, so whoever sat
+    // there next was dealt cards they could never read. The program refuses it
+    // now, and this loop is what the shipped client does too.
+    for (let i = 0; i < SEATED; i++) {
       tx = await erProgram.methods.secureHole(i)
         .accountsPartial({ hole: holes[i], seat: seats[i], permission: permissionPda(holes[i]), payer: wallet.publicKey, ...permAccounts })
         .transaction();
       await sendEr(tx, [wallet], `secure_hole ${i}`);
     }
     await new Promise((r) => setTimeout(r, 2500));
+  });
+
+  it("SECURITY: refuses to lock an empty seat to nobody", async () => {
+    // The seat that wedged a devnet table. A permission created while the seat
+    // is empty names no member, and the enclave will only accept an update from
+    // a member, so nobody can ever point it at the next occupant.
+    const wallet = (provider.wallet as anchor.Wallet).payer;
+    // Seats 0..SEATED-1 are taken, so this one never was.
+    const empty = SEATED;
+    assert.isBelow(empty, MAX_SEATS, "this test needs at least one empty seat");
+    let refused = false;
+    try {
+      const tx = await erProgram.methods.secureHole(empty)
+        .accountsPartial({ hole: holes[empty], seat: seats[empty], permission: permissionPda(holes[empty]), payer: wallet.publicKey, ...permAccounts })
+        .transaction();
+      await sendEr(tx, [wallet], `secure_hole ${empty}`);
+    } catch (e) {
+      refused = /SeatEmpty|0x1775/.test(String(e));
+    }
+    assert.isTrue(refused, "SECURITY: securing an empty seat must be refused");
+    console.log(`    seat ${empty} is empty, and locking it was refused`);
   });
 
   it("ADVERSARIAL: nobody can read the deck, not even the table creator", async () => {
@@ -420,7 +457,7 @@ describe("SolPoker Phases 3-5: private cards and a verifiable shuffle", () => {
     let refusedSeat = false;
     try {
       const t = await erProgram.methods.undelegateSeat()
-        .accountsPartial({ payer: wallet.publicKey, seat: seats[0], hole: holes[0] })
+        .accountsPartial({ payer: wallet.publicKey, table, seat: seats[0], hole: holes[0] })
         .transaction();
       await sendEr(t, [wallet], "undelegate_seat mid-hand");
     } catch {
@@ -556,18 +593,37 @@ describe("SolPoker Phases 3-5: private cards and a verifiable shuffle", () => {
   it("undelegates with no card data reaching the base layer", async function () {
     this.timeout(600_000);
     const wallet = (provider.wallet as anchor.Wallet).payer;
+
+    // Hand seat 0's read right back before the table leaves the rollup, which
+    // is what `pauseTable` does in the client and the whole reason a chair can
+    // survive changing hands. A permission names one member, only that member
+    // may update one, and it outlives the trip off the rollup and back — so
+    // released now or never. Sent over seat 0's own connection, because the
+    // enclave decides what a transaction may load from the token on the
+    // connection rather than from who signed it.
+    const rel = await erProgram.methods.releaseHole(0)
+      .accountsPartial({
+        hole: holes[0], seat: seats[0], permission: permissionPda(holes[0]),
+        payer: players[0].publicKey, authority: players[0].publicKey,
+        sessionToken: null, ...permAccounts,
+      })
+      .transaction();
+    await sendEr(rel, [players[0]], "release_hole 0 by its occupant", false, asPlayer[0]);
+    const releasedSeat = await erProgram.account.seat.fetch(seats[0]);
+    assert.isFalse(releasedSeat.cardsSecured, "releasing must clear cards_secured");
     let tx = await erProgram.methods.undelegateCore()
       .accountsPartial({ payer: wallet.publicKey, table, hand: handPda, deck: deckPda }).transaction();
+    // Seats first: undelegate_seat reads the table to refuse a mid-hand pull,
+    // so the table must still be delegated when they go.
+    for (let i = 0; i < MAX_SEATS; i++) {
+      const st = await erProgram.methods.undelegateSeat()
+        .accountsPartial({ payer: wallet.publicKey, table, seat: seats[i], hole: holes[i] }).transaction();
+      await sendEr(st, [wallet], `undelegate_seat ${i}`);
+    }
     const sig = await sendEr(tx, [wallet], "undelegate_core");
     // Best effort: this lookup times out often and the undelegation below is
     // confirmed by ownership returning to the program anyway.
     try { await GetCommitmentSignature(sig, erConnection); } catch { /* not fatal */ }
-
-    for (let i = 0; i < MAX_SEATS; i++) {
-      tx = await erProgram.methods.undelegateSeat()
-        .accountsPartial({ payer: wallet.publicKey, seat: seats[i], hole: holes[i] }).transaction();
-      await sendEr(tx, [wallet], `undelegate_seat ${i}`);
-    }
     for (let t = 0; t < 40; t++) {
       const info = await connection.getAccountInfo(table);
       if (info?.owner.equals(program.programId)) break;
@@ -580,6 +636,142 @@ describe("SolPoker Phases 3-5: private cards and a verifiable shuffle", () => {
       assert.isTrue(hc.cards.every((c: number) => c === 0xff));
     }
     console.log("  base layer holds no unrevealed cards after the hand");
+  });
+
+  /**
+   * The one path nothing exercised: a seat that changes hands across a pause.
+   *
+   * A hole account is pre-funded for its `EphemeralPermission` exactly once, at
+   * `create_hole`, and a delegated PDA cannot be topped up. So if that rent is
+   * not returned when the account leaves the rollup, the second delegation has
+   * nothing to pay with and `secure_hole` fails for the new occupant — who is
+   * then excluded from the deal and sits out every hand, permanently, on a
+   * table that otherwise looks healthy.
+   *
+   * The deal gate makes that failure *safe* rather than a leak, which is why it
+   * was acceptable to ship without knowing. It is not acceptable not to know.
+   */
+  it("HANDOVER: releasing the read right keeps the chair alive for the next player", async function () {
+    this.timeout(600_000);
+    const wallet = (provider.wallet as anchor.Wallet).payer;
+    const leaving = players[0];
+    const arriving = snooper; // funded, and has never sat anywhere
+
+    // Do not assume the previous test finished. Undelegation is several
+    // transactions against a public devnet endpoint and one of them can time
+    // out; if the table is still on the rollup, custody cannot move and this
+    // would fail with `AccountOwnedByWrongProgram` for a reason that has
+    // nothing to do with what it is testing. Wait for the handover to be
+    // possible, and finish the undelegation ourselves if it is still pending.
+    const onBaseLayer = async () => {
+      const info = await connection.getAccountInfo(table);
+      return info?.owner.equals(program.programId) ?? false;
+    };
+    if (!(await onBaseLayer())) {
+      for (let i = 0; i < MAX_SEATS; i++) {
+        try {
+          const st = await erProgram.methods.undelegateSeat()
+            .accountsPartial({ payer: wallet.publicKey, table, seat: seats[i], hole: holes[i] })
+            .transaction();
+          await sendEr(st, [wallet], `undelegate_seat ${i} (retry)`);
+        } catch { /* already off the rollup */ }
+      }
+      try {
+        const core = await erProgram.methods.undelegateCore()
+          .accountsPartial({ payer: wallet.publicKey, table, hand: handPda, deck: deckPda })
+          .transaction();
+        await sendEr(core, [wallet], "undelegate_core (retry)");
+      } catch { /* already off the rollup */ }
+      for (let t = 0; t < 60 && !(await onBaseLayer()); t++) {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+    assert.isTrue(await onBaseLayer(), "the table has to be on the base layer to change hands");
+
+    // The table is on the base layer now, so custody can move.
+    await retry(() => program.methods.leaveTable(0)
+      .accountsPartial({ table, seat: seats[0], player: playerPda(leaving.publicKey), authority: leaving.publicKey })
+      .signers([leaving]).rpc({ commitment: "confirmed" }), "leave seat 0");
+
+    await retry(() => program.methods.initPlayer()
+      .accountsPartial({ player: playerPda(arriving.publicKey), authority: arriving.publicKey })
+      .signers([arriving]).rpc({ commitment: "confirmed" }), "init arriving player").catch(() => {});
+    await retry(() => program.methods.buyChips(new BN(BUY_IN))
+      .accountsPartial({ player: playerPda(arriving.publicKey), authority: arriving.publicKey })
+      .signers([arriving]).rpc({ commitment: "confirmed" }), "arriving buys chips");
+    await retry(() => program.methods.joinTable(0, new BN(BUY_IN))
+      .accountsPartial({ table, config, seat: seats[0], player: playerPda(arriving.publicKey), authority: arriving.publicKey })
+      .signers([arriving]).rpc({ commitment: "confirmed" }), "arriving joins seat 0");
+
+    const seatNow = await program.account.seat.fetch(seats[0]);
+    assert.isFalse(seatNow.cardsSecured, "taking a seat must clear the stale permission flag");
+
+    // Re-delegate and try to point the permission at the new occupant.
+    await retry(() => program.methods.delegateCore(tableId)
+      .accountsPartial({ payer: wallet.publicKey, table, hand: handPda, deck: deckPda, validator: VALIDATOR })
+      .rpc({ commitment: "confirmed" }), "re-delegate core");
+    for (let i = 0; i < MAX_SEATS; i++) {
+      await retry(() => program.methods.delegateSeat(i)
+        .accountsPartial({ payer: wallet.publicKey, table, seat: seats[i], hole: holes[i], validator: VALIDATOR })
+        .rpc({ commitment: "confirmed" }), `re-delegate seat ${i}`);
+    }
+    for (let t = 0; t < 40; t++) {
+      try { if (await erConnection.getAccountInfo(seats[0])) break; } catch { /* not yet */ }
+      await new Promise((r) => setTimeout(r, 750));
+    }
+
+    // Diagnose before asserting: the two candidate causes look identical from
+    // the error alone. Either the permission still names the old member (a
+    // privacy problem), or it was destroyed with the rollup state and the hole
+    // account has no lamports left to create another (a rent problem, because
+    // the account is pre-funded for exactly one permission and cannot be topped
+    // up while delegated).
+    try {
+      const permInfo = await erConnection.getAccountInfo(permissionPda(holes[0]));
+      const holeInfo = await erConnection.getAccountInfo(holes[0]);
+      console.log(
+        `    permission on rollup: ${permInfo ? permInfo.lamports + " lamports, " + permInfo.data.length + " bytes" : "GONE"}`,
+      );
+      console.log(
+        `    hole account lamports: ${holeInfo ? holeInfo.lamports : "?"} (needs rent for one permission to re-create)`,
+      );
+    } catch (e) {
+      console.log(`    probe failed: ${String(e).slice(0, 90)}`);
+    }
+
+    let secured = false;
+    let why = "";
+    try {
+      const tx = await erProgram.methods.secureHole(0)
+        .accountsPartial({ hole: holes[0], seat: seats[0], permission: permissionPda(holes[0]), payer: wallet.publicKey, ...permAccounts })
+        .transaction();
+      await sendEr(tx, [wallet], "secure_hole 0 after handover");
+      secured = true;
+    } catch (e) {
+      why = String(e).split("\n")[0];
+    }
+
+    console.log(
+      secured
+        ? "    seat 0 changed hands across a pause and was re-secured for its new occupant"
+        : `    seat 0 could NOT be re-secured: ${why.slice(0, 100)}`,
+    );
+
+    const after = await erProgram.account.seat.fetch(seats[0]);
+
+    // With the release done, the chair lives: the permission was public when
+    // the new player arrived, so anyone could point it at them.
+    assert.isTrue(
+      secured,
+      "after its occupant released it, a seat re-taken across a pause must be securable",
+    );
+    assert.isTrue(after.cardsSecured, "the new occupant's seat must be marked secured");
+
+    // And the safety net is still the safety net. `start_hand` builds
+    // `dealt_in` from `cards_secured`, so had this failed the seat would sit
+    // out rather than be dealt cards its previous occupant could read. A dead
+    // chair is a bad table; a readable chair is a stolen pot.
+    console.log("    the read right moved with the chair, and the deal gate still guards it");
   });
 
   it("reports action latency", () => {

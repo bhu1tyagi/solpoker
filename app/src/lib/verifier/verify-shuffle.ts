@@ -178,35 +178,52 @@ export function verify(history: HandHistory): VerifyResult {
 
   const deck = shuffle(seed);
 
-  // Board and hole cards come off the top in a fixed order: two per seat in
-  // seat order, then five board cards. There are no burn cards.
-  const dealtIn = (history.seats ?? []).filter((s) => s.dealtIn);
-  let cursor = 0;
-  const expectedHoles: Record<number, number[]> = {};
-  for (const seat of dealtIn) {
-    expectedHoles[seat.index] = [deck[cursor++], deck[cursor++]];
-  }
-  const expectedBoard = Array.from({ length: 5 }, () => deck[cursor++]);
-
-  for (const seat of dealtIn) {
-    if (!seat.revealed) continue;
-    const got = seat.revealed;
-    const want = expectedHoles[seat.index];
-    if (got[0] !== want[0] || got[1] !== want[1]) {
-      problems.push(
-        `seat ${seat.index}: showed ${got.map(cardName).join(" ")} ` +
-          `but the deck gives ${want.map(cardName).join(" ")}`,
-      );
-    }
-  }
+  // The board is the top five cards of the deck this seed produces.
+  //
+  // Hole cards are deliberately *not* checkable here, and that is the point of
+  // the change this verifier was rewritten for. They are dealt from a second,
+  // independent randomness draw that is never published, from the forty-seven
+  // cards the board did not take. Publishing the seed that proves the board
+  // would, if the hole cards came from it too, publish every folded hand along
+  // with it — permanently, for every hand ever played. So the deal is split:
+  // the community cards are provable by anyone, and the hole cards rest on the
+  // enclave, which is exactly what this project has always claimed
+  // ("provably fair shuffle, TEE-protected hole cards") and now actually does.
+  const expectedBoard = Array.from(deck.slice(0, 5));
 
   if (history.board) {
     const same = history.board.every((c, i) => c === expectedBoard[i]);
     if (!same) {
       problems.push(
         `board was ${history.board.map(cardName).join(" ")} ` +
-          `but the deck gives ${expectedBoard.map(cardName).join(" ")}`,
+          `but the seed gives ${expectedBoard.map(cardName).join(" ")}`,
       );
+    }
+  }
+
+  // A shown hand still has to be a real card that is not on the board and not
+  // in somebody else's hand. That is weaker than deriving it, and it is what
+  // remains checkable without the hole seed.
+  const seen = new Map<number, number>();
+  for (const seat of history.seats ?? []) {
+    if (!seat.revealed) continue;
+    for (const card of seat.revealed) {
+      if (card < 0 || card > 51) {
+        problems.push(`seat ${seat.index}: showed a card outside the deck (${card})`);
+        continue;
+      }
+      if (expectedBoard.includes(card)) {
+        problems.push(
+          `seat ${seat.index}: showed ${cardName(card)}, which is on the board`,
+        );
+      }
+      const other = seen.get(card);
+      if (other !== undefined) {
+        problems.push(
+          `seat ${seat.index}: showed ${cardName(card)}, already shown by seat ${other}`,
+        );
+      }
+      seen.set(card, seat.index);
     }
   }
 
@@ -216,6 +233,10 @@ export function verify(history: HandHistory): VerifyResult {
     seed: hex(seed),
     deck: Array.from(deck),
     expectedBoard,
-    expectedHoles,
+    /**
+     * Empty by design. Hole cards are not derivable from published data any
+     * more; the field stays so callers that render it keep working.
+     */
+    expectedHoles: {} as Record<number, number[]>,
   };
 }

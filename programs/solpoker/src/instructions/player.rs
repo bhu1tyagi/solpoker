@@ -36,6 +36,44 @@ pub fn init_player(ctx: Context<InitPlayer>) -> Result<()> {
     Ok(())
 }
 
+/// Move a table's accrued rake into the treasury's balance.
+///
+/// Rake is taken at settlement, which runs on the rollup, where a base-layer
+/// [`Player`] balance cannot be written. So it waits on the table until the
+/// table is back on Solana, and this moves it the rest of the way.
+///
+/// Permissionless on purpose. The destination is fixed — the only account this
+/// will credit is the treasury's, checked against [`TREASURY_AUTHORITY`] — so
+/// there is nothing for a caller to gain by running it and no reason to make
+/// the house the only one who can. Anyone tidying a table can sweep it.
+///
+/// No chip is created here. It left the seats at settlement and it lands in a
+/// balance now, backed by the same vault lamports the whole way.
+pub fn sweep_rake(ctx: Context<SweepRake>) -> Result<()> {
+    // Delegation state is enforced by ownership, as everywhere else that
+    // touches custody: while the table is on the rollup its base-layer owner is
+    // the delegation program, so `Account<Table>` rejects this outright.
+    require_keys_eq!(
+        ctx.accounts.treasury.authority,
+        TREASURY_AUTHORITY,
+        PokerError::NotTableCreator
+    );
+
+    let amount = ctx.accounts.table.rake_accrued;
+    require!(amount > 0, PokerError::InsufficientChips);
+
+    ctx.accounts.treasury.chips = ctx
+        .accounts
+        .treasury
+        .chips
+        .checked_add(amount)
+        .ok_or(PokerError::InsufficientChips)?;
+    ctx.accounts.table.rake_accrued = 0;
+
+    msg!("swept {} chips of rake to the treasury", amount);
+    Ok(())
+}
+
 /// Buy chips with SOL, at the fixed rate.
 ///
 /// The wallet signs and the lamports go into the vault, so every chip minted
@@ -132,6 +170,25 @@ pub struct InitPlayer<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SweepRake<'info> {
+    #[account(
+        mut,
+        seeds = [TABLE_SEED, &table.table_id.to_le_bytes()],
+        bump = table.bump
+    )]
+    pub table: Account<'info, Table>,
+    /// The house's own balance, and the only account this can credit.
+    #[account(
+        mut,
+        seeds = [PLAYER_SEED, TREASURY_AUTHORITY.as_ref()],
+        bump = treasury.bump
+    )]
+    pub treasury: Account<'info, Player>,
+    /// Anyone at all: the destination is fixed, so there is nothing to gain.
+    pub payer: Signer<'info>,
 }
 
 #[derive(Accounts)]

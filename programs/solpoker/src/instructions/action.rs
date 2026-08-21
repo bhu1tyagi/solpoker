@@ -107,10 +107,13 @@ pub fn player_action(ctx: Context<PlayerAction>, action: PlayerMove) -> Result<(
     let slot = Clock::get()?.slot;
     let now = Clock::get()?.unix_timestamp;
     {
-        let mut seats = seats_mut!(ctx.accounts);
+        let seats = seats_mut!(ctx.accounts);
         seats[seat_index].last_action_slot = slot;
     }
-    ctx.accounts.hand.deadline = now + ctx.accounts.config.action_timeout_secs;
+    // Clamped rather than trusted. The range is enforced at creation too, but a
+    // config written before that rule existed still deserializes, and this is
+    // one of the four places its value becomes the turn clock.
+    ctx.accounts.hand.deadline = now + clamped_timeout(ctx.accounts.config.action_timeout_secs);
 
     msg!(
         "seat {} {:?}; bet {} to act {}",

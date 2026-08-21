@@ -45,7 +45,16 @@ pub fn create_table(
     config.min_buy_in = min_buy_in;
     config.max_buy_in = max_buy_in;
     config.max_seats = MAX_SEATS as u8;
-    require!(action_timeout_secs > 0, PokerError::IllegalAction);
+    // A turn clock is a weapon if it is short enough. `force_timeout` is
+    // permissionless and folds whoever owes chips, so a creator who set a
+    // one-second clock on their own table could raise and then time every
+    // opponent out before a human could answer, hand after hand, and cash the
+    // proceeds out for SOL. `check_config` cannot catch that: the config really
+    // does belong to the table. Only a bound does.
+    require!(
+        (MIN_ACTION_TIMEOUT_SECS..=MAX_ACTION_TIMEOUT_SECS).contains(&action_timeout_secs),
+        PokerError::TimeoutOutOfRange
+    );
     config.action_timeout_secs = action_timeout_secs;
     config.bump = ctx.bumps.config;
 
@@ -58,6 +67,7 @@ pub fn create_table(
     table.state = TableState::Waiting;
     table.bump = ctx.bumps.table;
     table.empty_since = Clock::get()?.unix_timestamp;
+    table.rake_accrued = 0;
 
     let hand = &mut ctx.accounts.hand;
     hand.table = table.key();
@@ -472,24 +482,11 @@ pub fn vacate_seat(ctx: Context<VacateSeat>, seat_index: u8) -> Result<()> {
     Ok(())
 }
 
-/// Read the creator straight out of the config account and check the signer.
-///
-/// Raw rather than deserialized because a table created by an older build has
-/// a shorter config, and a table nobody can delete is worse than one nobody
-/// can play. The creator has sat at the same offset in every version.
-fn assert_creator(
-    config: &AccountInfo,
-    table: &Account<Table>,
-    creator: &Signer,
-) -> Result<()> {
-    require_keys_eq!(*config.key, table.config, PokerError::SeatTableMismatch);
-    require_keys_eq!(*config.owner, crate::ID, PokerError::SeatTableMismatch);
-    let data = config.try_borrow_data()?;
-    require!(data.len() >= 48, PokerError::SeatOrderMismatch);
-    let stored = Pubkey::try_from(&data[16..48]).map_err(|_| error!(PokerError::SeatOrderMismatch))?;
-    require_keys_eq!(stored, creator.key(), PokerError::NotTableCreator);
-    Ok(())
-}
+// `assert_creator` used to live here. It was dead: both `vacate_seat` and
+// `close_table` read the creator out of the config themselves, raw, because
+// each needs slightly different surrounding state. A security helper that
+// nothing calls is worse than no helper, because it reads like a control that
+// is in force somewhere.
 
 /// Delete a table, refunding its rent to whoever paid for it.
 ///
@@ -512,7 +509,7 @@ pub fn close_table(ctx: Context<CloseTable>) -> Result<()> {
     let table_info = &ctx.accounts.table;
     require_keys_eq!(*table_info.owner, crate::ID, PokerError::SeatTableMismatch);
 
-    let (table_id, config_key, occupied, empty_since) = {
+    let (table_id, config_key, occupied, empty_since, rake_accrued) = {
         let data = table_info.try_borrow_data()?;
         // 8 discriminator, 8 table_id, 32 config, 6 x 32 seats, then the rest.
         require!(data.len() >= 240, PokerError::SeatOrderMismatch);
@@ -532,13 +529,28 @@ pub fn close_table(ctx: Context<CloseTable>) -> Result<()> {
         } else {
             0
         };
-        (table_id, config_key, occupied, empty_since)
+        // Rake sits at 259, appended after `empty_since`. A table written by a
+        // build that predates the rake stops before it and reads as zero, which
+        // is the truth for those tables.
+        let rake = if data.len() >= 267 {
+            u64::from_le_bytes(
+                data[259..267].try_into().map_err(|_| error!(PokerError::SeatOrderMismatch))?,
+            )
+        } else {
+            0
+        };
+        (table_id, config_key, occupied, empty_since, rake)
     };
 
     let (expected_table, _) =
         Pubkey::find_program_address(&[TABLE_SEED, &table_id.to_le_bytes()], &crate::ID);
     require_keys_eq!(table_info.key(), expected_table, PokerError::SeatOrderMismatch);
     require!(!occupied, PokerError::TableNotEmpty);
+    // Deleting the table would destroy chips that belong to the house, and
+    // chips are backed by real lamports in the vault, so this would quietly
+    // break the one-to-one backing. `sweep_rake` is permissionless, so
+    // whoever wants the table gone can always clear this first.
+    require!(rake_accrued == 0, PokerError::UnclaimedChips);
 
     // Rent always returns to whoever paid it, whoever asked for the delete.
     require_keys_eq!(*ctx.accounts.config.key, config_key, PokerError::SeatTableMismatch);

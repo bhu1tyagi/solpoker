@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Connection } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { makeErConnection } from "@/lib/connection";
-import { getAuthToken } from "@/lib/tee-auth";
+import { clearAuthToken, getAuthToken } from "@/lib/tee-auth";
+import { clearSession } from "@/lib/session";
 import { makeProgram, type SolpokerProgram } from "@/lib/anchor";
 import { useTableStore } from "@/stores/table-store";
 import { toast } from "@/stores/ui-store";
@@ -60,6 +61,22 @@ export function useTee() {
 
   useEffect(() => {
     if (!connected || !publicKey) {
+      // Disconnecting has to take the credentials with it. Both of these are
+      // bearer credentials in `localStorage`: the token reads hole cards and
+      // the session key signs bets. Leaving them behind meant "log out" cleared
+      // the UI and nothing else, so the next person at that browser — or any
+      // script on the origin — still held a working pair. Whoever was signed in
+      // last is the only identity we can clear, which is why it is tracked.
+      const last = identity.current;
+      if (last) {
+        try {
+          const key = new PublicKey(last);
+          clearAuthToken(key);
+          clearSession(key);
+        } catch {
+          // Not a key we can parse; nothing to clear.
+        }
+      }
       identity.current = null;
       setConnection(null);
       setProgram(null);

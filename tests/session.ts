@@ -5,7 +5,10 @@
  * stops responding. Nobody folds for them and no client covers for them. The
  * table has to keep moving on the turn clock alone.
  *
- * Asserts after every hand that chips are conserved. The table total can only
+* Asserts after every hand that chips are conserved: the six stacks plus the
+ * rake taken so far. The rake is the only way a chip leaves a seat without
+ * leaving the table, so counting it is what makes this a conservation law
+ * rather than a coincidence. The total can otherwise only
  * change when someone joins or leaves on the base layer, and nobody does that
  * here, so it must be identical from the first hand to the last.
  *
@@ -24,8 +27,18 @@ const MAX_SEATS = 6;
 const SEATED = 6;
 const BUY_IN = 2_000;
 const HANDS = Number(process.env.HANDS ?? 100);
-/** Short clock so a stalled seat costs seconds, not half a minute. */
-const TIMEOUT_SECS = 2;
+/**
+ * The shortest clock the program will accept, so a stalled seat costs ten
+ * seconds rather than half a minute.
+ *
+ * This used to be 2, which the program no longer allows. A clock short enough
+ * that a human cannot answer it is a way to take every pot: raise, then call
+ * the permissionless `force_timeout` the instant it expires, and every opponent
+ * who owes chips is folded before they can respond. `MIN_ACTION_TIMEOUT_SECS`
+ * is the floor that closed it, and a test has no business exercising a table
+ * nobody can create.
+ */
+const TIMEOUT_SECS = 10;
 /** Chance a given player ignores the whole hand. */
 const DROP_RATE = 0.15;
 /** Commit to the base layer every N hands, not every hand. See history.rs. */
@@ -68,7 +81,7 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
   };
   const permAccounts = { permissionProgram: PERMISSION_PROGRAM, ephemeralVault: EPHEMERAL_VAULT, magicProgram: MAGIC_PROGRAM };
 
-  const stats = { hands: 0, timeouts: 0, drops: 0, stalls: 0, commits: 0 };
+  const stats = { hands: 0, timeouts: 0, drops: 0, stalls: 0, commits: 0, rake: 0 };
 
   async function retry<T>(fn: () => Promise<T>, label: string, tries = 6): Promise<T> {
     let last: unknown;
@@ -150,10 +163,21 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
     throw new Error(`${label} failed after ${tries} attempts: ${last}`);
   }
 
+  /**
+   * Every chip the table is accountable for: the six stacks plus whatever rake
+   * has been taken and not yet swept to the treasury.
+   *
+   * The rake is why this counts more than the stacks. Chips now legitimately
+   * leave a seat without leaving the table, so "the stacks still add up" is no
+   * longer the conservation law — "the stacks plus the rake still add up" is,
+   * and asserting that is what proves the rake neither creates nor destroys a
+   * chip on its way out of the pot.
+   */
   async function tableChips(): Promise<number> {
     let total = 0;
     for (const s of seats) total += (await net(() => erProgram.account.seat.fetch(s), "fetch seat")).stack.toNumber();
-    return total;
+    const t = await net(() => erProgram.account.table.fetch(table), "fetch table");
+    return total + t.rakeAccrued.toNumber();
   }
 
   before(async function () {
@@ -336,6 +360,7 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
 
       const chips = await tableChips();
       assert.equal(chips, startingChips, `hand ${hand}: chips changed from ${startingChips} to ${chips}`);
+      stats.rake = (await net(() => erProgram.account.table.fetch(table), "fetch table")).rakeAccrued.toNumber();
       stats.hands++;
 
       if (hand % COMMIT_EVERY === 0 || hand === HANDS) {
@@ -374,12 +399,15 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
   it("returns chips to player balances on undelegation", async function () {
     this.timeout(900_000);
     const kp = (provider.wallet as anchor.Wallet).payer;
-    await sendEr(await erProgram.methods.undelegateCore()
-      .accountsPartial({ payer: kp.publicKey, table, hand: handPda, deck: deckPda }).transaction(), [kp], "undelegate_core");
+    // Seats before the core accounts: undelegate_seat carries the table so the
+    // program can refuse to pull a seat off the rollup mid-hand, which means
+    // the table has to still be on the rollup to be read.
     for (let i = 0; i < MAX_SEATS; i++) {
       await sendEr(await erProgram.methods.undelegateSeat()
-        .accountsPartial({ payer: kp.publicKey, seat: seats[i], hole: holes[i] }).transaction(), [kp], `undelegate_seat ${i}`);
+        .accountsPartial({ payer: kp.publicKey, table, seat: seats[i], hole: holes[i] }).transaction(), [kp], `undelegate_seat ${i}`);
     }
+    await sendEr(await erProgram.methods.undelegateCore()
+      .accountsPartial({ payer: kp.publicKey, table, hand: handPda, deck: deckPda }).transaction(), [kp], "undelegate_core");
     // Each seat undelegates in its own transaction, so they land at different
     // times. Waiting only on the table would read a seat whose base-layer copy
     // is still frozen at its delegation-time stack.
@@ -391,7 +419,13 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
 
     let onTable = 0;
     for (const s of seats) onTable += (await program.account.seat.fetch(s)).stack.toNumber();
-    assert.equal(onTable, SEATED * BUY_IN, "committed stacks must match what went in");
+    const rake = (await program.account.table.fetch(table)).rakeAccrued.toNumber();
+    assert.equal(
+      onTable + rake,
+      SEATED * BUY_IN,
+      "committed stacks plus rake must match what went in",
+    );
+    console.log(`  rake taken over ${HANDS} hand(s): ${rake} chips`);
 
     let inBalances = 0;
     for (let i = 0; i < SEATED; i++) {
@@ -400,7 +434,45 @@ describe(`SolPoker Phase 6: ${HANDS}-hand session with disconnects`, () => {
         .signers([players[i]]).rpc({ commitment: "confirmed" }), `leave ${i}`);
       inBalances += (await program.account.player.fetch(playerPda(players[i].publicKey))).chips.toNumber();
     }
-    assert.equal(inBalances, SEATED * 10_000, "every faucet chip is still accounted for");
-    console.log(`  all ${SEATED} players cashed out; ${inBalances} chips across balances`);
+    // Sweep the rake off the table now that it is back on Solana, which is the
+    // only place a base-layer balance can be written. Permissionless, and the
+    // destination is fixed, so the provider wallet can run it for the house.
+    let inTreasury = 0;
+    if (rake > 0) {
+      const treasuryAuthority = new PublicKey("FWRvqaezac9noSy2WsPSNoZZs2Vc2peA4TRLkjziS7Vq");
+      const treasury = playerPda(treasuryAuthority);
+      const before = await connection.getAccountInfo(treasury);
+      if (!before) {
+        console.log("  treasury player account does not exist yet; skipping sweep");
+      } else {
+        const had = (await program.account.player.fetch(treasury)).chips.toNumber();
+        await retry(() => program.methods.sweepRake()
+          .accountsPartial({ table, treasury, payer: provider.wallet.publicKey })
+          .rpc({ commitment: "confirmed" }), "sweep rake");
+        const now = (await program.account.player.fetch(treasury)).chips.toNumber();
+        inTreasury = now - had;
+        assert.equal(inTreasury, rake, "the sweep moved exactly the accrued rake");
+        assert.equal(
+          (await program.account.table.fetch(table)).rakeAccrued.toNumber(),
+          0,
+          "the table's rake is cleared once swept",
+        );
+        console.log(`  swept ${inTreasury} chips of rake to the treasury`);
+      }
+    }
+
+    // The real conservation law: nothing was created and nothing destroyed.
+    // Chips only moved — from seats, through the pot, out as rake, into the
+    // house's balance. Every one of them is still backed by the same lamports
+    // in the vault that were paid for it.
+    assert.equal(
+      inBalances + inTreasury + (inTreasury === 0 ? rake : 0),
+      SEATED * 10_000,
+      "every chip is still accounted for across balances and the house",
+    );
+    console.log(
+      `  all ${SEATED} players cashed out; ${inBalances} chips across balances, ` +
+        `${rake} raked`,
+    );
   });
 });
