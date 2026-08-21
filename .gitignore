@@ -30,3 +30,7 @@ app/.env.local
 .agents/
 .claude/
 skills-lock.json
+
+# Vercel's project link. The client's Root Directory is `app`, so a manual
+# deploy runs from here and drops the link at the root as well as under app/.
+.vercel

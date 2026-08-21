@@ -1041,7 +1041,9 @@ node scripts/clear-gate-tables.mjs  # delete tables created by a gate/persisted
                                     # wallet, signing as creator (no hour wait)
 node scripts/wipe-tables.mjs        # remove every table, wherever it is in its
                                     # lifecycle; run it twice, it converges
-vercel --prod                   # deploy the client
+vercel --prod                   # deploy the client, FROM THE REPOSITORY ROOT.
+                                # The project's Root Directory is `app`, so
+                                # running this from app/ looks for app/app.
 
 # For mainnet, set NEXT_PUBLIC_CLUSTER=mainnet in the Vercel project. Every
 # endpoint derives from it, and a mainnet build carrying a stale devnet URL

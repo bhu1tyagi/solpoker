@@ -1,0 +1,28 @@
+# What Vercel does not need.
+#
+# The project's Root Directory is `app`, so only the Next.js client is ever
+# built. But the CLI uploads from the repository root, and this repository also
+# holds a Rust workspace: `target` alone is hundreds of megabytes, and the
+# upload is capped at 15,000 files. Without this, `vercel --prod` fails before
+# it starts with 41,473 files.
+#
+# The Git integration does not need this file, since it clones and honours
+# .gitignore. It is here so a manual deploy behaves the same way.
+
+target
+node_modules
+.git
+
+# The program, the engine, and everything that only exists to build or test
+# them. None of it reaches the browser.
+programs
+crates
+tests
+tools
+phase0-private-counter
+Cargo.toml
+Cargo.lock
+Anchor.toml
+
+# Long-form documentation. Read on GitHub, not served by the app.
+docs
