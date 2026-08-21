@@ -132,9 +132,10 @@ jobs:
       - name: Build
         run: anchor build
 
+      # Compares everything except the program id. A fresh checkout has no
+      # program keypair, because the real one is the upgrade authority and is
+      # not in the repository, so `anchor build` writes itself a throwaway and
+      # resolves that into the IDL. Instructions, accounts, types, errors and
+      # every other address are still compared exactly.
       - name: Compare against the vendored copy
-        run: |
-          if ! diff -u target/idl/solpoker.json app/src/lib/idl/solpoker.json; then
-            echo "::error::The vendored IDL is stale. Re-run: cp target/idl/solpoker.json app/src/lib/idl/solpoker.json && cp target/types/solpoker.ts app/src/lib/idl/solpoker.ts"
-            exit 1
-          fi
+        run: python3 tools/verify-idl.py target/idl/solpoker.json app/src/lib/idl/solpoker.json
