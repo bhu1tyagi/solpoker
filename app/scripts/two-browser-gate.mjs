@@ -397,10 +397,21 @@ async function main() {
       const pauseBtn = A.page.getByRole("button", { name: /pause table/i });
       if (await pauseBtn.isVisible().catch(() => false)) {
         await pauseBtn.click().catch(() => {});
+        // Wait for the room to say it is back on the base layer, which it now
+        // does by offering "Start playing" again rather than by naming a layer.
+        // This used to look for the text "on Solana", from a Link field that was
+        // taken out of the HUD ("which layer a table is sitting on is plumbing,
+        // not something a player needs to read every hand"). Nothing rendered
+        // that string afterwards, so this check could only ever time out — and
+        // it did, silently, on a pause that had actually succeeded.
         paused = await A.page
-          .waitForFunction(() => /on Solana/i.test(document.body.innerText), {
-            timeout: 120_000,
-          })
+          .waitForFunction(
+            () =>
+              /start playing|ready to start|delete table/i.test(
+                document.body.innerText,
+              ) && !/pause table/i.test(document.body.innerText),
+            { timeout: 120_000 },
+          )
           .then(() => true)
           .catch(() => false);
       }

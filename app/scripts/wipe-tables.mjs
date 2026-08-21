@@ -126,12 +126,27 @@ async function main() {
           await sleep(1000);
         }
 
+        // Seats before the core accounts. undelegate_seat now reads the table
+        // to refuse a mid-hand pull, so the table has to still be there.
+        // Per seat, and tolerant of one already being home.
+        //
+        // A table can end up split across the two layers — some seats back on
+        // Solana while the rest, and the table itself, are still on the rollup.
+        // Undelegating a seat that has already left fails with
+        // `ReadonlyDataModified`, and aborting the whole wipe on that leaves
+        // every remaining seat stranded. Skip what is done, keep going.
+        for (let i = 0; i < 6; i++) {
+          const seatInfo = await base.getAccountInfo(seats[i]);
+          if (!seatInfo || !seatInfo.owner.equals(DELEG)) continue;
+          try {
+            await send(er, await erProgram.methods.undelegateSeat()
+              .accountsPartial({ payer: kp.publicKey, table, seat: seats[i], hole: holes[i] }).instruction(), `undelegate seat ${i}`);
+          } catch (e) {
+            console.log(`  seat ${i}: ${String(e).split("\n")[0].slice(0, 80)}`);
+          }
+        }
         await send(er, await erProgram.methods.undelegateCore()
           .accountsPartial({ payer: kp.publicKey, table, hand, deck }).instruction(), "undelegate core");
-        for (let i = 0; i < 6; i++) {
-          await send(er, await erProgram.methods.undelegateSeat()
-            .accountsPartial({ payer: kp.publicKey, seat: seats[i], hole: holes[i] }).instruction(), `undelegate seat ${i}`);
-        }
         const all = [table, ...seats];
         for (let t = 0; t < 60; t++) {
           const infos = await base.getMultipleAccountsInfo(all);

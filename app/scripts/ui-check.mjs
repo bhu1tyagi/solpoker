@@ -61,8 +61,15 @@ for (const page of PAGES) {
   });
   tab.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
 
-  await tab.goto(`${base}${page.path}`, { waitUntil: "networkidle", timeout: 60_000 });
-  await tab.waitForTimeout(2500);
+  // `domcontentloaded`, not `networkidle`. A table page watches chain state
+  // for as long as it is open — polls, a websocket, a hole-card chase — so
+  // there is never a 500ms window with no network activity and the wait can
+  // only ever time out. That is not a page fault, it is what a live table
+  // looks like, and it was failing this check on a page that renders fine.
+  // The settle below plus the selector assertions are what actually establish
+  // that React ran.
+  await tab.goto(`${base}${page.path}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await tab.waitForTimeout(4000);
 
   const missing = [];
   for (const [name, sel] of Object.entries(page.expect)) {
