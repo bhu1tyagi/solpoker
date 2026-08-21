@@ -108,26 +108,46 @@ function testWallets() {
   }
 }
 
+// What each test wallet needs on hand for a run: two buy-ins, a session key,
+// and fees.
+const TARGET_LAMPORTS = 0.35 * LAMPORTS_PER_SOL;
+
 async function main() {
   const players = testWallets();
-  log(`funding ${players.map((p) => p.publicKey.toBase58().slice(0, 8)).join(", ")}`);
 
-  const fund = new Transaction().add(
-    ...players.map((p) =>
-      SystemProgram.transfer({
-        fromPubkey: funder.publicKey,
-        toPubkey: p.publicKey,
-        lamports: 0.35 * LAMPORTS_PER_SOL,
-      }),
-    ),
-  );
-  const bh = await conn.getLatestBlockhash();
-  fund.feePayer = funder.publicKey;
-  fund.recentBlockhash = bh.blockhash;
-  fund.sign(funder);
-  const sig = await conn.sendRawTransaction(fund.serialize());
-  await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
-  log("  funded");
+  // Top up to the target rather than transferring unconditionally. The wallets
+  // are reused across runs and a hand rarely spends the whole float, so a flat
+  // transfer every run is a slow leak out of the funder and into two accounts
+  // nothing ever sweeps: they had quietly accumulated 2.37 SOL before this was
+  // noticed, at which point the funder could no longer afford a run.
+  const balances = await Promise.all(players.map((p) => conn.getBalance(p.publicKey)));
+  const short = players
+    .map((p, i) => ({ p, need: TARGET_LAMPORTS - balances[i] }))
+    .filter(({ need }) => need > 0);
+
+  if (short.length === 0) {
+    log(`funding: all ${players.length} wallets already at target, nothing to send`);
+  } else {
+    log(`funding ${short.map(({ p, need }) =>
+      `${p.publicKey.toBase58().slice(0, 8)} (+${(need / LAMPORTS_PER_SOL).toFixed(3)})`).join(", ")}`);
+
+    const fund = new Transaction().add(
+      ...short.map(({ p, need }) =>
+        SystemProgram.transfer({
+          fromPubkey: funder.publicKey,
+          toPubkey: p.publicKey,
+          lamports: need,
+        }),
+      ),
+    );
+    const bh = await conn.getLatestBlockhash();
+    fund.feePayer = funder.publicKey;
+    fund.recentBlockhash = bh.blockhash;
+    fund.sign(funder);
+    const sig = await conn.sendRawTransaction(fund.serialize());
+    await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
+    log("  funded");
+  }
 
   const browser = await chromium.launch();
   const A = await openBrowser(browser, players[0], "A");
