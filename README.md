@@ -185,7 +185,7 @@ HANDS=100 npm run test:session   # long session with random disconnects
 ```
 
 If you forked this, `npm run deploy` will not put your build at
-`4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9`. That program is owned by an
+`Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker`. That program is owned by an
 upgrade authority you do not have, so you need an id of your own:
 
 ```bash

@@ -90,16 +90,30 @@ setup.
 | Browser tests | Playwright | 1.62 |
 | Unit tests | Vitest, cargo test, proptest | current |
 
-Deployed program: `4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9`
+Deployed program: `Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker`
 TEE endpoint: `https://devnet-tee.magicblock.app`
 Pinned validator: `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo`
 Client: <https://solpoker.vercel.app>
 Source: <https://github.com/bhu1tyagi/solpoker>, MIT, public
 
-The program account has been extended twice to fit growing binaries the upgrade
-would otherwise refuse: 30,000 bytes on 16 August, and 100,000 bytes on
-20 August for the mainnet-audit fixes. Allocated data length is now 1,075,544
-bytes against a 1,004,888-byte binary, which leaves real headroom.
+The program moved to a fresh id on 22 August. The previous deployment, at
+`4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9`, had been extended twice to fit
+growing binaries an upgrade would otherwise refuse — 30,000 bytes on 16 August
+and 100,000 on 20 August — and still holds its 7.49 SOL of devnet rent. It can
+be closed to reclaim that, at the cost of burning the id permanently.
+
+**The new deployment has no headroom.** A first deploy allocates exactly the
+binary size, so allocated data length is 1,049,800 bytes against a 1,049,800-byte
+binary. The next upgrade that grows the binary by even one byte will be refused
+until the account is extended:
+
+```
+solana program extend Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker 100000 -u devnet
+```
+
+Rent is 0.00000696 SOL/byte and identical on both clusters, so 100,000 bytes of
+headroom costs 0.696 SOL. Worth buying deliberately before a mainnet deploy
+rather than discovering it mid-upgrade.
 
 ## What is built
 

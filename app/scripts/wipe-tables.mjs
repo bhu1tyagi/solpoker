@@ -19,7 +19,7 @@ import idl from "../src/lib/idl/solpoker.json" with { type: "json" };
 
 const RPC = "https://rpc.magicblock.app/devnet";
 const TEE = "https://devnet-tee.magicblock.app";
-const P = new PublicKey("4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9");
+const P = new PublicKey("Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker");
 const DELEG = new PublicKey("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
 const kp = Keypair.fromSecretKey(
   Uint8Array.from(JSON.parse(readFileSync(`${process.env.HOME}/.config/solana/id.json`, "utf8"))),

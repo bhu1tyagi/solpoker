@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-solpoker = "4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9"
+solpoker = "Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker"
 
 [registry]
 url = "https://api.apr.dev"
