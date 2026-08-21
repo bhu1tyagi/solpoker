@@ -27,3 +27,4 @@ app/out/
 app/next-env.d.ts
 *.tsbuildinfo
 app/.env.local
+.agents/

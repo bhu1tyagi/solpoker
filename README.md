@@ -30,7 +30,7 @@ Measured on devnet:
 | Undelegating mid-hand to expose cards | refused by the program |
 | Two browsers, two wallets, a real hand through the UI | passes |
 
-See [SPEC.md](SPEC.md) for the phase plan, [TRUST_MODEL.md](TRUST_MODEL.md) for what is
+See [SPEC.md](SPEC.md) for the design and why it is shaped this way, [TRUST_MODEL.md](TRUST_MODEL.md) for what is
 and is not guaranteed, and [DECISIONS.md](DECISIONS.md) for the decision log.
 
 ## Why this design

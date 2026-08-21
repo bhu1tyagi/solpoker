@@ -1,306 +1,205 @@
-# SolPoker: Build Prompt for Claude Code
+# SolPoker: design
 
-> Save this as `SPEC.md` in an empty repo, open Claude Code there, and say:
-> **"Read SPEC.md and execute Phase 0. Stop at the Phase 0 gate and report."**
-> Then advance one phase at a time. Don't let it run all phases unattended.
-
----
-
-## 0. Role and operating rules
-
-You are building a real-time, fully on-chain Texas Hold'em poker game on Solana, using MagicBlock Ephemeral Rollups for real-time execution and MagicBlock **Private** Ephemeral Rollups (Intel TDX TEE) for hole-card secrecy.
-
-**Rules for the whole project:**
-
-1. **Install the MagicBlock dev skill before writing any code:**
-   ```bash
-   npx skills add https://github.com/magicblock-labs/magicblock-dev-skill
-   ```
-   This gives you MagicBlock-specific patterns for delegation, Magic Actions, cranks, and VRF. Use it as your primary reference.
-
-2. **Verify every MagicBlock API against live docs before use.** This SDK moves fast and my knowledge of it may be stale. Start by fetching `https://docs.magicblock.gg/llms.txt` for the doc index, then read the specific pages you need. If anything in this spec contradicts the current docs, **the docs win**: flag the discrepancy to me and proceed with the docs.
-
-3. **Work in phases. Stop at every gate.** At each gate report: what works, what you verified, what you're unsure about, what's next. Don't proceed past a gate without me saying so.
-
-4. **Test as you go.** Every phase has a definition of done that includes running tests. "It compiles" is not done.
-
-5. **When something is genuinely ambiguous, ask.** Don't invent a design decision on the hidden-information or fund-custody paths and silently move on. Those are the two places where a wrong guess is expensive.
-
-6. **Keep a running `DECISIONS.md`**: every non-obvious choice, the reasoning, and the alternative you rejected.
+Why the system is shaped the way it is. `STATUS.md` covers what is built and
+what is verified; `TRUST_MODEL.md` covers what is and is not guaranteed. This
+covers the decisions underneath both, and the invariants the code exists to
+hold.
 
 ---
 
-## 1. What we're building, and why this architecture
+## 1. The problem
 
-### The three hard problems in on-chain poker
+On-chain poker has three hard problems, and most attempts die on the first.
 
-| Problem | Naive approach | Why it fails | What we do |
-|---|---|---|---|
-| **Hidden information**: hole cards secret from opponents *and* from anyone reading chain state | Store cards in a PDA | All Solana account data is world-readable | Cards live in PDAs delegated to a **TEE ER validator**, gated by per-player `EphemeralPermission` |
-| **Real-time**: poker needs sub-second actions and turn clocks | Base-layer Solana txs | ~400ms/block, fees, wallet popup per action | **Ephemeral Rollup** (10-50ms blocks, gasless) + session keys |
-| **Verifiable shuffle**: nobody, including the operator, may know or bias deck order | `Clock` / slot hash as seed | Trivially manipulable | **MagicBlock VRF** seed XOR per-player commit-reveal salts |
+| Problem | Why it is hard | What this does |
+| --- | --- | --- |
+| Hidden cards | Every Solana account is world-readable | Card accounts are delegated to a TEE validator and gated by `EphemeralPermission` |
+| Real-time play | 400ms blocks and a wallet popup per action | Ephemeral Rollup plus session keys |
+| Fair shuffle | Clock and slot seeds are trivially biased | VRF combined with per-player commit-reveal salts |
 
-### Why TEE and not mental poker
+### Why a TEE and not mental poker
 
-Mental poker (SRA commutative encryption, Barnett-Smart threshold ElGamal with ZK shuffle proofs) is the academically pure answer, and it's the reason no on-chain poker product has ever shipped at scale. Two killers:
+Mental poker is the cryptographically pure answer to hidden cards, and it is
+the reason no on-chain poker product has shipped at scale. Every card reveal
+needs a multi-party decryption round trip, and a player who disconnects
+mid-hand takes their key share with them, so the hand stalls. Six players means
+six chances per hand for somebody's laptop to close.
 
-- **Latency**: every card reveal needs a multi-party decryption round-trip; the ceremony scales with player count.
-- **Liveness**: if a player disconnects mid-hand, their key share is needed to reveal cards. The hand **stalls**. Every real implementation bolts on timeouts and key escrow, which erodes the purity anyway.
+Making the enclave the dealer turns a disconnect into an ordinary auto-fold.
+Nothing needs the absent player's key, because they never held one. That is the
+trade: a hardware and operator assumption in exchange for a game that finishes.
+`TRUST_MODEL.md` states the assumption plainly rather than burying it.
 
-The TEE approach makes the enclave the dealer. A disconnect becomes just an auto-fold and the hand continues. That is the single biggest reason this project is buildable at all.
+### The chip economy
 
-**Be honest about the trust model.** This is *not* trustless. We trust Intel TDX and MagicBlock's TEE validator. You must write `TRUST_MODEL.md` (Phase 4) stating this plainly, including what an enclave compromise would expose. No UI copy may claim "trustless" or "provably fair hole cards." It's "provably fair shuffle, TEE-protected hole cards." That distinction matters.
-
-### The chip economy: SOL in, SOL out
-
-Revised by owner decision on 16 August 2026. The original spec made chips
-play money with a faucet; the point of on-chain poker is that the buy-in is
-real, so chips are now backed by SOL.
-
-**Every chip is backed one to one by lamports in a program vault.** Chips
-enter the system only through `buy_chips`, which moves SOL from the buyer's
-wallet into a program-owned vault PDA, and leave only through `sell_chips`,
-which pays SOL back out of that vault. Fixed rate, set in the program: 1 chip
-= 1,000 lamports, so 10,000 chips cost 0.01 SOL. There is no faucet; an
-unbacked chip is a claim on someone else's deposit, so nothing may mint one.
-
-The chip itself stays a `u64` on the Player account rather than an SPL token.
-Custody already moves between balance and seat only on the base layer while
-undelegated, and that invariant is the security model; a token mint would add
-composability and nothing for gameplay while widening the custody surface.
-
-**Solvency is structural.** The vault's lamports minus a small rent floor must
-always cover every outstanding chip at the fixed rate. Buys add exactly what
-they mint, sells burn exactly what they pay, and no other instruction touches
-either side. Chips minted by the retired faucet were grandfathered by seeding
-the vault with operator devnet SOL.
-
-**Devnet only, and say so.** Devnet SOL is valueless test currency, so today
-this is real-money architecture without real money. Running it on mainnet is
-out of scope for this spec and must not be done casually: the enclave
-attestation gap (hardware proven, code not) becomes a custodial risk, and
-real-money poker is a licensed, regulated activity in most jurisdictions.
-`TRUST_MODEL.md` must state all of this in plain language.
+Chips are bought with SOL and sold back for SOL at a fixed rate, backed one to
+one by lamports in a program vault. They enter and leave in exactly two places,
+`buy_chips` and `sell_chips`, and there is no mint path anywhere. The house
+takes 2.5% of a pot that sees a flop, capped at three big blinds, which
+redistributes chips that already existed rather than creating any.
 
 ---
 
-## 2. Target stack and versions
+## 2. The two-layer split
 
-Confirm current versions against the docs; this is the documented baseline:
+The split is the security model, not an optimisation.
 
-| Component | Version |
-|---|---|
-| Solana CLI | 3.1.9 |
-| Rust | 1.89.0 |
-| Anchor | 1.0.2 |
-| Node | 24.10.0 |
-| `ephemeral-rollups-sdk` | **v0.14+** (required for `CreateEphemeralPermissionCpi`) |
+| Account | Layer | Why |
+| --- | --- | --- |
+| `Player` (chips), `TableConfig` | base only, never delegated | Custody stays settled on Solana |
+| `Table`, `Seat`, `Hand` | delegated to the rollup | Change on every action |
+| `Deck`, `HoleCards` | delegated, TEE-private | Must never be publicly readable |
 
-**Program IDs:**
-- Delegation Program: `DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh`
-- Permission Program: `ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1`
+`Player` is never delegated, so a single instruction cannot write both a
+player's balance and a delegated seat: they live on different layers. That
+forces every custody transition through the base layer while the table is
+undelegated, and gives a clean invariant. **While a hand runs on the rollup,
+chips may move between seats, but the table total cannot change, no chip can be
+minted, and no player balance is reachable.** Account ownership enforces it, not
+a check that could be forgotten.
 
-**Endpoints (devnet):**
-- Base layer: `https://api.devnet.solana.com`
-- Magic Router: `https://devnet-router.magicblock.app`
-- **TEE ER: `https://devnet-tee.magicblock.app`** ← the one we need
-- TEE validator identity: `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo`
-- Local ER: `localhost:7799`, validator `mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev`
-
-**Reference repos to read before coding:**
-- `magicblock-labs/magicblock-engine-examples`: especially `private-counter/anchor`, `magic-actions/anchor`, `delegation-actions/anchor`, `roll-dice`
-- `magicblock-labs/ephemeral-rollups-sdk`
-- `magicblock-labs/ephemeral-vrf`
+It also has a cost worth naming: cashing out genuinely requires the table to
+come off the rollup, because `leave_table` writes both a seat and a balance.
+That is why cashing out is a flow rather than a button.
 
 ---
 
-## 3. Repo layout
+## 3. Randomness
 
-```
-solpoker/
-├── SPEC.md
-├── DECISIONS.md
-├── TRUST_MODEL.md
-├── crates/
-│   └── poker-engine/          # Phase 1: pure Rust, no Solana deps
-│       ├── src/
-│       │   ├── card.rs        # Card encoding, deck
-│       │   ├── eval.rs        # 7-card hand evaluator
-│       │   ├── betting.rs     # Betting round state machine
-│       │   ├── pots.rs        # Main pot + side pots
-│       │   └── lib.rs
-│       └── tests/
-├── programs/
-│   └── solpoker/              # Anchor program
-│       └── src/
-│           ├── lib.rs
-│           ├── state/         # Table, Seat, Hand, Deck, HoleCards
-│           ├── instructions/
-│           │   ├── table.rs       # create, join, leave
-│           │   ├── delegation.rs  # delegate, undelegate, permissions
-│           │   ├── hand.rs        # start_hand, deal, advance_street
-│           │   ├── action.rs      # bet/call/raise/fold/check
-│           │   ├── vrf.rs         # request + callback
-│           │   └── settle.rs      # showdown, payout, commit
-│           └── errors.rs
-├── app/                       # Next.js frontend
-└── tests/                     # TS integration tests
-```
+Two independent VRF draws per hand.
+
+- **Board draw** — the seed is published at settlement, so anyone can recompute
+  the five community cards and confirm they were not rigged.
+- **Hole draw** — never published, never leaves the private deck, wiped at hand
+  end.
+
+One draw cannot do both jobs. Proving the board was fair means publishing the
+value it came from, and anything else derived from that value is published with
+it: XOR is reversible, and hashing the two apart does not help, because a
+verifier who cannot see the input cannot check the output either. With a single
+seed, publishing it also published every folded player's hand, permanently.
+
+The seed for the board is `VRF XOR salt_1 XOR ... XOR salt_n`. Players commit
+`sha256(salt)` before anyone reveals, so nobody can choose a salt after seeing
+another. The VRF is drawn only once the salts are fixed, so choosing one half of
+an XOR against a half nobody knows yet chooses nothing. The VRF caller seed is
+derived from the table, the hand number and the slot, none of which is a
+player's to pick.
 
 ---
 
 ## 4. Data model
 
-Design this carefully, account layout is the thing that's painful to change later.
+Account layout is the thing that is painful to change once anything is
+deployed, so it is defined up front in `state.rs`.
 
-### Base layer (never delegated)
-- **`Player`**: PDA seeded on wallet. Chip balance, faucet cooldown, lifetime stats.
-- **`TableConfig`**: immutable table params: blinds, max seats, min/max buy-in.
+### Base layer, never delegated
 
-### Delegated to TEE ER
-- **`Table`**: seat map (`Option<Pubkey>` per seat), button position, current hand number, table state enum.
-- **`Seat`** (one PDA per seat index), occupant, stack, `has_folded`, `is_all_in`, `committed_this_street`, `last_action_slot`.
-- **`Hand`**: hand number, street (`PreFlop`/`Flop`/`Turn`/`River`/`Showdown`), board cards (5x`u8`, `0xFF` = undealt), pot, current bet, min raise, `to_act` seat index, action deadline.
+- **`Player`** — PDA seeded on the wallet. Chip balance and lifetime stats.
+- **`TableConfig`** — immutable table parameters: blinds, seat count, buy-in
+  range, turn clock. Bounded at creation, because the clock is a weapon if it is
+  short enough.
 
-### Delegated to TEE ER **and private**
-- **`Deck`**: `[u8; 52]` shuffled order + `next_index: u8`. Permission: `is_private = true`, members = `[]`: readable by no wallet, only by program logic inside the enclave. *Verify against the access-control docs that an empty member list means "nobody"; if the semantics differ, ask me before proceeding.*
-- **`HoleCards`** (one PDA per seat per hand), `[u8; 2]`. Permission: `is_private = true`, members = `[Member { pubkey: seat_occupant, flags: TX_LOGS_FLAG | TX_MESSAGE_FLAG | TX_BALANCES_FLAG }]`.
+### Delegated to the rollup
 
-### The single most dangerous mistake in this project
+- **`Table`** — seat map, button, hand number, state, accrued rake.
+- **`Seat`** — one PDA per seat index, reused for the table's lifetime so a
+  seat address is stable and never needs re-delegating as players come and go.
+  Occupant, stack, per-street commitment, per-hand flags, salt state.
+- **`Hand`** — street, board, betting state, deadline, published seed and
+  revealed hands after settlement.
 
-**Never commit `Deck` or `HoleCards` to the base layer while a hand is live.** A commit writes account contents back to public Solana state, every card, visible to everyone, permanently. Enforce this structurally:
+### Delegated and private
 
-1. Maintain an explicit allowlist of committable accounts. Deck and HoleCards are never on it.
-2. Zeroize both accounts at hand end *before* any undelegation path can touch them.
-3. Write a test that starts a hand, forces a commit-and-undelegate, and asserts the base-layer bytes contain no card data.
-4. Add a comment at every `MagicIntentBundleBuilder` call site listing what's being committed and why it's safe.
+- **`Deck`** — the 52-card order, both randomness draws, the board held back
+  until each street reveals it. `EphemeralPermission` with `is_private = true`
+  and an empty member list: readable by no wallet, only by program logic inside
+  the enclave.
+- **`HoleCards`** — one PDA per seat, two card bytes. `is_private = true` with
+  exactly one member, the seat's current occupant.
 
-Card encoding: `u8` where `rank = card / 4` (0=Two … 12=Ace) and `suit = card % 4`. `0xFF` = none.
+A permission may only be updated by a member it already names, and it survives
+the trip off the rollup and back. Two rules follow, and both are load-bearing: a
+permission is never created for an empty seat, or nobody could ever be named in
+it; and a departing player releases their read right so the next occupant can be
+named. Without either, a chair dies for the life of the table.
 
----
+Card encoding is `u8`, `rank = card / 4` (0 = Two … 12 = Ace), `suit = card % 4`,
+`0xFF` = none. The same encoding in the engine, the program and the verifier, so
+nothing converts.
 
-## 5. Phases
+### The most dangerous mistake in this project
 
-### Phase 0: Scaffold and prove the pipe
-Install the dev skill. Fetch the docs index. Scaffold the Anchor workspace. Then **reproduce the `private-counter` example end to end on devnet TEE**: delegate a PDA, create an ephemeral permission, flip privacy on, confirm from a second wallet that reads are blocked, flip off, undelegate.
+**Never let `Deck` or `HoleCards` reach the base layer while they hold cards.**
+Undelegation commits account contents to public Solana state permanently: every
+card, visible to everyone, forever. It is also permissionless, so "the client
+only calls it after settlement" is a habit, not a guarantee.
 
-**Gate:** Working private counter on devnet TEE. Report the exact SDK version and any API drift vs. this spec.
+Four things enforce it structurally:
 
-> Don't skip this. If the TEE privacy path doesn't work for you, the whole architecture changes, and you want to know that on hour one, not hour twenty.
-
----
-
-### Phase 1: Poker engine (pure Rust, no Solana)
-Build `crates/poker-engine` as a standalone crate with zero Solana dependencies. This is chain-agnostic and by far the highest-value thing to get right.
-
-- **7-card hand evaluator.** Compute-unit budget matters, you can't use a 130MB lookup table on-chain. Use a bitmask / prime-product approach. Benchmark CU cost and report it. If showdown evaluation exceeds budget, plan a compute budget increase and note it.
-- **Betting state machine**: blinds, action order (UTG preflop, left-of-button postflop), valid action set per state, min-raise rules, all-in-for-less not reopening action.
-- **Side pots**: multi-way all-ins at different stack depths. This is where most implementations have bugs.
-- **Property tests** (`proptest`): chip conservation across any legal action sequence; evaluator ranking is a total order; side pots always sum to total contributions.
-
-**Gate:** `cargo test` green including property tests. Show me the CU benchmark for showdown evaluation and a worked three-way side-pot example.
-
----
-
-### Phase 2: Base-layer Anchor program
-Player accounts, chip faucet, table creation, join/leave, buy-in from chip balance to seat stack. No ER yet, everything on devnet base layer.
-
-**Gate:** TS test: create table, three players join with chips, leave and get stacks back. Chip totals conserved.
-
----
-
-### Phase 3: Ephemeral Rollup integration (public state only)
-Add `#[ephemeral]`, `#[delegate]`, `#[commit]` macros. Delegate `Table` + `Seat` PDAs. Run betting actions on the ER. Use `MagicIntentBundleBuilder` for commits, `commit_accounts` and `commit_and_undelegate_accounts` are deprecated.
-
-Play a full hand with **face-up cards** (deck in a public PDA). Privacy comes next; get the real-time loop working first.
-
-Add **session keys** so players don't get a wallet popup per action, non-negotiable for poker UX.
-
-**Gate:** Full face-up hand played on devnet ER. Report measured action latency (target: <100ms perceived).
+1. Both accounts are zeroized at settlement, before any undelegation path can
+   run.
+2. `undelegate_core` and `undelegate_seat` verify by content, byte by byte, that
+   what is leaving holds no cards, no randomness and no seed, and refuse
+   otherwise.
+3. Every account in those instructions is bound to one table, so the content
+   check cannot be satisfied with some other table's already-clean deck.
+4. Every commit call site carries a comment listing what is being committed and
+   why it is safe.
 
 ---
 
-### Phase 4: Privacy (the hard part)
-Move to the TEE validator. Add `Deck` and `HoleCards` with `EphemeralPermission`.
+## 5. Driving the game without a server
 
-- Pre-fund PDAs at init with `ephemeral_rollups_sdk::ephemeral_accounts::rent(EphemeralPermission::size_of(N) as u32)`: a delegated PDA can't be topped up the normal way later.
-- Client-side: `verifyTeeRpcIntegrity()` then `getAuthToken()`, connect to `https://devnet-tee.magicblock.app?token=${token}`.
-- At showdown, copy *only* the hole cards of players who reached showdown into a public `Showdown` account. Muck the rest.
+There is no backend. Starting a hand, dealing, advancing a street, settling and
+timing out are all permissionless, so every open client watches the same state
+and does whatever is next. Two clients will sometimes try the same step at the
+same moment.
 
-**Adversarial tests, write these and make them pass:**
-- Player B queries A's `HoleCards` via TEE RPC → denied.
-- Unauthenticated read of `Deck` → denied.
-- Base-layer `getAccountInfo` on `HoleCards` during a live hand → nothing useful.
-- Post-hand base-layer state contains no unrevealed cards.
+Two things keep that from being chaos. Steps are idempotent or refused on chain,
+so a duplicate is never applied twice. And clients wait their turn: a seat's
+delay is based on where it sits among the occupied seats, so the lowest usually
+acts and the others only step in if it did not. That turns a race into a
+fallback chain.
 
-Write `TRUST_MODEL.md`.
-
-**Gate:** All four adversarial tests pass. `TRUST_MODEL.md` written and shown to me.
-
----
-
-### Phase 5: Verifiable shuffle
-Use `ephemeral-vrf-sdk` (`create_request_randomness_ix` + `RequestRandomnessParams`, request/callback pattern). VRF on the ER is free.
-
-**Strengthen it beyond plain VRF:** before the deal, each seated player submits `commit = hash(salt)`. The shuffle seed is `VRF_output XOR salt_1 XOR salt_2 XOR …`. Now neither the VRF oracle nor the validator nor any subset of players controls the deck. Publish the seed and all salts at hand end so anyone can recompute the shuffle and verify it, this is the genuinely provable part of the product.
-
-Fisher-Yates from the seed, deterministic and re-runnable.
-
-**Gate:** A hand-history verifier script that takes published seed + salts and reproduces the exact deck. Statistical test over 10k shuffles.
+The loser of a race gets a specific error and treats it as success rather than
+showing anybody a failure. That is correct, and it has a cost worth knowing: a
+genuinely stuck state looks exactly like a lost race. Anything that waits longer
+than 35 seconds therefore stops reassuring and starts describing.
 
 ---
 
-### Phase 6: Timers, disconnects, settlement
-- **Turn clock** with auto-fold/check on expiry. Use a MagicBlock crank, or a permissionless `force_timeout` instruction anyone can call past the deadline. Read the dev skill's crank patterns.
-- **Disconnect**: player drops → auto-fold on timeout, hand continues. Call this out in `TRUST_MODEL.md` as the concrete advantage over mental poker.
-- **Settlement**: at hand end, commit public results (stacks, pot distribution, hand-history hash) to base layer via a post-commit **Magic Action**. Undelegate when the table empties.
-- Watch the **10-commit sponsorship cap**: a long session needs the delegated fee payer topped up via `lamportsDelegatedTransferIx` (submitted to the *base layer*, not the ER).
+## 6. Things that bite
 
-**Gate:** 100-hand automated session, 6 seats, random disconnects injected. Zero stalls, chips conserved.
+Collected because most of them cost a day each.
 
----
-
-### Phase 7: Frontend
-Next.js + wallet-adapter. `ConnectionMagicRouter` for routing, direct TEE connection with auth token for private reads. Real-time table UI, hand-history viewer with a "verify this shuffle" button, that verifier is your best marketing asset.
-
-**Gate:** Two browsers, two wallets, a real hand.
-
----
-
-## 6. Gotchas that will bite you
-
-Compiled from the docs, check each against current docs when you reach it:
-
-- Call `account.exit(&crate::ID)?` before a commit CPI, or the CPI sees stale serialized data.
-- The undelegation callback discriminator is `[196, 28, 41, 206, 48, 37, 51, 167]`; `#[ephemeral]` injects it, don't hand-roll it.
-- Resizing a delegated PDA requires it to already hold rent for the new size; the payer must itself be delegated to top it up.
-- `init_permission` must be idempotent, check `permission.lamports() > 0` and return early.
-- When toggling privacy, rebuild the member list every call so the authority can never lock itself out.
-- Pin one ER validator via `remaining_accounts` in the delegate instruction. Don't let it float.
-- Send top-ups to the **base layer** RPC; send game actions to the **ER**. Mixing these up produces confusing failures.
-- Use a fresh 32-byte salt per lamports top-up, reuse collides with an existing PDA.
-- The TEE enforces IP geofencing and OFAC screening at ingress. Test from your actual network early so you don't discover a block at Phase 7.
+- **A hand that cannot finish strands every chip on the table.** `settle_hand`
+  failing means the table never leaves `HandInProgress`, `leave_table` needs
+  `Waiting`, and undelegation refuses a deck holding cards. `abandon_hand` is
+  the break-glass: refund every contribution, nobody wins the pot.
+- **An unfulfilled VRF request is the same trap.** `reset_shuffle` clears it,
+  time-gated so recovery never depends on a particular client being awake.
+- **A retry must be a different request.** A caller seed that does not change
+  between attempts is a duplicate the oracle ignores, and the table retries
+  forever.
+- **Permission existence is decided by data, not lamports.** After a
+  re-delegation the account still exists with zero lamports, and reading that as
+  "does not exist" makes every seat fail to secure.
+- **Seats must leave the rollup before the core accounts**, because
+  `undelegate_seat` reads the table to refuse a mid-hand pull. Check the whole
+  table can leave before taking any of it apart, or it splits across two layers.
+- **The commit budget is ten per delegation cycle**, so settling to Solana after
+  every hand exhausts it in ten. Play at rollup speed, commit on a cadence.
+- **Re-vendor the IDL after every deploy.** Account layouts and the error list
+  live in it, and a stale copy makes the client send the wrong accounts and
+  decode the wrong bytes.
 
 ---
 
-## 7. Definition of done for v1
+## 7. What v1 means
 
-- 6-max Texas Hold'em, play-money, on devnet
-- Hole cards unreadable by opponents and by base-layer observers, with tests proving it
-- Verifiable shuffle with a public verifier
-- <100ms perceived action latency, no wallet popup per action
-- Disconnects don't stall hands
-- Chip conservation invariant holds across a 100-hand session
-- `TRUST_MODEL.md` that a skeptical poker player would find honest
-
----
-
-## 8. First message back to me
-
-Before writing code, reply with:
-1. Confirmation the dev skill installed, and the SDK version you found
-2. Any place this spec contradicts current MagicBlock docs
-3. Your read on the riskiest assumption here (my guess: whether an empty-member private permission gives true dealer-only secrecy for the `Deck`)
-4. Your Phase 0 plan
-
-Then execute Phase 0 and stop.
+Six-max no-limit Hold'em, playable end to end by two people in two browsers:
+buy chips, sit, play hands with no wallet prompt after setup, see only your own
+cards, cash out. A published hand verifies against its seed in the browser. The
+turn clock survives a disconnect. Chips are conserved across any legal sequence
+of actions, and the vault backs every one of them.
