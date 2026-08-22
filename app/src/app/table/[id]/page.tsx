@@ -260,8 +260,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   // What this player can actually put on the table: the table's limits capped
   // by what they hold. A modal that opens above their balance produces a join
   // that the program refuses.
-  const minBuyIn = tableConfig?.minBuyIn ?? 200;
-  const maxAffordable = Math.min(tableConfig?.maxBuyIn ?? 2000, player.state?.chips ?? 0);
+  const minBuyIn = tableConfig?.minBuyIn ?? 40;
+  const maxAffordable = Math.min(tableConfig?.maxBuyIn ?? 200, player.state?.chips ?? 0);
   const canAfford = maxAffordable >= minBuyIn;
   const affordableBuyIn = Math.max(minBuyIn, maxAffordable);
 

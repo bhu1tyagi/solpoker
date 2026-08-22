@@ -99,7 +99,7 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
                     marginLeft: "auto",
                     fontFamily: "var(--font-display)",
                     fontSize: "var(--t-sm)",
-                    color: "var(--accent)",
+                    color: "var(--gold)",
                     background: "var(--surface)",
                     borderRadius: "var(--r-panel)",
                     padding: "7px 14px",
@@ -189,8 +189,8 @@ function PresetButton({
       whileTap={{ scale: 0.95 }}
       transition={spring.snappy}
       style={{
-        background: active ? "var(--accent)" : "var(--surface)",
-        color: active ? "var(--on-accent)" : "var(--text-dim)",
+        background: active ? "var(--gold)" : "var(--surface)",
+        color: active ? "var(--on-gold)" : "var(--text-dim)",
         border: "none",
         borderRadius: "var(--r-panel)",
         fontFamily: "var(--font-display)",
@@ -213,8 +213,8 @@ const TONES = {
     color: "var(--on-danger)",
   },
   accent: {
-    background: "var(--accent)",
-    color: "var(--on-accent)",
+    background: "var(--gold)",
+    color: "var(--on-gold)",
   },
   dark: {
     background: "var(--control)",

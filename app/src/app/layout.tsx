@@ -22,9 +22,9 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: "SolPoker",
+  title: "Pokerable",
   description:
-    "Real-time Texas Hold'em on Solana. Buy chips with SOL, play, sell back. Provably fair shuffle, TEE-protected hole cards.",
+    "Play poker with SOL. Real-time six-max Texas Hold'em on Solana: buy chips, play, cash out. Provably fair shuffle, TEE-protected hole cards.",
 };
 
 // cover lets the room paint behind the notch and home bar; the HUD then keeps

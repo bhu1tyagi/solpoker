@@ -9,8 +9,8 @@ type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, React.CSSProperties> = {
   primary: {
-    background: "var(--accent)",
-    color: "var(--on-accent)",
+    background: "var(--gold)",
+    color: "var(--on-gold)",
     fontWeight: 600,
   },
   ghost: {

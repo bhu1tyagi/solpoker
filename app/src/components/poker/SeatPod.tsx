@@ -19,8 +19,10 @@ import { NO_CARD } from "@/lib/engine/cards";
  * the plate's top edge, and the text runs away from it, so a seat on the left
  * of the table mirrors one on the right.
  *
- * An empty seat is the same plate with its bands dimmed and the avatar tile
- * replaced by a cyan square with a plus in it, which is the invitation to sit.
+ * An empty seat is not a plate at all. Six full plates around an empty table
+ * buried the felt in furniture; an open chair is now a small dashed ring with
+ * a plus in it and the seat number underneath, quiet until hovered, so the
+ * table reads as a table with room at it rather than a wall of grey bars.
  */
 
 /**
@@ -124,6 +126,69 @@ export function SeatPod({
   // the two read as one object. The bands keep clear of it with padding.
   const clearance = d.avatar + d.gutter;
 
+  // Decided before the plate is even built: the plate's JSX reads
+  // seat!.occupant eagerly, so building it for an empty chair is a crash,
+  // not a wasted allocation.
+  if (empty) {
+    const ring = compact ? 30 : 48;
+    return (
+      <motion.button
+        onClick={() => onSit?.(index)}
+        // The ring shows a plus and a number, which is right on the table but
+        // says nothing on its own. The name is what a screen reader announces
+        // and what the browser tests click.
+        aria-label={`Seat ${index + 1}`}
+        className={onSit ? "seat-open sittable" : "seat-open"}
+        whileHover={onSit ? { scale: 1.06 } : undefined}
+        whileTap={onSit ? { scale: 0.95 } : undefined}
+        transition={spring.snappy}
+        style={{
+          border: "none",
+          background: "none",
+          padding: 0,
+          cursor: onSit ? "pointer" : "default",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: compact ? 4 : 7,
+          opacity: onSit ? 1 : 0.55,
+        }}
+      >
+        <span
+          className="seat-open-ring"
+          aria-hidden
+          style={{
+            width: ring,
+            height: ring,
+            borderRadius: "50%",
+            border: "1.5px dashed var(--seat-open-line)",
+            background: "var(--seat-open-bg)",
+            color: "var(--seat-open-fg)",
+            display: "grid",
+            placeItems: "center",
+            transition:
+              "border-color 0.15s ease, color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease",
+          }}
+        >
+          <PlusMark size={compact ? 10 : 14} />
+        </span>
+        <span
+          aria-hidden
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: compact ? 8 : 10,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--text-faint)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          seat {index + 1}
+        </span>
+      </motion.button>
+    );
+  }
+
   const plate = (
     <div
       style={{
@@ -139,15 +204,9 @@ export function SeatPod({
           top: -d.proud,
           width: d.avatar,
           height: d.avatar,
-          background: empty ? "var(--accent)" : "var(--avatar)",
-          color: empty ? "var(--on-accent)" : "var(--accent)",
-          // An open seat is a bubble inviting you in, with its tail pointing
-          // down at the plate. A taken one is a plain tile.
-          borderRadius: empty
-            ? avatarOn === "left"
-              ? "18px 18px 18px 4px"
-              : "18px 18px 4px 18px"
-            : "var(--r-panel)",
+          background: "var(--avatar)",
+          color: "var(--accent)",
+          borderRadius: "var(--r-panel)",
           display: "grid",
           placeItems: "center",
           overflow: "hidden",
@@ -155,9 +214,7 @@ export function SeatPod({
           zIndex: 2,
         }}
       >
-        {empty ? (
-          <PlusMark />
-        ) : isTurn ? (
+        {isTurn ? (
           <ClockRing
             deadline={deadline}
             totalSecs={timeoutSecs}
@@ -195,11 +252,11 @@ export function SeatPod({
             style={{
               fontFamily: "var(--font-display)",
               fontSize: d.stackFont,
-              color: "var(--accent)",
+              color: "var(--gold)",
               lineHeight: 1.32,
             }}
           >
-            {empty ? "-" : <AnimatedNumber value={seat!.stack} />}
+            <AnimatedNumber value={seat!.stack} />
           </span>
           {avatarOn === "left" && <ChipGlyph size={d.glyph} />}
         </div>
@@ -241,7 +298,7 @@ export function SeatPod({
               whiteSpace: "nowrap",
             }}
           >
-            {empty ? "open" : isMe ? "you" : shortKey(seat!.occupant!)}
+            {isMe ? "you" : shortKey(seat!.occupant!)}
           </span>
 
           {/* The action tag sweeps in over the lower band. */}
@@ -281,29 +338,6 @@ export function SeatPod({
     </div>
   );
 
-  if (empty) {
-    return (
-      <motion.button
-        onClick={() => onSit?.(index)}
-        // The plate shows a number and the word open, which is right on the
-        // table but says nothing on its own. The name is what a screen reader
-        // announces and what the browser tests click.
-        aria-label={`Seat ${index + 1}`}
-        whileHover={onSit ? { scale: 1.03 } : undefined}
-        whileTap={onSit ? { scale: 0.98 } : undefined}
-        transition={spring.snappy}
-        style={{
-          border: "none",
-          background: "none",
-          padding: 0,
-          paddingTop: d.proud,
-          cursor: onSit ? "pointer" : "default",
-        }}
-      >
-        {plate}
-      </motion.button>
-    );
-  }
 
   return (
     <motion.div
@@ -370,7 +404,11 @@ export function SeatPod({
           alignItems: "flex-end",
           gap: 6,
           zIndex: 1,
-          filter: lit ? "drop-shadow(0 0 12px var(--accent-glow))" : undefined,
+          filter: winner
+            ? "drop-shadow(0 0 12px var(--win-glow))"
+            : lit
+              ? "drop-shadow(0 0 12px var(--accent-glow))"
+              : undefined,
         }}
       >
         {plate}
@@ -391,11 +429,8 @@ export function SeatPod({
   );
 }
 
-/** Band fills: dim for an open seat, full strength for the one to act. */
-function bandColor(empty: boolean, lit: boolean, band: "hi" | "lo") {
-  if (empty) {
-    return band === "hi" ? "var(--plate-hi-idle)" : "var(--plate-lo-idle)";
-  }
+/** Band fills: full strength for the one to act. */
+function bandColor(_empty: boolean, lit: boolean, band: "hi" | "lo") {
   if (lit) return band === "hi" ? "var(--plate-hi)" : "var(--plate-lo)";
   // Seated but not to act: between the two, so the active seat still stands out.
   return band === "hi" ? "var(--plate-hi-taken)" : "var(--plate-lo-taken)";
@@ -423,19 +458,20 @@ function statusOf(seat: SeatView, dealtIn: boolean, handLive: boolean) {
 }
 
 /** The invitation on an open seat. */
-function PlusMark() {
+function PlusMark({ size = 14 }: { size?: number }) {
+  const bar = size >= 12 ? 2 : 1.5;
   return (
     <span
       aria-hidden
-      style={{ position: "relative", width: 16, height: 16, display: "inline-block" }}
+      style={{ position: "relative", width: size, height: size, display: "inline-block" }}
     >
       <span
         style={{
           position: "absolute",
-          left: 6.5,
+          left: (size - bar) / 2,
           top: 0,
-          width: 3,
-          height: 16,
+          width: bar,
+          height: size,
           background: "currentColor",
         }}
       />
@@ -443,9 +479,9 @@ function PlusMark() {
         style={{
           position: "absolute",
           left: 0,
-          top: 6.5,
-          width: 16,
-          height: 3,
+          top: (size - bar) / 2,
+          width: size,
+          height: bar,
           background: "currentColor",
         }}
       />
@@ -466,8 +502,8 @@ function DealerButton({ on, small = false }: { on: "left" | "right"; small?: boo
         width: size,
         height: size,
         borderRadius: "50%",
-        background: "var(--accent)",
-        color: "var(--on-accent)",
+        background: "var(--gold)",
+        color: "var(--on-gold)",
         fontSize: small ? 9 : 10,
         fontWeight: 700,
         display: "grid",

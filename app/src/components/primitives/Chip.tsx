@@ -6,11 +6,11 @@ import { AnimatedNumber } from "./AnimatedNumber";
 /**
  * The chip mark and the physical piles.
  *
- * The mark is the spec's two-stroke coin: an upright bar crossed by a wider
- * one, drawn in the same cyan every chip figure is written in. It sits beside
- * a number the way a currency symbol does.
+ * The mark is a poker chip seen face on, drawn in the same gold every chip
+ * figure is written in. It sits beside a number the way a currency symbol
+ * does.
  */
-export function ChipGlyph({ size = 16, color = "var(--accent)" }: { size?: number; color?: string }) {
+export function ChipGlyph({ size = 16, color = "var(--gold)" }: { size?: number; color?: string }) {
   // An actual poker chip: a rim with eight edge spots and an inner ring. Drawn
   // rather than fetched, because the page has to work with no network.
   return (
@@ -64,14 +64,14 @@ function coinsFor(amount: number, reference: number) {
 function Coin({ size, tone }: { size: number; tone: number }) {
   const h = Math.max(4, Math.round(size * 0.42));
   // Alternate two shades down the stack, the way real chips band.
-  const face = tone % 2 === 0 ? "var(--accent)" : "#7ec9d0";
+  const face = tone % 2 === 0 ? "var(--gold)" : "#c9a24e";
   return (
     <div
       style={{
         width: size,
         height: h,
         borderRadius: "50%",
-        background: `linear-gradient(180deg, ${face} 0%, ${face} 45%, var(--accent-deep) 46%, #2b7f86 100%)`,
+        background: `linear-gradient(180deg, ${face} 0%, ${face} 45%, var(--gold-deep) 46%, #7d6128 100%)`,
         boxShadow: "0 1px 1px rgba(7,12,15,0.55)",
       }}
     />
@@ -139,7 +139,7 @@ export function ChipStack({
           style={{
             fontFamily: "var(--font-display)",
             fontSize: compact ? "var(--t-xs)" : "var(--t-sm)",
-            color: "var(--accent)",
+            color: "var(--gold)",
             textShadow: "0 1px 3px rgba(7,12,15,0.7)",
           }}
         >

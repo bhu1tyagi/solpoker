@@ -23,7 +23,7 @@ const PAGES = [
     expect: {
       connect: "button:has-text('Select Wallet'), button:has-text('Connect')",
       trustLink: "[aria-label='How this works']",
-      heading: "h1:has-text('SolPoker')",
+      heading: "h1:has-text('Pokerable')",
     },
   },
   {

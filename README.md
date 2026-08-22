@@ -1,10 +1,11 @@
-# SolPoker
+# Pokerable
 
-Real-time on-chain Texas Hold'em on Solana. Built on MagicBlock Ephemeral Rollups for
+Play poker with SOL — real-time on-chain Texas Hold'em, live at
+[pokerable.fun](https://pokerable.fun). Built on MagicBlock Ephemeral Rollups for
 sub-second play, with Private Ephemeral Rollups (Intel TDX) for hole-card secrecy.
 
-Chips are bought with SOL and sold back for SOL at a fixed rate, backed one to one by a
-program vault. The house takes 2.5% of a pot that sees a flop, capped at three big
+Chips are bought with SOL and sold back for SOL at a fixed rate — 1 SOL is 1,000
+chips — backed one to one by a program vault. The house takes 2.5% of a pot that sees a flop, capped at three big
 blinds; a hand won before the flop is never raked. Devnet only, so the SOL involved is test currency; see TRUST_MODEL.md for
 what would have to change before that could ever be otherwise.
 

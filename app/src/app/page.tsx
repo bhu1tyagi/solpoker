@@ -75,25 +75,38 @@ export default function Lobby() {
                 marginBottom: 20,
               }}
             >
-              <h1
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  // The mark scales with the name rather than sitting at a fixed
-                  // size, so the pair holds together from a phone to a desktop.
-                  gap: "clamp(10px, 1.2vw, 16px)",
-                  fontSize: "clamp(34px, 4vw, 52px)",
-                  color: "var(--accent)",
-                  letterSpacing: "-0.03em",
-                  marginRight: "auto",
-                }}
-              >
-                {/* Decorative: the name is right there in the heading. Sized in
-                    em so it tracks the clamped heading instead of towering over
-                    it on a phone. */}
-                <Logo size="1em" />
-                SolPoker
-              </h1>
+              <div style={{ marginRight: "auto" }}>
+                <h1
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    // The mark scales with the name rather than sitting at a
+                    // fixed size, so the pair holds together from a phone to a
+                    // desktop.
+                    gap: "clamp(10px, 1.2vw, 16px)",
+                    fontSize: "clamp(34px, 4vw, 52px)",
+                    color: "var(--accent)",
+                    letterSpacing: "-0.03em",
+                  }}
+                >
+                  {/* Decorative: the name is right there in the heading. Sized
+                      in em so it tracks the clamped heading instead of towering
+                      over it on a phone. */}
+                  <Logo size="1em" />
+                  Pokerable
+                </h1>
+                <p
+                  style={{
+                    margin: "4px 0 0",
+                    fontSize: "var(--t-sm)",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: "var(--text-dim)",
+                  }}
+                >
+                  Play poker with SOL
+                </p>
+              </div>
 
               {connected && (
                 <>
@@ -560,7 +573,7 @@ function LeaderRowView({
           gap: 6,
           fontWeight: 500,
           fontSize: 15,
-          color: "var(--accent)",
+          color: "var(--gold)",
           justifyContent: "flex-end",
         }}
       >
@@ -824,7 +837,7 @@ function ExchangeModal({
   onSell: (chips: number) => Promise<void>;
   solPerChip: number;
 }) {
-  const [amount, setAmount] = useState(10_000);
+  const [amount, setAmount] = useState(100);
   const buying = mode === "buy";
   const max = buying ? affordable : chips;
   const clamped = Math.min(Math.max(amount, 0), max);
@@ -833,7 +846,7 @@ function ExchangeModal({
   return (
     <Modal open={mode !== null} onClose={onClose} title={buying ? "Buy chips" : "Cash out"}>
       <div style={{ display: "flex", gap: 8, margin: "4px 0 14px", flexWrap: "wrap" }}>
-        {[1_000, 10_000, 50_000].map((v) => (
+        {[100, 500, 1_000].map((v) => (
           <Button
             key={v}
             size="sm"
@@ -854,7 +867,7 @@ function ExchangeModal({
           type="range"
           min={0}
           max={Math.max(max, 1)}
-          step={100}
+          step={10}
           value={clamped}
           onChange={(e) => setAmount(Number(e.target.value))}
           style={{ flex: 1 }}
@@ -867,7 +880,7 @@ function ExchangeModal({
             gap: 8,
             fontFamily: "var(--font-display)",
             fontSize: 18,
-            color: "var(--accent)",
+            color: "var(--gold)",
             minWidth: 120,
             justifyContent: "flex-end",
           }}

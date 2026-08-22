@@ -1,5 +1,5 @@
 /**
- * Recompute a SolPoker deck from published hand history, in the browser.
+ * Recompute a Pokerable deck from published hand history, in the browser.
  *
  * A port of tools/verify-shuffle.mjs. It shares no code with the program: the
  * shuffle is reimplemented from the spec, so agreement between the two is

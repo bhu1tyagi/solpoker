@@ -18,8 +18,11 @@ use anchor_lang::system_program::{transfer, Transfer};
 use crate::errors::PokerError;
 use crate::state::*;
 
-/// The fixed price of one chip. 10,000 chips cost 0.01 SOL.
-pub const LAMPORTS_PER_CHIP: u64 = 1_000;
+/// The fixed price of one chip: 1 SOL buys exactly 1,000 chips, so a chip is
+/// 0.001 SOL and the smallest blind is real but not frightening. Changing this
+/// while any chip is outstanding changes what those chips redeem for, so it
+/// can only ever move together with a fresh ledger or a deliberate migration.
+pub const LAMPORTS_PER_CHIP: u64 = 1_000_000;
 
 /// Lamports the vault always keeps, so the account stays rent-exempt and
 /// cannot be closed out from under the players by an exact-drain sell.

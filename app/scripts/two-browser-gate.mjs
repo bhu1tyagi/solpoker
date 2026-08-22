@@ -167,13 +167,13 @@ async function main() {
     for (const b of [A, B]) {
       await b.page.getByRole("button", { name: /^buy chips$/i }).click();
       await b.page.waitForTimeout(1200);
-      await b.page.getByRole("button", { name: /^10,000$/ }).click();
+      await b.page.getByRole("button", { name: /^100$/ }).click();
       await b.page.getByRole("button", { name: /^buy$/i }).click();
       await b.page.waitForFunction(
-        () => /Bought 10,000 chips|10,000\s*chips/i.test(document.body.innerText),
+        () => /Bought 100 chips/i.test(document.body.innerText),
         { timeout: 90_000 },
       );
-      log(`  ${b.name}: bought 10,000 chips for 0.01 SOL`);
+      log(`  ${b.name}: bought 100 chips for 0.1 SOL`);
     }
     await shot(A, "1-lobby");
 

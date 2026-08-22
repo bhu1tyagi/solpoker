@@ -158,10 +158,8 @@ export function TableFelt({
           position: "absolute",
           inset: geo.ellipseInset,
           borderRadius: "50% / 50%",
-          background:
-            "radial-gradient(ellipse at 50% 34%, #46596a 0%, #354653 34%, #26333d 68%, #1b242c 100%)",
-          boxShadow:
-            "inset 0 2px 4px rgba(152,222,227,0.16), inset 0 -22px 50px rgba(7,12,15,0.55), 0 22px 48px -10px rgba(7,12,15,0.6)",
+          background: "var(--felt-grad)",
+          boxShadow: "var(--felt-glow)",
         }}
       >
         <div
@@ -169,7 +167,7 @@ export function TableFelt({
             position: "absolute",
             inset: "5% 3.5%",
             borderRadius: "50% / 50%",
-            border: "1px solid rgba(114,127,135,0.12)",
+            border: "1px solid var(--felt-line)",
             pointerEvents: "none",
           }}
         />
@@ -224,7 +222,7 @@ export function TableFelt({
                 style={{
                   fontFamily: "var(--font-display)",
                   fontSize: compact ? 14 : 17,
-                  color: "var(--text)",
+                  color: "var(--gold)",
                 }}
               >
                 <AnimatedNumber value={displayPot} />
@@ -322,8 +320,8 @@ export function TableFelt({
                     left: "50%",
                     transform: "translateX(-50%)",
                     bottom: compact ? -24 : -30,
-                    background: winners?.has(i) ? "var(--accent)" : "var(--surface-2)",
-                    color: winners?.has(i) ? "var(--on-accent)" : "var(--text)",
+                    background: winners?.has(i) ? "var(--win)" : "var(--surface-2)",
+                    color: winners?.has(i) ? "#07230f" : "var(--text)",
                     borderRadius: "var(--r-panel)",
                     fontFamily: "var(--font-display)",
                     fontSize: compact ? 9 : 10,

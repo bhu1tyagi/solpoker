@@ -156,11 +156,11 @@ export const NO_SEAT = 0xff;
 export const NO_CARD = 0xff;
 
 /**
- * The fixed price of one chip, matching the program. 10,000 chips cost
- * 0.01 SOL. Chips are backed one to one by lamports in the program vault:
+ * The fixed price of one chip, matching the program: 1 SOL buys exactly
+ * 1,000 chips. Chips are backed one to one by lamports in the program vault:
  * they exist only because someone paid this rate, and selling pays it back.
  */
-export const LAMPORTS_PER_CHIP = 1_000;
+export const LAMPORTS_PER_CHIP = 1_000_000;
 
 /** Salt protocol states, on Seat. */
 export const SALT_NONE = 0;

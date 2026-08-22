@@ -50,7 +50,7 @@ import { BASE_RPC, MAX_SEATS, SALT_REVEALED, TEE_URL } from "./constants";
 import type { HandView, SeatView, TableView } from "@/stores/table-store";
 
 const FUNDER_PATH = `${process.env.HOME}/.config/solana/id.json`;
-const BUY_IN = 1_000;
+const BUY_IN = 100;
 const SEATED = 2;
 
 const readFunder = async () => {
@@ -152,7 +152,7 @@ describe("a real hand, through the app's modules", () => {
         SystemProgram.transfer({
           fromPubkey: funder.publicKey,
           toPubkey: p.publicKey,
-          lamports: 0.09 * LAMPORTS_PER_SOL,
+          lamports: 0.16 * LAMPORTS_PER_SOL,
         }),
       ),
       [funder],
@@ -163,7 +163,7 @@ describe("a real hand, through the app's modules", () => {
     for (const p of players) {
       await sendBase(
         base,
-        [await initPlayerIx(program, p.publicKey), await buyChipsIx(program, p.publicKey, 10_000)],
+        [await initPlayerIx(program, p.publicKey), await buyChipsIx(program, p.publicKey, 150)],
         [p],
         "init and buy",
       );
@@ -176,10 +176,10 @@ describe("a real hand, through the app's modules", () => {
           program,
           {
             tableId,
-            smallBlind: 5,
-            bigBlind: 10,
-            minBuyIn: 200,
-            maxBuyIn: 2_000,
+            smallBlind: 1,
+            bigBlind: 2,
+            minBuyIn: 40,
+            maxBuyIn: 200,
             timeoutSecs: 15,
           },
           funder.publicKey,

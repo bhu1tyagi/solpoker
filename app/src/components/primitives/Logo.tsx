@@ -1,5 +1,5 @@
 /**
- * The SolPoker mark.
+ * The Pokerable mark.
  *
  * A spade in the accent cyan, on a slate tile lit from the top left like every
  * other surface in the room. Three candidates were drawn and rendered at 16, 20,
@@ -41,7 +41,7 @@ export function Logo({
    */
   title?: string;
 }) {
-  const gradientId = "solpoker-mark-tile";
+  const gradientId = "pokerable-mark-tile";
   return (
     <svg
       width={size}

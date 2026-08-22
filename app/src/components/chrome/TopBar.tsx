@@ -36,7 +36,7 @@ export function TopBar({ chips }: { chips?: number }) {
       <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
         <Link
           href="/"
-          aria-label="SolPoker home"
+          aria-label="Pokerable home"
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -55,7 +55,7 @@ export function TopBar({ chips }: { chips?: number }) {
         >
           {/* Decorative: the wordmark beside it already says the name. */}
           <Logo size={22} />
-          Sol<span style={{ color: "var(--accent)" }}>Poker</span>
+          Poker<span style={{ color: "var(--accent)" }}>able</span>
         </Link>
         <Link
           href="/trust"

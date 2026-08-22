@@ -1,7 +1,9 @@
 /*
- * Slate.
+ * Slate, felt and brass.
  *
- * Blue-grey steel lit from above, cyan for anything that carries a number, and
+ * Blue-grey steel lit from above; emerald felt for the table itself; gold for
+ * anything that is money — a stack, a pot, a chip — so value reads at a glance;
+ * cyan stays the brand and interface accent, and
  * corners that are almost square. Surfaces are frosted panels stacked in two
  * bands rather than outlined boxes, and the table is a lit rectangle instead of
  * a green oval.
@@ -59,7 +61,33 @@
   --text-dim: #727f87;
   --text-faint: #55636b;
 
-  /* Accent: the cyan every number is written in */
+  /* Money: chip figures, stacks, the pot, the dealer button. Warm against
+     the slate and the felt, and never used for anything that is not value. */
+  --gold: #dfba62;
+  --gold-deep: #a5813a;
+  --gold-glow: rgba(223, 186, 98, 0.25);
+  --gold-soft: rgba(223, 186, 98, 0.12);
+  --on-gold: #241a04;
+
+  /* The felt: emerald lit from above centre, falling to a dark rim. The one
+     surface in the room that is unmistakably a poker table. */
+  --felt-grad: radial-gradient(
+    ellipse at 50% 34%,
+    #2c7a5b 0%,
+    #215f47 34%,
+    #164632 68%,
+    #0f3325 100%
+  );
+  --felt-glow: inset 0 2px 6px rgba(184, 240, 214, 0.16),
+    inset 0 -22px 50px rgba(4, 14, 10, 0.55), 0 22px 48px -10px rgba(7, 12, 15, 0.6);
+  --felt-line: rgba(223, 186, 98, 0.14);
+
+  /* An open seat: quiet until you look at it, gold when you do. */
+  --seat-open-line: rgba(150, 168, 178, 0.38);
+  --seat-open-bg: rgba(13, 24, 20, 0.35);
+  --seat-open-fg: #8fa1ab;
+
+  /* Accent: the cyan the interface itself is written in */
   --accent: #98dee3;
   --accent-deep: #3fa3aa;
   --accent-glow: rgba(152, 222, 227, 0.22);
@@ -74,8 +102,9 @@
   --grad-danger: linear-gradient(0deg, #ed7483, #ed7483);
   --on-danger: #2b060b;
 
-  /* Semantic */
-  --win: #98dee3;
+  /* Semantic. A win is green, and only a win is green. */
+  --win: #5fd08c;
+  --win-glow: rgba(95, 208, 140, 0.24);
   --info: #7aa7ff;
 
   /* Cards: a slab lit from the bottom edge */
@@ -86,7 +115,7 @@
   --card-shadow: -1px 0 2px rgba(20, 28, 33, 0.56);
 
   /* Four colour deck */
-  --suit-clubs: #98dee3;
+  --suit-clubs: #6cc79b;
   --suit-diamonds: #eaa680;
   --suit-hearts: #e97b88;
   --suit-spades: #7aa7ff;

@@ -23,10 +23,13 @@ import { sweepTransactions } from "@/lib/sweep";
 import { toast } from "@/stores/ui-store";
 import type { LobbyTable } from "@/hooks/use-tables";
 
+// Chips are 0.001 SOL each, so these read directly in money: a Micro buy-in
+// is 0.04 to 0.2 SOL, and the High table seats 1 to 5 SOL. The shape is the
+// classic one — min 20 big blinds, max 100 — at every level.
 const STAKES = [
-  { label: "Micro", sb: 5, bb: 10, min: 200, max: 2_000 },
-  { label: "Low", sb: 25, bb: 50, min: 1_000, max: 10_000 },
-  { label: "High", sb: 100, bb: 200, min: 4_000, max: 40_000 },
+  { label: "Micro", sb: 1, bb: 2, min: 40, max: 200 },
+  { label: "Low", sb: 5, bb: 10, min: 200, max: 1_000 },
+  { label: "High", sb: 25, bb: 50, min: 1_000, max: 5_000 },
 ];
 
 /**

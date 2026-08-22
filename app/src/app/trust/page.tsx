@@ -1,10 +1,14 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import { CLUSTER } from "@/lib/constants";
+
+const MAINNET = CLUSTER === "mainnet";
+
 export const metadata: Metadata = {
-  title: "Trust model | SolPoker",
+  title: "Trust model | Pokerable",
   description:
-    "What SolPoker actually guarantees, what it only claims, and what breaks if an assumption is wrong.",
+    "What Pokerable actually guarantees, what it only claims, and what breaks if an assumption is wrong.",
 };
 
 export default function TrustPage() {
@@ -35,7 +39,7 @@ export default function TrustPage() {
       </p>
 
       <Callout>
-        <strong>SolPoker does not remove all trust.</strong> The shuffle is
+        <strong>Pokerable does not remove all trust.</strong> The shuffle is
         provably fair and you can check it yourself. Your hole cards are
         protected by Intel TDX and MagicBlock&apos;s TEE validator, which is a
         hardware and operator assumption, not a mathematical one. The accurate
@@ -156,21 +160,34 @@ export default function TrustPage() {
       <H2>Chips and SOL</H2>
       <P>
         Chips are bought with SOL and sold back for SOL, at a rate fixed in the
-        program: 1 chip is 1,000 lamports. The SOL sits in a program vault, and
+        program: 1 SOL is exactly 1,000 chips, so a chip is 0.001 SOL. The SOL
+        sits in a program vault, and
         chips only exist because someone paid that rate, so every chip is
         backed the moment it is minted. Buying and selling need your wallet;
         session keys cannot touch either.
       </P>
-      <P>
-        Today this runs on devnet, where SOL is valueless test currency, so the
-        architecture is real money and the stakes are not. Be clear-eyed about
-        what changes if that ever stops being true: the enclave assumptions on
-        this page stop bounding a spoiled game and start bounding custody of
-        funds, the attestation gap above becomes financially material, and
-        real-stakes poker is a licensed, regulated activity in most places.
-        None of that is solved here, and this page will say so for as long as
-        it is true.
-      </P>
+      {MAINNET ? (
+        <P>
+          This build runs on mainnet, where SOL is real money. That means the
+          enclave assumptions on this page bound custody of funds, not just the
+          fairness of a game; the attestation gap above is financially
+          material; the program&apos;s upgrade authority could replace the
+          program that holds the vault; and real-stakes poker is a licensed,
+          regulated activity in most places. None of that is solved here, and
+          this page will say so for as long as it is true.
+        </P>
+      ) : (
+        <P>
+          This build runs on devnet, where SOL is valueless test currency, so
+          the architecture is real money and the stakes are not. Be clear-eyed
+          about what changes if that ever stops being true: the enclave
+          assumptions on this page stop bounding a spoiled game and start
+          bounding custody of funds, the attestation gap above becomes
+          financially material, and real-stakes poker is a licensed, regulated
+          activity in most places. None of that is solved here, and this page
+          will say so for as long as it is true.
+        </P>
+      )}
 
       <H2>Summary</H2>
       <table
@@ -189,7 +206,12 @@ export default function TrustPage() {
             ["Cards hidden from opponents", "Trusts Intel TDX and the validator operator"],
             ["Cards hidden from the operator", "Trusts TDX isolation, and attestation does not check the code"],
             ["Hand completes if you disconnect", "Yes, auto-fold"],
-            ["Funds at risk", "Devnet SOL, which is valueless test currency"],
+            [
+              "Funds at risk",
+              MAINNET
+                ? "Real SOL, plus trust in the program's upgrade authority"
+                : "Devnet SOL, which is valueless test currency",
+            ],
           ].map(([k, v]) => (
             <tr key={k} style={{ borderTop: "1px solid var(--line)" }}>
               <td style={{ padding: "9px 12px 9px 0", color: "var(--text)" }}>{k}</td>

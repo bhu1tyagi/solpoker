@@ -100,6 +100,19 @@ identity on both clusters, confirmed by `getIdentity` against each.
 Client: <https://solpoker.vercel.app> (devnet)
 Source: <https://github.com/bhu1tyagi/solpoker>, MIT, public
 
+**22 August, later: the product is now Pokerable** (pokerable.fun, "Play poker
+with SOL"), and the chip rate changed from 1,000 lamports per chip to
+1,000,000 — **1 SOL is exactly 1,000 chips** — so stakes read directly in
+money. The client, both test suites, and the stake presets (Micro 1/2,
+Low 5/10, High 25/50, min 20 BB / max 100 BB) all carry the new rate. The
+program constant is changed in source, but **neither cluster's deployed
+program has the new rate yet**: an upgrade needs the ~7.31 SOL buffer
+transiently, devnet's wallet holds 1.91 with the faucet dry for the day, and
+mainnet's holds 1.51. Until the devnet upgrade lands, the live client's SOL
+figures on buy and sell are 1,000× the lamports that actually move; chip
+figures are right everywhere. Do not point a client at mainnet until the
+mainnet program is upgraded to match.
+
 **The mainnet program is deployed but the client still points at devnet.** The
 program went up on 22 August with 1,150,000 bytes allocated against a
 1,049,800-byte binary, so there is ~100 KB of upgrade headroom and a redeploy
