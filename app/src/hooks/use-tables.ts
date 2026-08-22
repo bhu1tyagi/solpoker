@@ -158,18 +158,28 @@ export function useTables() {
         }
       });
 
+      // Solana RPC caps getMultipleAccountsInfo at 100 keys and web3.js does
+      // not chunk for you: key 101 is not a partial answer but an error, which
+      // would blank the whole lobby — including for people already seated —
+      // the day the room grows past a hundred tables. Chunk, preserving order.
+      const batched = async (keys: PublicKey[]) => {
+        const out: Awaited<ReturnType<typeof conn.getMultipleAccountsInfo>> = [];
+        for (let i = 0; i < keys.length; i += 100) {
+          out.push(...(await conn.getMultipleAccountsInfo(keys.slice(i, i + 100))));
+        }
+        return out;
+      };
+
       // Config never changes, so one batched read covers the whole lobby.
       const configs = decoded.length
-        ? await conn.getMultipleAccountsInfo(decoded.map((d) => new PublicKey(d.table.config)))
+        ? await batched(decoded.map((d) => new PublicKey(d.table.config)))
         : [];
 
       // A deck from an older layout cannot be dealt from, so say so here
       // rather than letting someone sit down and hit a deserialization error
       // the moment they press start.
       const decks = decoded.length
-        ? await conn.getMultipleAccountsInfo(
-            decoded.map((d) => deckPda(new PublicKey(d.table.address))),
-          )
+        ? await batched(decoded.map((d) => deckPda(new PublicKey(d.table.address))))
         : [];
 
       setTables(
@@ -215,8 +225,20 @@ export function useTables() {
 
   useEffect(() => {
     void refresh();
-    const id = setInterval(() => void refresh(), 12_000);
-    return () => clearInterval(id);
+    // Six seconds keeps the players column honest while someone is watching
+    // the room fill; twelve read as frozen. Coming back to the tab refreshes
+    // immediately, because that is the moment a person is actually looking.
+    const id = setInterval(() => void refresh(), 6_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, [refresh]);
 
   return { tables, loading, error, refresh };

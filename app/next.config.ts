@@ -6,9 +6,27 @@ import type { NextConfig } from "next";
 // falls back to; if they ever drift, the CSP is too tight rather than too
 // loose, which fails visibly in the browser console instead of silently
 // allowing a host it should not.
-const BASE_RPC = process.env.NEXT_PUBLIC_BASE_RPC ?? "https://rpc.magicblock.app/devnet";
-const TEE_URL = process.env.NEXT_PUBLIC_TEE_URL ?? "https://devnet-tee.magicblock.app";
-const TEE_WS = process.env.NEXT_PUBLIC_TEE_WS ?? "wss://devnet-tee.magicblock.app";
+// Resolved the same way src/lib/constants.ts resolves them: the cluster picks
+// the defaults, an explicit env var overrides. The CSP must allowlist exactly
+// what the client will dial; these fell out of step the day mainnet arrived,
+// and the first mainnet hand died on a devnet-only connect-src — every TEE
+// auth call refused by the browser, so the table never delegated.
+const CLUSTER = process.env.NEXT_PUBLIC_CLUSTER === "mainnet" ? "mainnet" : "devnet";
+const CLUSTER_DEFAULTS = {
+  devnet: {
+    base: "https://rpc.magicblock.app/devnet",
+    tee: "https://devnet-tee.magicblock.app",
+    ws: "wss://devnet-tee.magicblock.app",
+  },
+  mainnet: {
+    base: "https://rpc.magicblock.app/mainnet",
+    tee: "https://mainnet-tee.magicblock.app",
+    ws: "wss://mainnet-tee.magicblock.app",
+  },
+}[CLUSTER];
+const BASE_RPC = process.env.NEXT_PUBLIC_BASE_RPC ?? CLUSTER_DEFAULTS.base;
+const TEE_URL = process.env.NEXT_PUBLIC_TEE_URL ?? CLUSTER_DEFAULTS.tee;
+const TEE_WS = process.env.NEXT_PUBLIC_TEE_WS ?? CLUSTER_DEFAULTS.ws;
 
 /**
  * Content Security Policy.

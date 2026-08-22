@@ -77,7 +77,11 @@ export function useTableActions(args: {
       tx.feePayer = publicKey;
       tx.recentBlockhash = bh.blockhash;
       const signed = await signTransaction(tx);
-      const sig = await conn.sendRawTransaction(signed.serialize(), { skipPreflight: true });
+      // Preflight on purpose. A join against a seat someone took first is
+      // doomed, and with preflight skipped it does not fail until the
+      // blockhash expires — the player watches a spinner for a minute to
+      // learn what one simulation round trip would have said instantly.
+      const sig = await conn.sendRawTransaction(signed.serialize());
       const conf = await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
       if (conf.value.err) {
         throw new Error(`${label} failed: ${JSON.stringify(conf.value.err)}`);

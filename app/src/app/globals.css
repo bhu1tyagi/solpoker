@@ -50,16 +50,6 @@ button {
   color: inherit;
 }
 
-/* An open seat answers the pointer: the dashed ring warms to gold and lifts
-   slightly, which is the whole invitation. Idle, it stays part of the felt. */
-.seat-open.sittable:hover .seat-open-ring,
-.seat-open.sittable:focus-visible .seat-open-ring {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: var(--gold-soft);
-  box-shadow: 0 0 18px var(--gold-glow);
-}
-
 /* Focus should be obvious without shouting. */
 :focus-visible {
   outline: 2px solid var(--accent);

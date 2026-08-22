@@ -17,8 +17,9 @@ import nacl from "tweetnacl";
 import bs58 from "bs58";
 import idl from "../src/lib/idl/solpoker.json" with { type: "json" };
 
-const RPC = "https://rpc.magicblock.app/devnet";
-const TEE = "https://devnet-tee.magicblock.app";
+// Devnet by default; a mainnet sweep passes RPC/TEE explicitly.
+const RPC = process.env.RPC ?? "https://rpc.magicblock.app/devnet";
+const TEE = process.env.TEE ?? "https://devnet-tee.magicblock.app";
 const P = new PublicKey("Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker");
 const DELEG = new PublicKey("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
 const kp = Keypair.fromSecretKey(

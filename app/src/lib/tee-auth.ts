@@ -85,8 +85,20 @@ export async function requestAuthToken(
   signMessage: SignMessage,
   rpcUrl = TEE_URL,
 ): Promise<CachedToken> {
+  // Both handshake requests carry a deadline. A fetch that never settles
+  // wedges more than itself: the connect flow holds a busy flag while it
+  // waits, so a hung handshake left the table saying "connecting" forever
+  // with a Retry button that silently did nothing, and only a reload — which
+  // resets the flag — could recover. Fifteen seconds turns that into an
+  // honest "offline", where Retry works.
+  const deadline = (ms: number) =>
+    typeof AbortSignal !== "undefined" && AbortSignal.timeout
+      ? AbortSignal.timeout(ms)
+      : undefined;
+
   const challengeRes = await fetch(
     `${rpcUrl}/auth/challenge?pubkey=${pubkey.toBase58()}`,
+    { signal: deadline(15_000) },
   );
   if (!challengeRes.ok) {
     throw new Error(`could not get a challenge from the validator (${challengeRes.status})`);
@@ -103,6 +115,7 @@ export async function requestAuthToken(
       challenge,
       signature: bs58.encode(signature),
     }),
+    signal: deadline(15_000),
   });
   if (!loginRes.ok) {
     throw new Error(`the validator rejected the signature (${loginRes.status})`);

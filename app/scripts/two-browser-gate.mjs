@@ -17,7 +17,10 @@ import nacl from "tweetnacl";
 
 const PORT = process.argv[2] ?? "3111";
 const BASE = `http://localhost:${PORT}`;
-const RPC = "https://rpc.magicblock.app/devnet";
+// The Node side must talk to the same chain the served client does, or the
+// wallets get funded on one cluster and play on another. Devnet by default;
+// a mainnet run passes GATE_RPC explicitly.
+const RPC = process.env.GATE_RPC ?? "https://rpc.magicblock.app/devnet";
 const SHOTS = "/tmp/solpoker-gate";
 mkdirSync(SHOTS, { recursive: true });
 
@@ -44,7 +47,7 @@ async function openBrowser(browser, kp, name) {
   const toasts = [];
   page.on("console", (m) => {
     const t = m.text();
-    if (/failed|Error|error:/i.test(t)) toasts.push(t.slice(0, 240));
+    if (/failed|Error|error:|^session:/i.test(t)) toasts.push(t.slice(0, 240));
   });
   page.__toasts = toasts;
 
@@ -73,10 +76,10 @@ async function connectWallet(b) {
   await b.page.goto(BASE, { waitUntil: "networkidle", timeout: 60_000 });
   await b.page.getByRole("button", { name: /select wallet/i }).click();
   await b.page.getByRole("button", { name: /test wallet/i }).first().click();
-  await b.page.waitForFunction(
-    () => !!document.body.innerText.match(/chips/i),
-    { timeout: 30_000 },
-  );
+  // Connected means the lobby's own controls appear. Waiting for the word
+  // "chips" worked by accident: it matched the leaderboard's column header,
+  // which a virgin cluster with no ranked players never renders.
+  await b.page.getByRole("button", { name: /create a table/i }).waitFor({ timeout: 30_000 });
   log(`  ${b.name}: connected`);
 }
 
@@ -181,8 +184,21 @@ async function main() {
     await A.page.getByRole("button", { name: /create a table/i }).click();
     // The modal springs in; clicking mid-animation can miss.
     await A.page.waitForTimeout(1200);
-    await A.page.getByRole("button", { name: /^create table$/i }).click();
-    await A.page.waitForURL(/\/table\/\d+/, { timeout: 180_000 });
+    // One transient RPC error inside create() resets the modal in under a
+    // second; a player would simply click again, so the gate does too rather
+    // than staring at an idle button for three minutes.
+    let navigated = false;
+    for (let attempt = 0; attempt < 3 && !navigated; attempt++) {
+      await A.page
+        .getByRole("button", { name: /^create table$/i })
+        .click()
+        .catch(() => {});
+      navigated = await A.page
+        .waitForURL(/\/table\/\d+/, { timeout: 60_000 })
+        .then(() => true)
+        .catch(() => false);
+    }
+    if (!navigated) throw new Error("table creation did not navigate after 3 attempts");
     const tableUrl = A.page.url();
     const tableId = tableUrl.match(/\/table\/(\d+)/)[1];
     log(`  created table ${tableId}`);
@@ -215,7 +231,16 @@ async function main() {
     await shot(B, "4-lobby-with-table");
 
     await B.page.goto(`${BASE}/table/${tableId}`, { waitUntil: "networkidle" });
-    await B.page.waitForTimeout(4000);
+    // Do not pick a seat until A's occupancy has actually rendered, or a
+    // stale view offers B the seat A is sitting in. The short key is what a
+    // taken seat displays; innerText reflects the CSS uppercasing.
+    const aKey = players[0].publicKey.toBase58();
+    const aShort = `${aKey.slice(0, 4)}..${aKey.slice(-4)}`.toUpperCase();
+    await B.page.waitForFunction(
+      (k) => document.body.innerText.toUpperCase().includes(k),
+      aShort,
+      { timeout: 60_000 },
+    );
     const bSeesA = await B.page
       .waitForFunction(() => /\d{3,}/.test(document.body.innerText), { timeout: 60_000 })
       .then(() => true)
@@ -225,16 +250,27 @@ async function main() {
     await B.page.getByRole("button", { name: /^seat \d$/i }).first().click();
     await B.page.waitForTimeout(1200);
     await B.page.getByRole("button", { name: /sit down/i }).click();
-    await B.page.waitForFunction(() => /\byou\b/.test(document.body.innerText), { timeout: 90_000 });
+    // Seated means the modal is gone and B's own plate says "you". The old
+    // check matched the word "you" anywhere, which the sit modal's own copy
+    // contains, so a join stuck mid-flight still "passed".
+    await B.page.waitForFunction(
+      () => !/take seat/i.test(document.body.innerText) && /\byou\b/i.test(document.body.innerText),
+      { timeout: 90_000 },
+    );
     log("  B seated");
     await shot(B, "5-both-seated");
 
-    // A must see B arrive without a reload.
+    // A must see B arrive without a reload — B's short key specifically,
+    // because counting name-shaped tokens also counted the wallet chip in the
+    // top bar.
+    const bKey = players[1].publicKey.toBase58();
+    const bShort = `${bKey.slice(0, 4)}..${bKey.slice(-4)}`.toUpperCase();
     const aSeesB = await A.page
-      .waitForFunction(() => {
-        const pods = document.body.innerText;
-        return (pods.match(/\b(you|[A-Za-z0-9]{4}\.\.[A-Za-z0-9]{4})\b/g) ?? []).length >= 2;
-      }, { timeout: 60_000 })
+      .waitForFunction(
+        (k) => document.body.innerText.toUpperCase().includes(k),
+        bShort,
+        { timeout: 60_000 },
+      )
       .then(() => true)
       .catch(() => false);
     check(aSeesB, "A sees B arrive live, without a reload");
@@ -249,6 +285,9 @@ async function main() {
         .then(() => true)
         .catch(() => false);
       check(ok, `${b.name} authorised a session key`);
+      if (!ok) {
+        (b.page.__toasts ?? []).slice(-5).forEach((t) => log(`      ${b.name} console: ${t}`));
+      }
     }
 
     log("\n7. A starts the table");
@@ -532,6 +571,27 @@ async function main() {
     await shot(A, "error").catch(() => {});
     await shot(B, "error").catch(() => {});
   } finally {
+    // Save both browsers' session keys before the contexts evaporate. Each
+    // session key holds a real SOL float, which on devnet was noise and on
+    // mainnet is money: with the secrets on disk the float can be swept back
+    // to the funder after the run instead of dying with the browser.
+    try {
+      const saved = {};
+      for (const b of [A, B]) {
+        const entries = await b.page.evaluate(() => {
+          const out = {};
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith("solpoker:session:")) out[k] = localStorage.getItem(k);
+          }
+          return out;
+        });
+        Object.assign(saved, entries);
+      }
+      writeFileSync(`${SHOTS}/session-keys.json`, JSON.stringify(saved));
+    } catch {
+      // Losing this only costs the floats, and must not hide a real failure.
+    }
     await browser.close();
   }
 

@@ -15,7 +15,8 @@ import { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
 import bs58 from "bs58";
 import idl from "../src/lib/idl/solpoker.json" with { type: "json" };
 
-const RPC = "https://rpc.magicblock.app/devnet";
+// Devnet by default; a mainnet sweep passes RPC explicitly.
+const RPC = process.env.RPC ?? "https://rpc.magicblock.app/devnet";
 const P = new PublicKey("Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker");
 const conn = new Connection(RPC, "confirmed");
 const kp = Keypair.fromSecretKey(

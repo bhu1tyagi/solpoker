@@ -272,24 +272,58 @@ export async function ensureSession(
   const validUntil = Math.floor(Date.now() / 1000) + VALIDITY_SECS;
   const { ix, tokenPda } = createSessionV2Ix(keypair.publicKey, wallet, validUntil);
 
+  // Every await here is bounded and named. This flow hung silently in the
+  // wild — no throw, no toast, just an authorise button that never came back —
+  // and an unbounded await cannot say which step it was. A deadline turns a
+  // stall into an error that names the stage.
+  const staged = async <T,>(stage: string, ms: number, p: Promise<T>): Promise<T> => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        p,
+        new Promise<never>((_, reject) => {
+          t = setTimeout(
+            () => reject(new Error(`session authorise timed out at: ${stage}`)),
+            ms,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(t);
+    }
+  };
+
   const tx = new Transaction().add(ix);
   tx.feePayer = wallet;
-  tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  tx.recentBlockhash = (
+    await staged("fetch blockhash", 20_000, connection.getLatestBlockhash())
+  ).blockhash;
   // Both must sign: the wallet authorises, the session key proves it exists.
   tx.partialSign(keypair);
-  const signed = await signTransaction(tx);
+  const signed = await staged("wallet signature", 120_000, signTransaction(tx));
 
-  const sig = await connection.sendRawTransaction(signed.serialize(), {
-    skipPreflight: true,
-  });
-  const bh = await connection.getLatestBlockhash();
-  const conf = await connection.confirmTransaction(
-    { signature: sig, ...bh },
-    "confirmed",
+  // Preflight on: a doomed create should fail in one simulated round trip
+  // with the program's own error, not ride the full confirmation window.
+  const sig = await staged(
+    "send",
+    20_000,
+    connection.sendRawTransaction(signed.serialize()),
+  );
+  // Breadcrumbs on purpose, not debug leftovers: authorisation failures
+  // surface as a toast, which no automated check can read. The signature in
+  // the console is what turns "the button never went away" into a lookup.
+  console.log(`session: sent ${sig}`);
+  const bh = await staged("fetch confirm blockhash", 20_000, connection.getLatestBlockhash());
+  const conf = await staged(
+    "confirm",
+    90_000,
+    connection.confirmTransaction({ signature: sig, ...bh }, "confirmed"),
   );
   if (conf.value.err) {
+    console.error(`session: failed on chain ${sig}`, JSON.stringify(conf.value.err));
     throw new Error(`could not authorise a session key: ${JSON.stringify(conf.value.err)}`);
   }
+  console.log(`session: confirmed ${sig}`);
 
   storeSession(wallet, keypair, tokenPda, validUntil);
   return { keypair, tokenPda, validUntil };

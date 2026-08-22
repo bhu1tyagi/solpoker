@@ -52,6 +52,21 @@ export function useTableSubscriptions(
     const seats = Array.from({ length: MAX_SEATS }, (_, i) => seatPda(table, i));
     let cancelled = false;
 
+    // Updates arrive from two directions at once: websocket pushes and the
+    // batched poll. Without an ordering rule, a poll that was issued before an
+    // action but answered after its push overwrites new state with old — a
+    // stack un-pays a bet, a folded player un-folds, the turn jumps backwards.
+    // Every write carries the slot it was read at and older slots are dropped.
+    // The map lives inside this effect on purpose: the base layer and the
+    // rollup count slots on unrelated clocks, so a connection switch must
+    // start the comparison over.
+    const lastSlot = new Map<string, number>();
+    const fresh = (k: string, slot: number) => {
+      if (slot < (lastSlot.get(k) ?? 0)) return false;
+      lastSlot.set(k, slot);
+      return true;
+    };
+
     const applyHand = (data: Buffer) => store.getState().setHand(decodeHand(new Uint8Array(data)));
     const applyTable = (data: Buffer) =>
       store.getState().setTable(decodeTable(new Uint8Array(data), table.toBase58()));
@@ -61,16 +76,18 @@ export function useTableSubscriptions(
     /** One batched read of everything public. Also the initial load. */
     const readAll = async () => {
       try {
-        const infos = await connection.getMultipleAccountsInfo(
+        const resp = await connection.getMultipleAccountsInfoAndContext(
           [table, hand, ...seats],
           "processed",
         );
         if (cancelled) return;
-        if (infos[0]) applyTable(infos[0].data);
-        if (infos[1]) applyHand(infos[1].data);
+        const slot = resp.context.slot;
+        const infos = resp.value;
+        if (infos[0] && fresh("table", slot)) applyTable(infos[0].data);
+        if (infos[1] && fresh("hand", slot)) applyHand(infos[1].data);
         for (let i = 0; i < MAX_SEATS; i++) {
           const info = infos[2 + i];
-          if (info) applySeat(i, info.data);
+          if (info && fresh(`seat:${i}`, slot)) applySeat(i, info.data);
         }
       } catch {
         // The watchdog will try again shortly.
@@ -81,10 +98,28 @@ export function useTableSubscriptions(
 
     try {
       subs.current.push(
-        connection.onAccountChange(hand, (info) => applyHand(info.data), "processed"),
-        connection.onAccountChange(table, (info) => applyTable(info.data), "processed"),
+        connection.onAccountChange(
+          hand,
+          (info, ctx) => {
+            if (fresh("hand", ctx.slot)) applyHand(info.data);
+          },
+          "processed",
+        ),
+        connection.onAccountChange(
+          table,
+          (info, ctx) => {
+            if (fresh("table", ctx.slot)) applyTable(info.data);
+          },
+          "processed",
+        ),
         ...seats.map((seat, i) =>
-          connection.onAccountChange(seat, (info) => applySeat(i, info.data), "processed"),
+          connection.onAccountChange(
+            seat,
+            (info, ctx) => {
+              if (fresh(`seat:${i}`, ctx.slot)) applySeat(i, info.data);
+            },
+            "processed",
+          ),
         ),
       );
     } catch {
@@ -117,7 +152,12 @@ export function useTableSubscriptions(
   // there looking at the backs of their own cards for the whole hand.
   useEffect(() => {
     if (!holeConnection || !table || mySeat < 0) {
-      store.getState().setMyHole(null, 0);
+      // Clear the cards only when they are genuinely not yours to hold — you
+      // stood up, or left the table. A reconnecting socket also passes through
+      // here with a null connection, and wiping then blanks your own hand
+      // mid-play for the length of the flap; the cards are still valid for
+      // the hand number they carry, and the render layer already checks that.
+      if (!table || mySeat < 0) store.getState().setMyHole(null, 0);
       return;
     }
 

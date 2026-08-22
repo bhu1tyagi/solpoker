@@ -161,6 +161,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     return () => clearInterval(t);
   }, [refreshDelegation]);
 
+
   // Only the creator gets a delete button. The config is immutable, so this is
   // read once alongside it.
   const [creator, setCreator] = useState<string | null>(null);
@@ -213,6 +214,16 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     sessionToken,
   });
 
+  // Start, pause and cash-out all move the table between layers, and the page
+  // reads whichever layer owns the accounts. Waiting up to six seconds for
+  // the delegation poll to notice leaves the table rendering the frozen side.
+  // The moment an action finishes, ask again.
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (wasBusy.current && actions.busy === null) void refreshDelegation();
+    wasBusy.current = actions.busy !== null;
+  }, [actions.busy, refreshDelegation]);
+
   useCrank({
     connection: erConnection,
     program: erProgram,
@@ -251,6 +262,9 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
       setSessionToken(s.tokenPda);
       toast("Session key authorised. No more prompts while you play.", "good");
     } catch (e) {
+      // The toast is for the player; the console line is for anything driving
+      // the page that cannot read a toast.
+      console.error("authorise session failed:", e);
       toast(friendlyError(e), "bad");
     } finally {
       setAuthorising(false);
@@ -275,6 +289,18 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   // moment the chain reports something newer, so it can never mask reality for
   // more than the round trip.
   const pending = useTableStore((s) => s.pending);
+  // Retire the optimistic action once the chain has caught up with it, or
+  // after long enough that it clearly never landed. Holding it any longer
+  // would show a bet the chain might not have.
+  useEffect(() => {
+    if (!pending) return;
+    if (!pendingApplies(pending, hand)) {
+      setPending(null);
+      return;
+    }
+    const t = setTimeout(() => setPending(null), 8_000);
+    return () => clearTimeout(t);
+  }, [pending, hand, setPending]);
   const showPending = pendingApplies(pending, hand);
   const viewSeats = showPending ? applyPending(seats, pending) : seats;
   const viewHand = showPending && hand ? applyPendingHand(hand, pending) : hand;
@@ -317,8 +343,14 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         // their own click was an error reads as a broken table when nothing
         // went wrong. The felt already shows what actually happened.
         if (!isRaceLost(e)) toast(friendlyError(e), "bad");
-      } finally {
+        // A failed action shows the truth again at once.
         setPending(null);
+      } finally {
+        // Deliberately not clearing `pending` on success here: the send
+        // resolves a beat before the subscription delivers the acted-on state,
+        // and clearing early snaps the seat back to its pre-action shape for
+        // that frame. The chain retires it instead — the effect below drops it
+        // the moment `toAct` moves on — with a timed backstop.
         setActing(false);
       }
     },
