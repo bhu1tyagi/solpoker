@@ -1,8 +1,9 @@
 # SolPoker: what is built, what is verified, what is left
 
-Written 15 August 2026. Updated 20 August 2026, after a second, mainnet-focused
-security audit, the fixes it produced, and a full devnet redeploy and
-verification. Still devnet only.
+Written 15 August 2026. Updated 22 August 2026, after moving the program to a
+new id, redeploying and re-verifying it on devnet, and deploying it to
+mainnet-beta. The program is on mainnet; the client is not. Play is still
+devnet only.
 
 This is the honest version. "Verified" below means a test or a measurement ran
 and I read the result, not that the code looks right. Anything I have not
@@ -91,10 +92,25 @@ setup.
 | Unit tests | Vitest, cargo test, proptest | current |
 
 Deployed program: `Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker`
-TEE endpoint: `https://devnet-tee.magicblock.app`
-Pinned validator: `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo`
-Client: <https://solpoker.vercel.app>
+The same id on **both** devnet and mainnet-beta, so one vendored IDL serves
+both and the cluster is chosen entirely by which RPC the client is pointed at.
+TEE endpoint: `https://devnet-tee.magicblock.app`, `https://mainnet-tee.magicblock.app`
+Pinned validator: `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo` — the same
+identity on both clusters, confirmed by `getIdentity` against each.
+Client: <https://solpoker.vercel.app> (devnet)
 Source: <https://github.com/bhu1tyagi/solpoker>, MIT, public
+
+**The mainnet program is deployed but the client still points at devnet.** The
+program went up on 22 August with 1,150,000 bytes allocated against a
+1,049,800-byte binary, so there is ~100 KB of upgrade headroom and a redeploy
+costs only fees. Its vault holds a 0.01 SOL seed, five times the floor
+`sell_chips` asserts, so the first seller is not blocked. A base-layer smoke
+test — init, buy 1,000 chips, sell them back — ran on mainnet and returned
+every chip, with the vault moving 0.010 → 0.011 → 0.010 exactly.
+
+Nothing else on mainnet has been exercised: no hand, no delegation, no rollup.
+Switching the live client is a separate decision, and the remaining blockers
+below are unchanged by the deploy.
 
 The program moved to a fresh id on 22 August. The previous deployment, at
 `4f8UE9BfWnAMLpYwpxJCNFD6HEmHwNQLtmQfhKW45tZ9`, had been extended twice to fit
