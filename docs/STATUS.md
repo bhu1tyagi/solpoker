@@ -97,7 +97,7 @@ both and the cluster is chosen entirely by which RPC the client is pointed at.
 TEE endpoint: `https://devnet-tee.magicblock.app`, `https://mainnet-tee.magicblock.app`
 Pinned validator: `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo` — the same
 identity on both clusters, confirmed by `getIdentity` against each.
-Client: <https://solpoker.vercel.app> (devnet)
+Client: <https://pokerable.fun> (devnet; solpoker.vercel.app still serves the same deploy)
 Source: <https://github.com/bhu1tyagi/solpoker>, MIT, public
 
 **22 August, later: the product is now Pokerable** (pokerable.fun, "Play poker
@@ -198,7 +198,7 @@ dealing, advancing a street, settling and timing out are all permissionless, so
 every open client watches the same state and does whatever is next, staggered by
 seat so they rarely collide.
 
-Deployed at <https://solpoker.vercel.app>. It lays out for narrow screens, and a
+Deployed at <https://pokerable.fun>. It lays out for narrow screens, and a
 phone held upright gets a table stood on end rather than a shrunken wide one:
 the media queries live in `globals.css` because inline styles cannot hear one,
 and `use-viewport` mirrors the same breakpoints for the parts positioned in JS.
