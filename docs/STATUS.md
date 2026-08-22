@@ -121,8 +121,10 @@ deposit the loader returns in the same command, which is also the answer to
 "why does a mainnet upgrade need more SOL than the fees". Proven on chain
 after the upgrade, not assumed: buying 10 chips moved exactly 10,000,000
 lamports into the vault and selling them moved exactly 10,000,000 back.
-**Mainnet still runs the old rate** and needs the same upgrade — ~6 SOL sent
-to the deploy wallet, returned minutes later, net cost about 0.005.
+**Mainnet was upgraded the same day**: same binary, 0.0052 SOL total with the
+buffer refunded in the same command, and the same on-chain proof — 10 chips
+moved exactly 10,000,000 lamports into the mainnet vault and back out. Both
+clusters now run 1 SOL = 1,000 chips, byte-identical programs.
 
 **The mainnet program is deployed but the client still points at devnet.** The
 program went up on 22 August with 1,150,000 bytes allocated against a
