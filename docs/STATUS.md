@@ -113,6 +113,17 @@ figures on buy and sell are 1,000× the lamports that actually move; chip
 figures are right everywhere. Do not point a client at mainnet until the
 mainnet program is upgraded to match.
 
+**22 August, later still: devnet carries the new rate.** The previous devnet
+program at `4f8UE9Bf…` was closed with the owner's approval — 7.49 SOL
+reclaimed, that id burned for good — which funded the upgrade of the live
+program in place. The whole upgrade cost 0.0052 SOL: the 7.31 SOL buffer is a
+deposit the loader returns in the same command, which is also the answer to
+"why does a mainnet upgrade need more SOL than the fees". Proven on chain
+after the upgrade, not assumed: buying 10 chips moved exactly 10,000,000
+lamports into the vault and selling them moved exactly 10,000,000 back.
+**Mainnet still runs the old rate** and needs the same upgrade — ~6 SOL sent
+to the deploy wallet, returned minutes later, net cost about 0.005.
+
 **The mainnet program is deployed but the client still points at devnet.** The
 program went up on 22 August with 1,150,000 bytes allocated against a
 1,049,800-byte binary, so there is ~100 KB of upgrade headroom and a redeploy
