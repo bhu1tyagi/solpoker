@@ -47,8 +47,19 @@ export function useLeaderboard() {
         }
       });
 
-      decoded.sort((a, b) => b.chips - a.chips || b.handsPlayed - a.handsPlayed);
-      setRows(decoded);
+      // Rank only players who actually hold chips. A Player account can never
+      // be closed — the program has no instruction for it, and `sell_chips`
+      // only zeroes the balance — so every wallet that has ever bought in is
+      // on chain permanently. Without this the board fills with accounts
+      // holding nothing, including abandoned test wallets whose keys are gone.
+      //
+      // `handsPlayed` is not used to rescue them, because it is dead: the
+      // program sets it to 0 in `init_player` and never increments it. It
+      // stays in the sort as a tiebreaker so that ranking starts working on
+      // its own if the program ever begins recording it.
+      const ranked = decoded.filter((p) => p.chips > 0);
+      ranked.sort((a, b) => b.chips - a.chips || b.handsPlayed - a.handsPlayed);
+      setRows(ranked);
     } catch {
       // Leave the previous board up rather than blanking it on a failed read.
     } finally {
