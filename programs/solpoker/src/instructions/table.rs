@@ -92,6 +92,15 @@ pub fn create_table(
     deck.next_index = 0;
     deck.vrf_randomness = [0u8; 32];
     deck.shuffle_seed = [0u8; 32];
+    // Every field undelegation checks must leave `init` in its cleared state,
+    // not Anchor's zero-fill. `board` clears to NO_CARD, and a deck born with
+    // it zeroed fails `assert_deck_publishable` until a first hand settles —
+    // so a table delegated and then abandoned before ever dealing could not be
+    // pulled back to the base layer, and its seats' chips were stuck with it.
+    // Found on the first mainnet table, which wedged exactly that way.
+    deck.hole_randomness = [0u8; 32];
+    deck.board = [NO_CARD; 5];
+    deck.fulfilled_mask = 0;
     deck.shuffle_state = 0;
     deck.bump = ctx.bumps.deck;
 

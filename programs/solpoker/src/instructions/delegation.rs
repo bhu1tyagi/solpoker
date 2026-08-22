@@ -81,8 +81,14 @@ fn assert_deck_publishable(info: &AccountInfo) -> Result<()> {
         );
     }
     if data.len() >= DECK_BOARD_END {
+        // Cleared is NO_CARD. All-zero is also accepted, but only because it is
+        // unambiguous: decks created before `create_table` initialised this
+        // field were born zero-filled, and five copies of card 0 cannot occur
+        // in a dealt board. Without this arm those decks can never leave the
+        // rollup.
+        let board = &data[DECK_BOARD..DECK_BOARD_END];
         require!(
-            data[DECK_BOARD..DECK_BOARD_END].iter().all(|c| *c == NO_CARD),
+            board.iter().all(|c| *c == NO_CARD) || board.iter().all(|c| *c == 0),
             PokerError::HandInProgress
         );
     }
