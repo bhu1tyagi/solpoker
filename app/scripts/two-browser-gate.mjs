@@ -198,7 +198,10 @@ async function main() {
         .then(() => true)
         .catch(() => false);
     }
-    if (!navigated) throw new Error("table creation did not navigate after 3 attempts");
+    if (!navigated) {
+      (A.page.__toasts ?? []).slice(-6).forEach((t) => log(`      A console: ${t}`));
+      throw new Error("table creation did not navigate after 3 attempts");
+    }
     const tableUrl = A.page.url();
     const tableId = tableUrl.match(/\/table\/(\d+)/)[1];
     log(`  created table ${tableId}`);
@@ -240,6 +243,13 @@ async function main() {
       (k) => document.body.innerText.toUpperCase().includes(k),
       aShort,
       { timeout: 60_000 },
+    );
+    // The page reached over a full navigation, so the wallet reconnects
+    // asynchronously — and a seat click while it is still connecting is a
+    // designed no-op. Waiting for the content beat the wallet by seconds.
+    await B.page.waitForFunction(
+      () => window.__pokerableDebug?.()?.connected === true,
+      { timeout: 30_000 },
     );
     const bSeesA = await B.page
       .waitForFunction(() => /\d{3,}/.test(document.body.innerText), { timeout: 60_000 })

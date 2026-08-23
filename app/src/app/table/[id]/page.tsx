@@ -187,15 +187,23 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     (window as unknown as Record<string, unknown>).__pokerableDebug = () => {
       const s = useTableStore.getState();
       return {
+        connected,
         mySeat: s.mySeat,
         link: s.link,
         handNumber: s.hand?.handNumber,
         dealtIn: s.hand?.dealtIn,
         myHole: s.myHole,
         myHoleHandNumber: s.myHoleHandNumber,
+        delegated,
+        crankEnabled: Boolean(
+          delegated && !outdated && session && sessionToken && erProgram && s.mySeat >= 0,
+        ),
+        saltStates: s.seats.map((x) => x?.saltState ?? null),
       };
     };
-  }, []);
+    // Re-bound on every value it reports, or the handle lies with first-render
+    // state forever.
+  }, [connected, delegated, outdated, session, sessionToken, erProgram]);
 
   // The end of a hand, paced into reveal, compare, and pay.
   const showdown = useShowdownSequence(hand, tableView, seats);

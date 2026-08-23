@@ -93,14 +93,6 @@ export class Crank {
   private lastSaltFingerprint = "";
   /** Hands this client has already sent a deal for, for the not-dealt-in case. */
   private dealtHands = new Set<number>();
-  /**
-   * Seats this client has already tried to re-secure, per hand.
-   *
-   * A locked-out permission fails every time, so without this the attempt would
-   * fire on every tick forever. One try per seat per hand is enough to catch
-   * the case where it can actually succeed.
-   */
-  private securedTried = new Set<string>();
 
   constructor(private ctx: CrankContext) {}
 
@@ -303,9 +295,11 @@ export class Crank {
       for (let i = 0; i < MAX_SEATS; i++) {
         const s = seats[i];
         if (!s?.occupant || s.cardsSecured) continue;
-        if (this.securedTried.has(`${i}:${nHand}`)) continue;
-        this.securedTried.add(`${i}:${nHand}`);
-        try {
+        // Through `armed`, so a transient failure retries with backoff
+        // rather than being remembered as permanent. One TEE hiccup on the
+        // single try this used to get meant the seat sat out the entire
+        // hand — and with two players, a table that could never start.
+        await this.armed(`secure:${i}:${nHand}`, 0, async () => {
           const ix = await secureHoleIx(
             this.ctx.program,
             this.ctx.table,
@@ -313,11 +307,7 @@ export class Crank {
             this.ctx.session.publicKey,
           );
           await this.send(ix, `secure seat ${i}`);
-        } catch {
-          // Someone else got there first, or this client cannot update that
-          // seat's permission. Either way the hand can still be dealt to
-          // everyone else, so carry on rather than stalling the table.
-        }
+        });
       }
     }
 
