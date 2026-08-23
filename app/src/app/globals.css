@@ -50,6 +50,11 @@ button {
   color: inherit;
 }
 
+/* The stack credit answers the pointer without shouting. */
+.stack-chip:hover {
+  color: var(--text) !important;
+}
+
 /* Focus should be obvious without shouting. */
 :focus-visible {
   outline: 2px solid var(--accent);

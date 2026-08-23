@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import { SPADE_PATH } from "@/components/primitives/Logo";
 import { PlayingCard, CardSlot } from "@/components/primitives/PlayingCard";
 import { ChipStack } from "@/components/primitives/Chip";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
@@ -171,6 +172,43 @@ export function TableFelt({
             pointerEvents: "none",
           }}
         />
+        {/* The house mark, printed into the cloth. Low enough contrast that
+            cards and chips always beat it, present enough that an empty table
+            still says whose room this is. It sits in the lower half so the
+            board and pot never cover it. */}
+        <svg
+          aria-hidden
+          viewBox="0 0 100 100"
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "68%",
+            transform: "translate(-50%, -50%)",
+            width: "13%",
+            opacity: 0.07,
+            pointerEvents: "none",
+          }}
+        >
+          <path d={SPADE_PATH} fill="#eafff4" />
+        </svg>
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "82%",
+            transform: "translate(-50%, -50%)",
+            fontFamily: "var(--font-display)",
+            fontSize: "clamp(8px, 1.6cqw, 13px)",
+            letterSpacing: "0.42em",
+            textTransform: "uppercase",
+            color: "rgba(234, 255, 244, 0.06)",
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+          }}
+        >
+          Pokerable
+        </div>
       </div>
 
       {/* Board and pot, centred. Absolute centring shrink-wraps to half the

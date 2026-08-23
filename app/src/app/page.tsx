@@ -10,6 +10,7 @@ import { Button } from "@/components/primitives/Button";
 import { Modal, Skeleton } from "@/components/primitives/Surface";
 import { ChipGlyph } from "@/components/primitives/Chip";
 import { Logo } from "@/components/primitives/Logo";
+import { StackCredit } from "@/components/primitives/StackCredit";
 import { Avatar, shortKey } from "@/components/primitives/Avatar";
 import {
   CashOutIcon,
@@ -106,6 +107,7 @@ export default function Lobby() {
                 >
                   Play poker with SOL
                 </p>
+                <StackCredit />
               </div>
 
               {connected && (
