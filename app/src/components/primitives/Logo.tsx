@@ -18,6 +18,64 @@ export const SPADE_PATH =
   "C 47 76, 44 83, 37 89 L 63 89 C 56 83, 53 76, 52 67 C 54 71, 59 74, 65 74 " +
   "C 75 74, 83 66, 83 55 C 83 39, 62 28, 50 12 Z";
 
+/**
+ * The chip as a letterform: the 'o' of the wordmark. Same geometry as the
+ * mark, redrawn with the ring fattened to Dela Gothic's stroke weight so it
+ * reads as a letter among letters rather than an icon that wandered in. The
+ * hidden 'o' beside it keeps the word whole for screen readers, searches and
+ * the page checks: the visible text alone would spell "Pkerable".
+ */
+export function ChipO({ size = "0.62em" }: { size?: string }) {
+  const id = "pokerable-chip-o";
+  return (
+    <>
+      <span
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          overflow: "hidden",
+          clipPath: "inset(50%)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        o
+      </span>
+      <svg
+        aria-hidden
+        width={size}
+        height={size}
+        viewBox="0 0 100 100"
+        style={{
+          display: "inline-block",
+          verticalAlign: "baseline",
+          marginBottom: "-0.015em",
+        }}
+      >
+        <defs>
+          <linearGradient id={`${id}-suit`} x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stopColor="#9945FF" />
+            <stop offset="1" stopColor="#14F195" />
+          </linearGradient>
+        </defs>
+        <circle
+          cx="50"
+          cy="50"
+          r="41"
+          fill="none"
+          stroke={`url(#${id}-suit)`}
+          strokeWidth="15"
+          strokeDasharray="19.7 12.5"
+          strokeDashoffset="9.85"
+        />
+        <g transform="translate(50 51) scale(0.44) translate(-50 -50)">
+          <path d={SPADE_PATH} fill={`url(#${id}-suit)`} />
+        </g>
+      </svg>
+    </>
+  );
+}
+
 export function Logo({
   size = 22,
   title,

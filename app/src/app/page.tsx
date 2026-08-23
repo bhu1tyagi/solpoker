@@ -9,7 +9,7 @@ import { CreateTableModal } from "@/components/chrome/CreateTableModal";
 import { Button } from "@/components/primitives/Button";
 import { Modal, Skeleton } from "@/components/primitives/Surface";
 import { ChipGlyph } from "@/components/primitives/Chip";
-import { Logo } from "@/components/primitives/Logo";
+import { ChipO, Logo } from "@/components/primitives/Logo";
 import { StackCredit } from "@/components/primitives/StackCredit";
 import { Avatar, shortKey } from "@/components/primitives/Avatar";
 import {
@@ -90,11 +90,11 @@ export default function Lobby() {
                     letterSpacing: "-0.03em",
                   }}
                 >
-                  {/* Decorative: the name is right there in the heading. Sized
-                      in em so it tracks the clamped heading instead of towering
-                      over it on a phone. */}
-                  <Logo size="1em" />
-                  <span className="wordmark-solana">Pokerable</span>
+                  <span className="wordmark-solana" style={{ whiteSpace: "nowrap" }}>
+                    P
+                    <ChipO />
+                    kerable
+                  </span>
                 </h1>
                 <p
                   style={{
