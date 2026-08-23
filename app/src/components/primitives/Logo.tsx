@@ -1,20 +1,12 @@
 /**
  * The Pokerable mark.
  *
- * A poker chip in Solana's colours with the spade at its centre, on a slate
- * tile lit from the top left like every
- * other surface in the room. Three candidates were drawn and rendered at 16, 20,
- * 32, 64 and 160 before this one was picked, which is the only way to choose a
- * mark honestly: the version with two hole cards fanned behind it is prettier at
- * 160 and turns to mush by 20, and a bevel down the top edge disappears below 64
- * while reading glossy above it. What survives every size is one bold shape.
- *
- * The tile is not decoration. A bare cyan spade sits on whatever the browser
- * paints behind a tab, which on a light theme is cyan on near-white, and the
- * tile is what guarantees the contrast in both.
- *
- * Corners are near-square on purpose: the design system's softest radius is 8px
- * on a modal, and a pill-round icon would belong to a different product.
+ * A poker chip in Solana's colours with the spade at its centre, standing on
+ * its own — no tile. The chip's eight edge spots are real gaps in the ring
+ * rather than dark paint, which is what lets the mark sit on any ground: the
+ * background shows through the spots the way the felt shows through a real
+ * chip's edge. Rendered at 16, 20, 32, 64 and 160 before shipping; one bold
+ * shape is what survives every size.
  *
  * Kept in one file because `app/icon.svg` draws the same geometry. If this
  * changes, change that too, or the tab and the header stop agreeing.
@@ -55,52 +47,38 @@ export function Logo({
       style={{ display: "block", flexShrink: 0 }}
     >
       <defs>
-        {/* The same top-left light source as --bg-grad and every panel. */}
-        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#43535e" />
-          <stop offset="1" stopColor="#161f25" />
-        </linearGradient>
-        {/* The spade wears the chain's colours: Solana's purple-to-green,
-            run bottom-left to top-right at the same angle as its bars. */}
+        {/* The chain's colours: Solana's purple-to-green, run bottom-left to
+            top-right at the same angle as its bars. */}
         <linearGradient id={`${gradientId}-suit`} x1="0" y1="1" x2="1" y2="0">
           <stop offset="0" stopColor="#9945FF" />
           <stop offset="1" stopColor="#14F195" />
         </linearGradient>
       </defs>
-      <rect
-        x="2"
-        y="2"
-        width="96"
-        height="96"
-        rx="10"
-        fill={`url(#${gradientId})`}
-        stroke="#61737f"
-        strokeWidth="2"
-      />
-      {/* The chip: a gradient ring with eight edge spots knocked out in the
-          tile's own dark, which is what makes a circle read as a poker chip
-          rather than a coin. */}
+      {/* The chip: eight fat segments with real gaps between them, plus a
+          thin continuous inner ring that closes the circle. Solid-ring chips
+          need a contrast colour behind their spots; gaps work everywhere. */}
       <circle
         cx="50"
         cy="50"
-        r="39"
+        r="42"
         fill="none"
         stroke={`url(#${gradientId}-suit)`}
-        strokeWidth="9"
+        strokeWidth="10"
+        strokeDasharray="20.3 12.7"
+        strokeDashoffset="10.15"
       />
       <circle
         cx="50"
         cy="50"
-        r="39"
+        r="33"
         fill="none"
-        stroke="#1d262d"
-        strokeWidth="9"
-        strokeDasharray="15.3 15.3"
-        strokeDashoffset="7.65"
+        stroke={`url(#${gradientId}-suit)`}
+        strokeWidth="2.5"
+        opacity="0.7"
       />
       {/* Nudged a unit low: a spade carries its weight in the lobes, so a
           mathematically centred one reads as sitting high in the frame. */}
-      <g transform="translate(50 51) scale(0.56) translate(-50 -50)">
+      <g transform="translate(50 51) scale(0.5) translate(-50 -50)">
         <path d={SPADE_PATH} fill={`url(#${gradientId}-suit)`} />
       </g>
     </svg>

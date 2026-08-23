@@ -55,7 +55,7 @@ export function TopBar({ chips }: { chips?: number }) {
         >
           {/* Decorative: the wordmark beside it already says the name. */}
           <Logo size={22} />
-          Poker<span style={{ color: "var(--accent)" }}>able</span>
+          <span className="wordmark-solana">Pokerable</span>
         </Link>
         <Link
           href="/trust"

@@ -50,6 +50,25 @@ button {
   color: inherit;
 }
 
+/* The name in the chain's colours: purple through green, left to right,
+   with a fallback for any renderer that cannot clip a background to text.
+   The gradient midpoint leans green so the word stays legible: the purple
+   end is the darker of the two against slate. */
+.wordmark-solana {
+  background-image: linear-gradient(94deg, #b981ff 0%, #8f7bff 30%, #2fe0a8 72%, #14F195 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #14F195;
+}
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .wordmark-solana {
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
+    color: var(--accent);
+  }
+}
+
 /* The stack credit answers the pointer without shouting. */
 .stack-chip:hover {
   color: var(--text) !important;

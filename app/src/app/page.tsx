@@ -94,7 +94,7 @@ export default function Lobby() {
                       in em so it tracks the clamped heading instead of towering
                       over it on a phone. */}
                   <Logo size="1em" />
-                  Pokerable
+                  <span className="wordmark-solana">Pokerable</span>
                 </h1>
                 <p
                   style={{
