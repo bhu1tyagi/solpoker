@@ -1,7 +1,7 @@
 /**
  * The Pokerable mark.
  *
- * A spade in the accent cyan, on a slate tile lit from the top left like every
+ * A spade in Solana's colours, on a slate tile lit from the top left like every
  * other surface in the room. Three candidates were drawn and rendered at 16, 20,
  * 32, 64 and 160 before this one was picked, which is the only way to choose a
  * mark honestly: the version with two hole cards fanned behind it is prettier at
@@ -59,6 +59,12 @@ export function Logo({
           <stop offset="0" stopColor="#43535e" />
           <stop offset="1" stopColor="#161f25" />
         </linearGradient>
+        {/* The spade wears the chain's colours: Solana's purple-to-green,
+            run bottom-left to top-right at the same angle as its bars. */}
+        <linearGradient id={`${gradientId}-suit`} x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0" stopColor="#9945FF" />
+          <stop offset="1" stopColor="#14F195" />
+        </linearGradient>
       </defs>
       <rect
         x="2"
@@ -73,7 +79,7 @@ export function Logo({
       {/* Nudged a unit low: a spade carries its weight in the lobes, so a
           mathematically centred one reads as sitting high in the tile. */}
       <g transform="translate(50 51) scale(0.76) translate(-50 -50)">
-        <path d={SPADE_PATH} fill="#98dee3" />
+        <path d={SPADE_PATH} fill={`url(#${gradientId}-suit)`} />
       </g>
     </svg>
   );

@@ -36,21 +36,24 @@ export function SolanaMark({ size = 13 }: { size?: number }) {
   );
 }
 
+/**
+ * MagicBlock's own mark, supplied by the team. Their original is white; it is
+ * drawn in currentColor here so it follows the credit row's text colour and
+ * its hover, and stays legible on any ground the row sits on.
+ */
 export function BlockMark({ size = 13 }: { size?: number }) {
   return (
     <svg
       aria-hidden
-      width={size}
+      width={size * 1.69}
       height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinejoin="round"
+      viewBox="-150 -74 270 160"
       style={{ display: "block", flexShrink: 0 }}
     >
-      <path d="M12 2.6 L20.4 7.3 V16.7 L12 21.4 L3.6 16.7 V7.3 Z" />
-      <path d="M3.6 7.3 L12 12 L20.4 7.3 M12 12 V21.4" />
+      <path
+        fill="currentColor"
+        d="M113.37637329101562,-33.22443771362305 C107.31800079345703,-68.53284454345703 13.4288911819458,-65.48045349121094 -42.53285217285156,-57.61576461791992 C-80.48788452148438,-49.250335693359375 -144.578369140625,-20.65522575378418 -65.37899780273438,5.259235382080078 C-63.893001556396484,13.123235702514648 -69.54900360107422,45.26300048828125 -59.683998107910156,49.49399948120117 C-52.516998291015625,51.86000061035156 -13.607999801635742,81.1510009765625 -5.826000213623047,75.63899993896484 C76.24800109863281,37.17300033569336 62.08747863769531,64.42695617675781 69.36210632324219,-7.21024227142334 C103.56103515625,-13.84117317199707 114.99246215820312,-22.904813766479492 113.37637329101562,-33.22443771362305z"
+      />
     </svg>
   );
 }
