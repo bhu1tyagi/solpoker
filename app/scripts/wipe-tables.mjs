@@ -127,6 +127,16 @@ async function main() {
           await sleep(1000);
         }
 
+        // A shuffle the oracle never answered blocks undelegation, and its
+        // reset is permissionless once the request goes stale. Try it before
+        // pulling accounts; a table whose shuffle is healthy refuses harmlessly.
+        try {
+          await send(er, await erProgram.methods.resetShuffle()
+            .accountsPartial({ table, hand, deck, payer: kp.publicKey }).instruction(), "reset shuffle");
+        } catch {
+          // Not stale, or already clear.
+        }
+
         // Seats before the core accounts. undelegate_seat now reads the table
         // to refuse a mid-hand pull, so the table has to still be there.
         // Per seat, and tolerant of one already being home.

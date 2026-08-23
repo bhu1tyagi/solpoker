@@ -54,7 +54,8 @@ button {
    with a fallback for any renderer that cannot clip a background to text.
    The gradient midpoint leans green so the word stays legible: the purple
    end is the darker of the two against slate. */
-.wordmark-solana {
+.wordmark-solana,
+.sol-text {
   background-image: linear-gradient(94deg, #b981ff 0%, #8f7bff 30%, #2fe0a8 72%, #14F195 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -62,7 +63,8 @@ button {
   color: #14F195;
 }
 @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
-  .wordmark-solana {
+  .wordmark-solana,
+  .sol-text {
     background-image: none;
     -webkit-text-fill-color: currentColor;
     color: var(--accent);
@@ -120,12 +122,12 @@ button {
   height: 44px !important;
   padding: 0 16px !important;
   border-radius: var(--r-panel) !important;
-  background: var(--accent) !important;
-  color: var(--on-accent) !important;
+  background: var(--sol-grad-flat) !important;
+  color: var(--on-sol) !important;
   transition: transform 0.12s ease, filter 0.12s ease;
 }
 .wallet-adapter-button:not([disabled]):hover {
-  background: var(--accent) !important;
+  background: var(--sol-grad-flat) !important;
   filter: brightness(1.06);
   transform: translateY(-1px);
 }
@@ -205,9 +207,9 @@ input[type="range"]::-webkit-slider-thumb {
   height: 16px;
   margin-top: -6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--sol-grad-flat);
   border: 3px solid var(--bg);
-  box-shadow: 0 0 0 1px var(--accent-deep);
+  box-shadow: 0 0 0 1px rgba(153, 69, 255, 0.55);
 }
 input[type="range"]::-moz-range-track {
   height: 4px;
@@ -218,9 +220,9 @@ input[type="range"]::-moz-range-thumb {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--sol-grad-flat);
   border: 3px solid var(--bg);
-  box-shadow: 0 0 0 1px var(--accent-deep);
+  box-shadow: 0 0 0 1px rgba(153, 69, 255, 0.55);
 }
 
 /* ------------------------------------------------------------------ */

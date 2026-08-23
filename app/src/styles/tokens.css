@@ -49,6 +49,11 @@
   --plate-lo-idle: #232d35;
   --avatar: #485c69;
 
+  /* An opaque panel, for surfaces that must fully cover what is painted
+     behind them (gradient-border cards, layered fills). The translucent
+     surfaces below let backdrop bleed through by design; this one does not. */
+  --surface-solid: #232e36;
+
   /* Surfaces and controls */
   --surface: rgba(64, 82, 94, 0.24);
   --surface-2: rgba(64, 82, 94, 0.42);
@@ -87,6 +92,14 @@
   --seat-open-bg: rgba(13, 24, 20, 0.35);
   --seat-open-fg: #8fa1ab;
 
+  /* The chain's colours, as tokens. The full ramp is for display type; the
+     flat two-stop is for controls, where four stops would band. */
+  --sol-a: #9945ff;
+  --sol-b: #14f195;
+  --sol-grad: linear-gradient(94deg, #b981ff 0%, #8f7bff 30%, #2fe0a8 72%, #14f195 100%);
+  --sol-grad-flat: linear-gradient(90deg, #9945ff, #14f195);
+  --on-sol: #071310;
+
   /* Accent: the cyan the interface itself is written in */
   --accent: #98dee3;
   --accent-deep: #3fa3aa;
@@ -120,11 +133,13 @@
   --suit-hearts: #e97b88;
   --suit-spades: #7aa7ff;
 
-  /* Radii: the spec is nearly square. Only the big page panels are soft. */
-  --r-control: 1px;
-  --r-card: 3px;
-  --r-panel: 2px;
-  --r-modal: 8px;
+  /* Radii. The room began nearly square and it read as unfinished rather
+     than severe; the whole system is soft now, with playing cards kept
+     tighter because a very round card stops looking like a card. */
+  --r-control: 10px;
+  --r-card: 5px;
+  --r-panel: 12px;
+  --r-modal: 20px;
   --r-shell: 33px;
 
   /* Elevation */

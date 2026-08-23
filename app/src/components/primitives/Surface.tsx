@@ -93,7 +93,21 @@ export function Modal({
               padding: 24,
             }}
           >
-            <h2 style={{ fontSize: "var(--t-md)", marginBottom: 16 }}>{title}</h2>
+            {/* The chain's colours as a hairline across the top: the one
+                signature every dialog shares. */}
+            <div
+              aria-hidden
+              style={{
+                height: 3,
+                margin: "-24px -24px 18px",
+                background: "var(--sol-grad-flat)",
+                borderRadius: "var(--r-modal) var(--r-modal) 0 0",
+                opacity: 0.85,
+              }}
+            />
+            <h2 className="sol-text" style={{ fontSize: "var(--t-md)", marginBottom: 16 }}>
+              {title}
+            </h2>
             {children}
           </motion.div>
         </motion.div>

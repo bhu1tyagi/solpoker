@@ -5,8 +5,12 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Transaction } from "@solana/web3.js";
 import BN from "bn.js";
+import { motion } from "motion/react";
 import { Modal } from "@/components/primitives/Surface";
 import { Button } from "@/components/primitives/Button";
+import { ChipGlyph } from "@/components/primitives/Chip";
+import { ClockIcon } from "@/components/primitives/Icons";
+import { spring } from "@/styles/theme";
 import { getBaseConnection } from "@/lib/connection";
 import { makeProgram } from "@/lib/anchor";
 import {
@@ -148,28 +152,83 @@ export function CreateTableModal({
 
   return (
     <Modal open={open} onClose={busy ? () => {} : onClose} title="New table">
-      <p style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)", marginTop: 0 }}>
-        Six seats, no limit. Chips are bought with SOL and sell back at the
-        same fixed rate, so the stakes here are the stakes.
-      </p>
-
       <Field label="Stakes">
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {STAKES.map((s, i) => (
-            <Button
-              key={s.label}
-              size="sm"
-              variant={stake === i ? "primary" : "ghost"}
-              onClick={() => setStake(i)}
-            >
-              {s.sb} / {s.bb}
-            </Button>
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+          {STAKES.map((s, i) => {
+            const active = stake === i;
+            return (
+              <motion.button
+                key={s.label}
+                onClick={() => setStake(i)}
+                aria-pressed={active}
+                whileHover={{ y: -3 }}
+                whileTap={{ scale: 0.97 }}
+                animate={{ scale: active ? 1.02 : 1 }}
+                transition={spring.snappy}
+                style={{
+                  textAlign: "center",
+                  padding: "14px 10px 12px",
+                  borderRadius: "var(--r-panel)",
+                  cursor: "pointer",
+                  // The inner layer must be opaque: a translucent surface lets
+                  // the border-box gradient wash across the whole card face
+                  // and drown the small type.
+                  border: "1.5px solid transparent",
+                  background: active
+                    ? "linear-gradient(var(--surface-solid), var(--surface-solid)) padding-box, var(--sol-grad-flat) border-box"
+                    : "linear-gradient(var(--surface-solid), var(--surface-solid)) padding-box, var(--line) border-box",
+                  color: "var(--text)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 5,
+                  boxShadow: active ? "0 10px 26px -14px rgba(20,241,149,0.35)" : "none",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.09em",
+                    textTransform: "uppercase",
+                    color: active ? "var(--text)" : "var(--text-faint)",
+                  }}
+                >
+                  {s.label}
+                </span>
+                <span
+                  className="tnum"
+                  style={{ fontFamily: "var(--font-display)", fontSize: "var(--t-lg)", lineHeight: 1.1 }}
+                >
+                  {s.sb}/{s.bb}
+                </span>
+                <span
+                  className="tnum"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    fontSize: "var(--t-xs)",
+                    color: "var(--gold)",
+                  }}
+                >
+                  <ChipGlyph size={12} />
+                  {s.min}–{s.max}
+                </span>
+                <span className="tnum" style={{ fontSize: "var(--t-xs)", color: "var(--text-dim)" }}>
+                  {s.min / 1000}–{s.max / 1000} SOL
+                </span>
+              </motion.button>
+            );
+          })}
         </div>
       </Field>
 
       <Field label="Time to act">
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: "var(--text-faint)", display: "inline-flex" }}>
+            <ClockIcon size={17} />
+          </span>
           {[15, 30, 60].map((t) => (
             <Button
               key={t}
@@ -183,18 +242,13 @@ export function CreateTableModal({
         </div>
       </Field>
 
-      <div style={{ marginTop: 22, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <Button variant="primary" onClick={create} disabled={!publicKey} loading={busy}>
-          Create table
+      <div style={{ marginTop: 22, display: "flex", gap: 10, alignItems: "center" }}>
+        <Button variant="primary" fullWidth onClick={create} disabled={!publicKey} loading={busy}>
+          {busy && progress ? progress : "Create table"}
         </Button>
         <Button variant="quiet" onClick={onClose} disabled={busy}>
           Cancel
         </Button>
-        {progress && (
-          <span style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>
-            {progress}
-          </span>
-        )}
       </div>
     </Modal>
   );

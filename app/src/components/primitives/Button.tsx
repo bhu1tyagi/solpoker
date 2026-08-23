@@ -11,7 +11,8 @@ const VARIANTS: Record<Variant, React.CSSProperties> = {
   primary: {
     background: "var(--gold)",
     color: "var(--on-gold)",
-    fontWeight: 600,
+    fontWeight: 700,
+    boxShadow: "0 6px 18px -8px var(--gold-glow), inset 0 1px 0 rgba(255,255,255,0.25)",
   },
   ghost: {
     background: "var(--control)",

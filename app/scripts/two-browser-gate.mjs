@@ -327,8 +327,18 @@ async function main() {
         )
         .then(() => true)
         .catch(() => false);
-    check(await seesOwnCards(A), "A can see its own hole cards face up");
-    check(await seesOwnCards(B), "B can see its own hole cards face up");
+    const aSaw = await seesOwnCards(A);
+    check(aSaw, "A can see its own hole cards face up");
+    if (!aSaw) {
+      const dbg = await A.page.evaluate(() => window.__pokerableDebug?.()).catch(() => null);
+      log(`      A store: ${JSON.stringify(dbg)}`);
+    }
+    const bSaw = await seesOwnCards(B);
+    check(bSaw, "B can see its own hole cards face up");
+    if (!bSaw) {
+      const dbg = await B.page.evaluate(() => window.__pokerableDebug?.()).catch(() => null);
+      log(`      B store: ${JSON.stringify(dbg)}`);
+    }
     await shot(A, "6b-own-cards");
 
     // History entries live in IndexedDB, which is the ground truth for

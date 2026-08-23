@@ -208,7 +208,12 @@ export function useTableSubscriptions(
     const tick = () => {
       const s = store.getState();
       const handNumber = s.hand?.handNumber ?? 0;
-      const caughtUp = handNumber === 0 || s.myHoleHandNumber === handNumber;
+      // Hand number 0 does not mean "no hand" here — it also means "this
+      // client has not heard about the hand yet", which is exactly when the
+      // chase must keep running. On the first hand after delegation the hand
+      // account can arrive seconds late, and a chase that trusted the stale 0
+      // sat idle while the player stared at the backs of their own cards.
+      const caughtUp = handNumber !== 0 && s.myHoleHandNumber === handNumber;
 
       if (handNumber !== chasing) {
         // A new hand: start eager again.

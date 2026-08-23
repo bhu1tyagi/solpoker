@@ -11,6 +11,8 @@ import { TableFelt } from "@/components/poker/TableFelt";
 import { ActionBar, type ActionKind } from "@/components/poker/ActionBar";
 import { Button } from "@/components/primitives/Button";
 import { ChipGlyph } from "@/components/primitives/Chip";
+import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
+import { TableIcon } from "@/components/primitives/Icons";
 import { Modal } from "@/components/primitives/Surface";
 import { useTee } from "@/hooks/use-tee";
 import { useTableSubscriptions } from "@/hooks/use-table-subscriptions";
@@ -179,6 +181,22 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
 
   const capture = useHandCapture(tableView?.tableId ?? null, erConnection, table);
 
+  // A read-only window handle for driven browsers (the two-browser gate) to
+  // report what the store actually held when a check failed. Reads only.
+  useEffect(() => {
+    (window as unknown as Record<string, unknown>).__pokerableDebug = () => {
+      const s = useTableStore.getState();
+      return {
+        mySeat: s.mySeat,
+        link: s.link,
+        handNumber: s.hand?.handNumber,
+        dealtIn: s.hand?.dealtIn,
+        myHole: s.myHole,
+        myHoleHandNumber: s.myHoleHandNumber,
+      };
+    };
+  }, []);
+
   // The end of a hand, paced into reveal, compare, and pay.
   const showdown = useShowdownSequence(hand, tableView, seats);
 
@@ -198,7 +216,12 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   // cards only ever come over the player's own authenticated rollup
   // connection, and only matter while a game is live.
   useTableSubscriptions(
-    delegated === true ? erConnection : getBaseConnection(),
+    // While delegated the rollup owns the truth — but a viewer whose rollup
+    // link is not up yet (spectator mid-auth, token refused, TEE hiccup) used
+    // to get an empty felt while the lobby showed a full table. The base
+    // layer's frozen copy is truthful as of delegation, so show that until
+    // the live link lands.
+    delegated === true ? (erConnection ?? getBaseConnection()) : getBaseConnection(),
     delegated === true ? erConnection : null,
     table,
     mySeat,
@@ -723,11 +746,37 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         onClose={() => setSitting(null)}
         title={`Take seat ${(sitting ?? 0) + 1}`}
       >
-        <p style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)", marginTop: 0 }}>
-          Chips move from your balance to the seat, and back when you cash
-          out. They keep their SOL backing the whole time.
-        </p>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0" }}>
+        {/* What this table is, and what you bring to it: two icon rows. */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            padding: "12px 14px",
+            borderRadius: "var(--r-panel)",
+            background: "var(--surface-2)",
+            fontSize: "var(--t-sm)",
+          }}
+        >
+          <span
+            className="tnum"
+            style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--text-dim)" }}
+          >
+            <TableIcon size={15} />
+            {tableConfig?.smallBlind ?? "?"}/{tableConfig?.bigBlind ?? "?"} ·{" "}
+            {minBuyIn.toLocaleString()}–{(tableConfig?.maxBuyIn ?? 0).toLocaleString()}
+          </span>
+          <span
+            className="tnum"
+            style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--gold)" }}
+          >
+            <ChipGlyph size={14} />
+            {(player.state?.chips ?? 0).toLocaleString()}
+          </span>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0 6px" }}>
           <input
             type="range"
             min={minBuyIn}
@@ -735,19 +784,49 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             step={10}
             value={buyIn}
             onChange={(e) => setBuyIn(Number(e.target.value))}
-            style={{ flex: 1, accentColor: "var(--accent)" }}
+            style={{ flex: 1 }}
           />
           <span
             className="tnum"
             style={{
               fontFamily: "var(--font-display)",
               fontSize: "var(--t-md)",
-              color: "var(--accent)",
-              minWidth: 80,
+              color: "var(--gold)",
+              minWidth: 84,
               textAlign: "right",
             }}
           >
-            {buyIn.toLocaleString()}
+            <AnimatedNumber value={buyIn} />
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            marginBottom: 16,
+          }}
+        >
+          <div style={{ display: "flex", gap: 6 }}>
+            {([
+              ["Min", minBuyIn],
+              ["Half", Math.round((minBuyIn + maxAffordable) / 2 / 10) * 10],
+              ["Max", maxAffordable],
+            ] as const).map(([label, v]) => (
+              <Button
+                key={label}
+                size="sm"
+                variant={buyIn === v ? "primary" : "ghost"}
+                disabled={!canAfford}
+                onClick={() => setBuyIn(Math.max(minBuyIn, Math.min(v, maxAffordable)))}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+          <span className="tnum" style={{ fontSize: "var(--t-sm)", color: "var(--text-dim)" }}>
+            = {(buyIn / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 })} SOL
           </span>
         </div>
         {!canAfford && (
@@ -758,6 +837,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         )}
         <Button
           variant="primary"
+          fullWidth
           disabled={!canAfford}
           loading={actions.busy === "join"}
           onClick={async () => {
@@ -767,7 +847,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             await player.refresh();
           }}
         >
-          Sit down
+          Sit down with {Math.min(Math.max(buyIn, minBuyIn), Math.max(minBuyIn, maxAffordable)).toLocaleString()} chips
         </Button>
       </Modal>
     </>

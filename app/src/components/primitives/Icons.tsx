@@ -24,6 +24,16 @@ const frame = (size: number) => ({
   style: { display: "block" as const, flexShrink: 0 },
 });
 
+/** Clock: the action timer. */
+export function ClockIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
 /** Spade: the suit, standing for a poker table. */
 export function TableIcon({ size = 20 }: Props) {
   return (
