@@ -54,6 +54,16 @@ button {
 .stack-chip:hover {
   color: var(--text) !important;
 }
+.mb-lockup svg {
+  display: block;
+  height: 15px;
+  width: auto;
+  opacity: 0.62;
+  transition: opacity 0.12s ease;
+}
+.mb-lockup:hover svg {
+  opacity: 1;
+}
 
 /* Focus should be obvious without shouting. */
 :focus-visible {

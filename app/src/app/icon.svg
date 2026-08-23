@@ -16,7 +16,9 @@
     </linearGradient>
   </defs>
   <rect x="2" y="2" width="96" height="96" rx="10" fill="url(#tile)" stroke="#61737f" stroke-width="2"/>
-  <g transform="translate(50 51) scale(0.76) translate(-50 -50)">
+  <circle cx="50" cy="50" r="39" fill="none" stroke="url(#suit)" stroke-width="9"/>
+  <circle cx="50" cy="50" r="39" fill="none" stroke="#1d262d" stroke-width="9" stroke-dasharray="15.3 15.3" stroke-dashoffset="7.65"/>
+  <g transform="translate(50 51) scale(0.56) translate(-50 -50)">
     <path fill="url(#suit)" d="M50 12 C 38 28, 17 39, 17 55 C 17 66, 25 74, 35 74 C 41 74, 46 71, 48 67 C 47 76, 44 83, 37 89 L 63 89 C 56 83, 53 76, 52 67 C 54 71, 59 74, 65 74 C 75 74, 83 66, 83 55 C 83 39, 62 28, 50 12 Z"/>
   </g>
 </svg>

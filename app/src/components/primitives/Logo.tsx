@@ -1,7 +1,8 @@
 /**
  * The Pokerable mark.
  *
- * A spade in Solana's colours, on a slate tile lit from the top left like every
+ * A poker chip in Solana's colours with the spade at its centre, on a slate
+ * tile lit from the top left like every
  * other surface in the room. Three candidates were drawn and rendered at 16, 20,
  * 32, 64 and 160 before this one was picked, which is the only way to choose a
  * mark honestly: the version with two hole cards fanned behind it is prettier at
@@ -76,9 +77,30 @@ export function Logo({
         stroke="#61737f"
         strokeWidth="2"
       />
+      {/* The chip: a gradient ring with eight edge spots knocked out in the
+          tile's own dark, which is what makes a circle read as a poker chip
+          rather than a coin. */}
+      <circle
+        cx="50"
+        cy="50"
+        r="39"
+        fill="none"
+        stroke={`url(#${gradientId}-suit)`}
+        strokeWidth="9"
+      />
+      <circle
+        cx="50"
+        cy="50"
+        r="39"
+        fill="none"
+        stroke="#1d262d"
+        strokeWidth="9"
+        strokeDasharray="15.3 15.3"
+        strokeDashoffset="7.65"
+      />
       {/* Nudged a unit low: a spade carries its weight in the lobes, so a
-          mathematically centred one reads as sitting high in the tile. */}
-      <g transform="translate(50 51) scale(0.76) translate(-50 -50)">
+          mathematically centred one reads as sitting high in the frame. */}
+      <g transform="translate(50 51) scale(0.56) translate(-50 -50)">
         <path d={SPADE_PATH} fill={`url(#${gradientId}-suit)`} />
       </g>
     </svg>
