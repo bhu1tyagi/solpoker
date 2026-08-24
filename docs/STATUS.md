@@ -126,6 +126,16 @@ buffer refunded in the same command, and the same on-chain proof — 10 chips
 moved exactly 10,000,000 lamports into the mainnet vault and back out. Both
 clusters now run 1 SOL = 1,000 chips, byte-identical programs.
 
+**24 August, evening: pokerable.fun is live on mainnet.** Certification was
+two consecutive 27-check gates — real SOL, two isolated browsers, full hands,
+verified shuffles, clean cash-outs — passed back to back on the paid RPC the
+moment the last harness artifact was understood: the recurring second-run
+failure was two gate players sharing one browser process's connection pool,
+something no pair of real players can reproduce. The verdict probe
+(scripts/vrf-verdict.mjs) settled the oracle question with signatures: four
+consecutive raw-protocol runs fulfilled in 0.5-1.3s. The client the players
+load is the same one certified here.
+
 **24 August: mainnet is one steady oracle away.** MagicBlock's mainnet VRF
 was confirmed fixed by their team and immediately passed a full two-browser
 gate — 27 checks, two real hands, real SOL, hole cards visible, per-wallet

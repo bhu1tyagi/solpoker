@@ -152,9 +152,15 @@ async function main() {
     log("  funded");
   }
 
-  const browser = await chromium.launch();
-  const A = await openBrowser(browser, players[0], "A");
-  const B = await openBrowser(browser, players[1], "B");
+  // One PROCESS per player, not one context: two contexts share the
+  // browser's HTTP/2 connection pool to the RPC, and the creator's heavier
+  // traffic kept poisoning the shared connection — every fetch in that
+  // context dying with ERR_FAILED while the sibling context sailed. Real
+  // players bring their own browsers; the gate now does too.
+  const browserA = await chromium.launch();
+  const browserB = await chromium.launch();
+  const A = await openBrowser(browserA, players[0], "A");
+  const B = await openBrowser(browserB, players[1], "B");
   const failures = [];
   const check = (ok, what) => {
     log(`  ${ok ? "ok  " : "FAIL"} ${what}`);
@@ -287,13 +293,20 @@ async function main() {
 
     log("\n6. both authorise a session key");
     for (const b of [A, B]) {
-      await b.page.getByRole("button", { name: /authorise session key/i }).first().click();
-      const ok = await b.page
-        .waitForFunction(() => !/authorise session key/i.test(document.body.innerText), {
-          timeout: 120_000,
-        })
-        .then(() => true)
-        .catch(() => false);
+      let ok = false;
+      for (let attempt = 0; attempt < 2 && !ok; attempt++) {
+        await b.page
+          .getByRole("button", { name: /authorise session key/i })
+          .first()
+          .click({ timeout: 5_000 })
+          .catch(() => {});
+        ok = await b.page
+          .waitForFunction(() => !/authorise session key/i.test(document.body.innerText), {
+            timeout: 90_000,
+          })
+          .then(() => true)
+          .catch(() => false);
+      }
       check(ok, `${b.name} authorised a session key`);
       if (!ok) {
         (b.page.__toasts ?? []).slice(-5).forEach((t) => log(`      ${b.name} console: ${t}`));
@@ -604,6 +617,7 @@ async function main() {
     await shot(A, "error").catch(() => {});
     await shot(B, "error").catch(() => {});
   } finally {
+    void browserB;
     // Save both browsers' session keys before the contexts evaporate. Each
     // session key holds a real SOL float, which on devnet was noise and on
     // mainnet is money: with the secrets on disk the float can be swept back
@@ -625,7 +639,8 @@ async function main() {
     } catch {
       // Losing this only costs the floats, and must not hide a real failure.
     }
-    await browser.close();
+    await browserA.close();
+    await browserB.close();
   }
 
   log(`\n${failures.length === 0 ? "GATE PASSED" : `GATE FAILED: ${failures.length} check(s)`}`);
