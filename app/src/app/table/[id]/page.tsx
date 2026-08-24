@@ -683,14 +683,19 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             />
           )}
 
+          {/* Taking a seat sets this up on its own. The notice is what is left
+              when that did not land — a refused prompt, an expired key, a
+              wallet switched mid-session — so it reads as "finish this", not
+              as a step nobody was told about. */}
           {connected && mySeat >= 0 && !session && (
             <Notice>
               <span>
-                Authorise a session key to play without a wallet prompt on every
-                action. It can bet for you at this table and nothing else.
+                One more signature and this table stops asking. The key it
+                creates can bet for you here and nothing else — it cannot touch
+                your balance or cash anything out.
               </span>
               <Button variant="primary" size="sm" loading={authorising} onClick={authorise}>
-                Authorise
+                Continue
               </Button>
             </Notice>
           )}
@@ -868,12 +873,17 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           variant="primary"
           fullWidth
           disabled={!canAfford}
-          loading={actions.busy === "join"}
+          loading={actions.busy === "join" || authorising}
           onClick={async () => {
             if (sitting === null) return;
             await actions.join(sitting, Math.min(Math.max(buyIn, minBuyIn), maxAffordable));
             setSitting(null);
             await player.refresh();
+            // Sitting down and being able to act are the same intention, so
+            // the session key is part of taking a seat rather than a second
+            // thing to go and find. Nothing is lost if it fails: the button
+            // comes back, and the seat is already yours.
+            if (!session) void authorise();
           }}
         >
           Sit down with {Math.min(Math.max(buyIn, minBuyIn), Math.max(minBuyIn, maxAffordable)).toLocaleString()} chips

@@ -32,6 +32,17 @@ const VALIDITY_SECS = 24 * 60 * 60;
  * delegation rent it fronts when it starts a table (refunded on undelegation).
  */
 const TOP_UP_LAMPORTS = 0.05 * 1_000_000_000;
+
+/**
+ * What authorising a session actually takes out of the wallet: the key's float,
+ * the rent for its token account, and the fee.
+ *
+ * This number existed only inside the session program before, which meant a
+ * wallet holding less than it got no warning and no readable failure — the
+ * top-up transfer ran out of lamports inside a CPI and came back as
+ * `custom program error: 0x1`, which tells a player nothing at all.
+ */
+export const SESSION_COST_LAMPORTS = TOP_UP_LAMPORTS + 2_500_000;
 /** Renew rather than start a hand on a session about to expire. */
 const RENEW_WITHIN_SECS = 60 * 60;
 
@@ -266,6 +277,22 @@ export async function ensureSession(
   const expiring = readStoredKeypair(wallet);
   if (expiring) {
     await sweepOldSession(connection, { keypair: expiring }, wallet);
+  }
+
+  // Ask before spending. The session program funds the key through a CPI, and
+  // a wallet that cannot cover it fails inside that CPI as
+  // `custom program error: 0x1` — a System Program "negative lamports" wearing
+  // someone else's error code, which reads as a bug in this program rather
+  // than an empty wallet.
+  const balance = await connection.getBalance(wallet);
+  if (balance < SESSION_COST_LAMPORTS) {
+    const need = (SESSION_COST_LAMPORTS / 1e9).toFixed(3);
+    const has = (balance / 1e9).toFixed(4);
+    throw new Error(
+      `Playing needs about ${need} SOL in this wallet for the session key and network fees, ` +
+        `and it holds ${has}. Chips are bought with USDC, but Solana charges its fees in SOL. ` +
+        `Top up and try again — the SOL comes back when the session is swept.`,
+    );
   }
 
   const keypair = Keypair.generate();

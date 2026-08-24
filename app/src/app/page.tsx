@@ -982,7 +982,7 @@ function ExchangeModal({
         }}
       >
         {buying
-          ? "Chips are backed one for one by the USDC you deposit, at ten cents a chip. Solana charges its network fee in SOL, not USDC, so keep around 0.1 SOL here to sit down and play."
+          ? "Chips are backed one for one by the USDC you deposit, at ten cents a chip. Solana charges its fees in SOL, not USDC — keep at least 0.06 SOL here, or you will be able to buy chips and not sit down with them."
           : "Cashing out returns USDC to this wallet at the same ten cents a chip. Chips on a table have to be picked up first."}
       </p>
 

@@ -71,6 +71,14 @@ export function friendlyError(e: unknown): string {
   if (name) return name;
   if (isTransient(e)) return "Network hiccup. Retrying.";
   const s = String(e);
+  // `0x1` is the System Program's "this would leave a negative balance",
+  // surfaced through whatever CPI attempted the transfer — so it arrives
+  // wearing the calling program's error code and reads like an internal fault.
+  // It is almost always an empty wallet, and saying so is more use than a hex
+  // number nobody can look up.
+  if (/custom program error: 0x1\b/.test(s) || /insufficient lamports/i.test(s)) {
+    return "Not enough SOL in this wallet to cover the network fee. Chips are bought with USDC, but Solana charges fees in SOL.";
+  }
   return s.length > 140 ? `${s.slice(0, 140)}...` : s;
 }
 

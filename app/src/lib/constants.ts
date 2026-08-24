@@ -207,6 +207,18 @@ export const USDC_MINT = new PublicKey(
  */
 export const GAS_FLOOR_LAMPORTS = 3_000_000;
 
+/**
+ * SOL a wallet needs to actually sit down and play, as opposed to merely buy
+ * chips. The session key's float dominates it.
+ *
+ * Kept separate from the floor above because they answer different questions,
+ * and conflating them fails in both directions: a wallet with 0.01 SOL can
+ * genuinely buy chips, and blocking that would be wrong — but letting it buy
+ * chips and then discover at the table that it cannot play is worse, so the
+ * deposit sheet quotes this number.
+ */
+export const PLAY_FLOOR_LAMPORTS = 60_000_000;
+
 /** Salt protocol states, on Seat. */
 export const SALT_NONE = 0;
 export const SALT_COMMITTED = 1;
