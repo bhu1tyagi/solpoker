@@ -8,6 +8,14 @@
  */
 import { readFileSync, existsSync } from "node:fs";
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
+  createCloseAccountInstruction,
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
 import { sha256 } from "@noble/hashes/sha256";
 import bs58pkg from "bs58";
 const bs58 = bs58pkg.default ?? bs58pkg;
@@ -15,6 +23,11 @@ const bs58 = bs58pkg.default ?? bs58pkg;
 const RPC = process.env.RPC ?? "https://nicholle-p42o2b-fast-mainnet.helius-rpc.com";
 const P = new PublicKey("Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker");
 const SESSION_PROGRAM = new PublicKey("KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5");
+const USDC_MINT = new PublicKey(
+  /devnet/i.test(process.env.RPC ?? "")
+    ? "CzZoUHtyZkarrnRbsjPVEge6UANgCYrq8Bb8ambjjTxq"
+    : "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+);
 const idl = JSON.parse(readFileSync("src/lib/idl/solpoker.json", "utf8"));
 const enc = (s) => new TextEncoder().encode(s);
 const pda = (...s) => PublicKey.findProgramAddressSync(s, P)[0];
@@ -41,8 +54,12 @@ async function send(ixs, signers, label, payer = signers[0]) {
 const startAuthority = await conn.getBalance(authority.publicKey);
 let recovered = 0;
 
-// ---- 1. chips back to SOL ----
+// ---- 1. chips back to USDC ----
+// The account list mirrors `SellChips` field for field; Anchor matches by
+// position, so a stale order here fails on the wrong constraint and reads like
+// a seeds bug rather than a missing account.
 const [vault] = PublicKey.findProgramAddressSync([enc("vault")], P);
+const vaultAta = getAssociatedTokenAddressSync(USDC_MINT, vault, true);
 for (const g of gates) {
   const player = pda(enc("player"), g.publicKey.toBuffer());
   const info = await conn.getAccountInfo(player);
@@ -50,12 +67,50 @@ for (const g of gates) {
   if (chips > 0n) {
     await send([new TransactionInstruction({ programId: P, keys: [
       { pubkey: player, isSigner: false, isWritable: true },
-      { pubkey: vault, isSigner: false, isWritable: true },
+      { pubkey: vault, isSigner: false, isWritable: false },
+      { pubkey: USDC_MINT, isSigner: false, isWritable: false },
+      { pubkey: vaultAta, isSigner: false, isWritable: true },
+      { pubkey: getAssociatedTokenAddressSync(USDC_MINT, g.publicKey), isSigner: false, isWritable: true },
       { pubkey: g.publicKey, isSigner: true, isWritable: true },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ], data: Buffer.concat([D("sell_chips"), u64(chips)]) })], [g], "sell");
     log(`sold ${chips} chips for ${g.publicKey.toBase58().slice(0, 6)}`);
   }
+}
+
+// ---- 1b. the USDC those sales produced, and the account holding it ----
+// Draining a wallet's lamports to zero leaves its token account behind with
+// its own rent still in it, which is exactly the kind of quiet residue this
+// script exists to stop.
+for (const g of gates) {
+  const ata = getAssociatedTokenAddressSync(USDC_MINT, g.publicKey);
+  const info = await conn.getAccountInfo(ata);
+  if (!info) continue;
+  const held = info.data.readBigUInt64LE(64);
+  const ixs = [];
+  if (held > 0n) {
+    ixs.push(
+      createAssociatedTokenAccountIdempotentInstruction(
+        g.publicKey,
+        getAssociatedTokenAddressSync(USDC_MINT, authority.publicKey),
+        authority.publicKey,
+        USDC_MINT,
+      ),
+      createTransferCheckedInstruction(
+        ata,
+        USDC_MINT,
+        getAssociatedTokenAddressSync(USDC_MINT, authority.publicKey),
+        g.publicKey,
+        held,
+        6,
+      ),
+    );
+  }
+  ixs.push(createCloseAccountInstruction(ata, authority.publicKey, g.publicKey));
+  await send(ixs, [g], "usdc sweep");
+  log(`swept $${(Number(held) / 1e6).toFixed(2)} and closed the token account for ${g.publicKey.toBase58().slice(0, 6)}`);
 }
 
 // ---- 2. last saved session signers ----

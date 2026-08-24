@@ -1,6 +1,6 @@
 # Pokerable
 
-Play poker with SOL — real-time on-chain Texas Hold'em, live at
+Play poker with stablecoins — real-time on-chain Texas Hold'em, live at
 [pokerable.fun](https://pokerable.fun). Built on MagicBlock Ephemeral Rollups for
 sub-second play, with Private Ephemeral Rollups (Intel TDX) for hole-card secrecy.
 

@@ -75,11 +75,24 @@ const DEFAULTS = ENDPOINTS[CLUSTER];
  * carry on from that, so it fails at module load.
  */
 function assertClusterMatch(url: string, name: string) {
-  if (CLUSTER !== "mainnet") return;
-  if (/devnet/i.test(url)) {
+  if (CLUSTER === "mainnet") {
+    if (/devnet/i.test(url)) {
+      throw new Error(
+        `${name} is "${url}", which is a devnet endpoint, but NEXT_PUBLIC_CLUSTER is "mainnet". ` +
+          `Real funds are involved, so this is refused rather than guessed at.`,
+      );
+    }
+    return;
+  }
+  // And the mirror image, which is not harmless either. A mainnet RPC left in
+  // a devnet build reads every balance off the wrong chain and reports them as
+  // zero — a wallet with money looks empty, the deposit button greys out, and
+  // nothing anywhere says why. That cost two gate runs to find, so it fails
+  // loudly now instead.
+  if (/mainnet/i.test(url)) {
     throw new Error(
-      `${name} is "${url}", which is a devnet endpoint, but NEXT_PUBLIC_CLUSTER is "mainnet". ` +
-        `Real funds are involved, so this is refused rather than guessed at.`,
+      `${name} is "${url}", which is a mainnet endpoint, but NEXT_PUBLIC_CLUSTER is "devnet". ` +
+        `Every balance would be read from the wrong chain, so this is refused.`,
     );
   }
 }
@@ -156,11 +169,43 @@ export const NO_SEAT = 0xff;
 export const NO_CARD = 0xff;
 
 /**
- * The fixed price of one chip, matching the program: 1 SOL buys exactly
- * 1,000 chips. Chips are backed one to one by lamports in the program vault:
- * they exist only because someone paid this rate, and selling pays it back.
+ * The fixed price of one chip, matching `MICRO_USDC_PER_CHIP` in the program:
+ * ten cents, in USDC's six-decimal base units. Chips are backed one to one by
+ * USDC in the program vault — they exist only because someone paid this rate,
+ * and selling pays it back.
+ *
+ * This number and the program's must move together or the client will quote
+ * prices the chain does not honour.
  */
-export const LAMPORTS_PER_CHIP = 1_000_000;
+export const MICRO_USDC_PER_CHIP = 100_000;
+
+/** USDC's decimals, on both clusters. */
+export const USDC_DECIMALS = 6;
+
+/**
+ * The mint chips are bought with, per cluster.
+ *
+ * Mainnet is Circle's USDC. Devnet is a test mint we created and then threw the
+ * keypair away, so it can never be brought into existence on mainnet; the
+ * program hardcodes both and refuses everything else, because opening a token
+ * account is permissionless and a mint anyone can print is a mint anyone can
+ * pay with.
+ */
+export const USDC_MINT = new PublicKey(
+  CLUSTER === "mainnet"
+    ? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    : "CzZoUHtyZkarrnRbsjPVEge6UANgCYrq8Bb8ambjjTxq",
+);
+
+/**
+ * SOL a wallet needs on hand to transact at all: a few signatures, and the
+ * rent for a token account if the wallet has never held USDC before.
+ *
+ * USDC is what a chip is made of, but SOL is still what a transaction costs,
+ * and a wallet holding only USDC can afford chips it cannot actually buy. The
+ * buy button says so rather than failing at signing time.
+ */
+export const GAS_FLOOR_LAMPORTS = 3_000_000;
 
 /** Salt protocol states, on Seat. */
 export const SALT_NONE = 0;
@@ -281,6 +326,9 @@ export const ERROR_NAMES: Record<number, string> = {
   6042: "ShuffleNotStale",
   6043: "TableMismatch",
   6044: "ValidatorNotPinned",
+  6045: "WrongMint",
+  6046: "NotTreasuryAuthority",
+  6047: "InsufficientUsdc",
 };
 
 /** What to show a player when one of these comes back. */
@@ -298,6 +346,9 @@ export const ERROR_MESSAGES: Record<string, string> = {
     "Only the creator can delete this table until it has sat empty for an hour.",
   InsufficientVault:
     "The vault cannot cover that sale right now. This should not happen, please report it.",
+  WrongMint: "That is not the USDC this game accepts.",
+  InsufficientUsdc: "Not enough USDC in your wallet for that.",
+  NotTreasuryAuthority: "Only the house can do that.",
   InsufficientChips: "Not enough chips for that.",
   ConfigTableMismatch:
     "That action carried the settings of a different table and was refused. An honest client never does this, so if you are seeing it, report it.",

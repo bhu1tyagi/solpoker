@@ -243,14 +243,13 @@ function BigButton({
       whileTap={disabled ? undefined : { scale: 0.97 }}
       whileHover={disabled ? undefined : { y: -1 }}
       transition={spring.snappy}
-      className="tnum"
+      className="num"
       style={{
         ...TONES[tone],
         flex,
         height: 52,
         border: "none",
         borderRadius: "var(--r-panel)",
-        fontFamily: "var(--font-display)",
         fontSize: "var(--t-sm)",
         textTransform: "uppercase",
         letterSpacing: "0.04em",

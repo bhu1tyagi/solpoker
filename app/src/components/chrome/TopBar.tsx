@@ -84,7 +84,7 @@ export function TopBar({ chips }: { chips?: number }) {
           >
             <ChipGlyph size={18} />
             <span
-              className="tnum"
+              className="num"
               style={{
                 fontSize: "var(--t-base)",
                 fontWeight: 700,

@@ -21,12 +21,14 @@ import {
   RefreshIcon,
   TableIcon,
   TrophyIcon,
+  UsdcMark,
 } from "@/components/primitives/Icons";
 import { usePlayer } from "@/hooks/use-player";
 import { useLeaderboard, type LeaderRow } from "@/hooks/use-leaderboard";
 import { isJoinable, useTables, type LobbyTable } from "@/hooks/use-tables";
 import { spring, stagger } from "@/styles/theme";
-import { LAMPORTS_PER_CHIP, MAX_SEATS } from "@/lib/constants";
+import { MAX_SEATS } from "@/lib/constants";
+import { formatUsd, formatUsdRange } from "@/lib/money";
 
 const WalletMultiButton = dynamic(
   () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
@@ -35,7 +37,7 @@ const WalletMultiButton = dynamic(
 
 export default function Lobby() {
   const { connected, publicKey } = useWallet();
-  const { state, buy, sell, busy, affordable } = usePlayer();
+  const { state, buy, sell, busy, affordable, buyBlocked, sellBlocked } = usePlayer();
   const [exchange, setExchange] = useState<"buy" | "sell" | null>(null);
   const { tables, loading, error, refresh: refreshTables } = useTables();
   const [creating, setCreating] = useState(false);
@@ -105,7 +107,7 @@ export default function Lobby() {
                     color: "var(--text-dim)",
                   }}
                 >
-                  Play poker with SOL
+                  Play poker with stablecoins
                 </p>
                 <StackCredit />
               </div>
@@ -128,7 +130,7 @@ export default function Lobby() {
                   >
                     <ChipGlyph size={22} />
                     <span
-                      className="tnum"
+                      className="num"
                       style={{ fontWeight: 700, fontSize: 16, color: "var(--text-dim)" }}
                     >
                       {state ? state.chips.toLocaleString() : "..."}
@@ -297,7 +299,8 @@ export default function Lobby() {
         busy={busy}
         onBuy={buy}
         onSell={sell}
-        solPerChip={LAMPORTS_PER_CHIP / 1e9}
+        blocked={exchange === "buy" ? buyBlocked : sellBlocked}
+        ready={state !== null}
       />
 
       <CreateTableModal
@@ -331,7 +334,7 @@ function TableRow({ t }: { t: LobbyTable }) {
       >
         <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <span
-            className="tnum"
+            className="num"
             style={{ fontWeight: 500, fontSize: 18, color: "var(--text-dim)" }}
           >
             {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "-"}
@@ -344,7 +347,7 @@ function TableRow({ t }: { t: LobbyTable }) {
           </span>
           {/* The phone's buy-in line, standing in for the hidden column. */}
           <span
-            className="tnum m-only"
+            className="num m-only"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -361,21 +364,34 @@ function TableRow({ t }: { t: LobbyTable }) {
           </span>
         </span>
 
-        <span
-          className="tnum m-hide"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            fontWeight: 500,
-            fontSize: 18,
-            color: "var(--accent)",
-          }}
-        >
-          <ChipGlyph size={17} />
-          {t.config
-            ? `${t.config.minBuyIn.toLocaleString()} - ${t.config.maxBuyIn.toLocaleString()}`
-            : "-"}
+        {/* Chips are the unit at the table, but nobody arrives knowing what a
+            chip is worth. The money goes underneath, quietly, so the row can
+            still be read at a glance. */}
+        <span className="m-hide" style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <span
+            className="num"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontWeight: 500,
+              fontSize: 18,
+              color: "var(--accent)",
+            }}
+          >
+            <ChipGlyph size={17} />
+            {t.config
+              ? `${t.config.minBuyIn.toLocaleString()} - ${t.config.maxBuyIn.toLocaleString()}`
+              : "-"}
+          </span>
+          {t.config && (
+            <span
+              className="num"
+              style={{ fontSize: "var(--t-xs)", color: "var(--text-dim)", paddingLeft: 25 }}
+            >
+              {formatUsdRange(t.config.minBuyIn, t.config.maxBuyIn)}
+            </span>
+          )}
         </span>
 
         <span
@@ -545,7 +561,7 @@ function LeaderRowView({
       }}
     >
       <span
-        className="tnum"
+        className="num"
         style={{
           fontWeight: 700,
           fontSize: 14,
@@ -568,7 +584,7 @@ function LeaderRowView({
       </span>
       <Avatar pubkey={row.authority} size={30} square />
       <span
-        className="tnum"
+        className="num"
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -607,14 +623,14 @@ function MyTables({ tables }: { tables: LobbyTable[] }) {
               height: 52,
             }}
           >
-            <span className="tnum" style={{ fontSize: 17, color: "var(--text-dim)" }}>
+            <span className="num" style={{ fontSize: 17, color: "var(--text-dim)" }}>
               {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "-"}
             </span>
             <span style={{ color: "var(--accent)" }}>
               <TableIcon size={22} />
             </span>
             <span
-              className="tnum"
+              className="num"
               style={{ fontSize: 17, color: "var(--accent)", textAlign: "right" }}
             >
               {t.seated}
@@ -821,6 +837,15 @@ function IconButton({
   );
 }
 
+/**
+ * Deposit and cash out.
+ *
+ * The one screen where the currency has to be unambiguous, so it says USDC in
+ * as many ways as it can without nagging: in the title, on the badge beside the
+ * amount, and in the line that names what leaves or arrives. The dollar figure
+ * is the large number and the chip count is the small one, because dollars are
+ * what a person is deciding about.
+ */
 function ExchangeModal({
   mode,
   onClose,
@@ -829,7 +854,8 @@ function ExchangeModal({
   busy,
   onBuy,
   onSell,
-  solPerChip,
+  blocked,
+  ready,
 }: {
   mode: "buy" | "sell" | null;
   onClose: () => void;
@@ -838,17 +864,65 @@ function ExchangeModal({
   busy: "buy" | "sell" | null;
   onBuy: (chips: number) => Promise<void>;
   onSell: (chips: number) => Promise<void>;
-  solPerChip: number;
+  blocked: string | null;
+  ready: boolean;
 }) {
   const [amount, setAmount] = useState(100);
   const buying = mode === "buy";
   const max = buying ? affordable : chips;
   const clamped = Math.min(Math.max(amount, 0), max);
-  const sol = clamped * solPerChip;
+  // Until the balances land, every control here would be disabled with nothing
+  // to explain why. Say so instead: a dead row of buttons reads as broken.
+  const waiting = !ready;
 
   return (
-    <Modal open={mode !== null} onClose={onClose} title={buying ? "Buy chips" : "Cash out"}>
-      <div style={{ display: "flex", gap: 8, margin: "4px 0 14px", flexWrap: "wrap" }}>
+    <Modal
+      open={mode !== null}
+      onClose={onClose}
+      title={buying ? "Deposit USDC" : "Cash out to USDC"}
+    >
+      {/* The headline figure: dollars first, chips underneath. */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--sp-3)",
+          padding: "var(--sp-4)",
+          marginBottom: "var(--sp-4)",
+          background: "var(--surface)",
+          borderRadius: "var(--r-panel)",
+          border: "1px solid var(--line)",
+        }}
+      >
+        <UsdcMark size={34} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+          <span
+            className="num"
+            style={{
+              fontSize: "var(--t-xl)",
+              fontWeight: 600,
+              color: "var(--text)",
+              lineHeight: 1.05,
+            }}
+          >
+            {formatUsd(clamped)}
+          </span>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: "var(--t-sm)",
+              color: "var(--text-dim)",
+            }}
+          >
+            <ChipGlyph size={13} />
+            <span className="num">{clamped.toLocaleString()}</span> chips
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: "var(--sp-2)", marginBottom: "var(--sp-3)", flexWrap: "wrap" }}>
         {[100, 500, 1_000].map((v) => (
           <Button
             key={v}
@@ -857,7 +931,7 @@ function ExchangeModal({
             disabled={max === 0}
             onClick={() => setAmount(Math.min(v, max))}
           >
-            {v.toLocaleString()}
+            {formatUsd(v)}
           </Button>
         ))}
         <Button size="sm" variant="ghost" disabled={max === 0} onClick={() => setAmount(max)}>
@@ -865,54 +939,71 @@ function ExchangeModal({
         </Button>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "6px 0 18px" }}>
-        <input
-          type="range"
-          min={0}
-          max={Math.max(max, 1)}
-          step={10}
-          value={clamped}
-          onChange={(e) => setAmount(Number(e.target.value))}
-          style={{ flex: 1 }}
-        />
-        <span
-          className="tnum"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-            fontFamily: "var(--font-display)",
-            fontSize: 18,
-            color: "var(--gold)",
-            minWidth: 120,
-            justifyContent: "flex-end",
-          }}
-        >
-          <ChipGlyph size={17} />
-          {clamped.toLocaleString()}
-        </span>
-      </div>
+      <input
+        type="range"
+        min={0}
+        max={Math.max(max, 1)}
+        step={10}
+        value={clamped}
+        disabled={max === 0}
+        aria-label={buying ? "Chips to buy" : "Chips to cash out"}
+        onChange={(e) => setAmount(Number(e.target.value))}
+        style={{ width: "100%", marginBottom: "var(--sp-4)" }}
+      />
 
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 20,
+          marginBottom: "var(--sp-2)",
           color: "var(--text-dim)",
-          fontSize: 15,
+          fontSize: "var(--t-ui)",
         }}
       >
         <span>{buying ? "You pay" : "You receive"}</span>
-        <span className="tnum" style={{ color: "var(--text)", fontWeight: 600 }}>
-          {sol.toFixed(4)} SOL
+        <span className="num" style={{ color: "var(--text)", fontWeight: 600 }}>
+          {formatUsd(clamped)} USDC
         </span>
       </div>
 
-      <div style={{ display: "flex", gap: 10 }}>
+      {/* Said once, quietly, so nobody meets it for the first time in a
+          failed signature. */}
+      <p
+        style={{
+          margin: "0 0 var(--sp-4)",
+          fontSize: "var(--t-xs)",
+          color: "var(--text-faint)",
+          lineHeight: 1.5,
+        }}
+      >
+        {buying
+          ? "Chips are backed one for one by the USDC you deposit, at ten cents a chip. Solana charges its network fee in SOL, so keep a little in this wallet."
+          : "Cashing out returns USDC to this wallet at the same ten cents a chip. Chips on a table have to be picked up first."}
+      </p>
+
+      {(waiting || blocked) && (
+        <p
+          role="status"
+          style={{
+            margin: "0 0 var(--sp-4)",
+            padding: "var(--sp-3)",
+            borderRadius: "var(--r-control)",
+            background: "var(--surface)",
+            borderLeft: "2px solid var(--info)",
+            fontSize: "var(--t-sm)",
+            color: "var(--text-dim)",
+            lineHeight: 1.5,
+          }}
+        >
+          {waiting ? "Checking your balance…" : blocked}
+        </p>
+      )}
+
+      <div style={{ display: "flex", gap: "var(--sp-2)" }}>
         <Button
           variant="primary"
-          disabled={clamped === 0}
+          disabled={clamped === 0 || blocked !== null || waiting}
           loading={busy !== null}
           onClick={async () => {
             if (buying) await onBuy(clamped);
@@ -920,7 +1011,7 @@ function ExchangeModal({
             onClose();
           }}
         >
-          {buying ? "Buy" : "Cash out"}
+          {buying ? `Deposit ${formatUsd(clamped)}` : `Cash out ${formatUsd(clamped)}`}
         </Button>
         <Button variant="quiet" onClick={onClose}>
           Cancel

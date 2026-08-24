@@ -42,6 +42,7 @@ import {
   NO_SEAT,
   SHUFFLE_REQUESTED,
 } from "@/lib/constants";
+import { formatUsd } from "@/lib/money";
 import { friendlyError, isRaceLost } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
 import { spring } from "@/styles/theme";
@@ -771,7 +772,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           }}
         >
           <span
-            className="tnum"
+            className="num"
             style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--text-dim)" }}
           >
             <TableIcon size={15} />
@@ -779,7 +780,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             {minBuyIn.toLocaleString()}–{(tableConfig?.maxBuyIn ?? 0).toLocaleString()}
           </span>
           <span
-            className="tnum"
+            className="num"
             style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--gold)" }}
           >
             <ChipGlyph size={14} />
@@ -798,9 +799,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             style={{ flex: 1 }}
           />
           <span
-            className="tnum"
+            className="num"
             style={{
-              fontFamily: "var(--font-display)",
               fontSize: "var(--t-md)",
               color: "var(--gold)",
               minWidth: 84,
@@ -836,8 +836,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
               </Button>
             ))}
           </div>
-          <span className="tnum" style={{ fontSize: "var(--t-sm)", color: "var(--text-dim)" }}>
-            = {(buyIn / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 })} SOL
+          <span className="num" style={{ fontSize: "var(--t-sm)", color: "var(--text-dim)" }}>
+            = {formatUsd(buyIn)}
           </span>
         </div>
         {!canAfford && (
@@ -888,9 +888,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
         {label}
       </span>
       <span
-        className="tnum"
+        className="num"
         style={{
-          fontFamily: "var(--font-display)",
           fontSize: 14,
           color: "var(--text)",
           display: "flex",
@@ -949,7 +948,7 @@ function BalancePill({ chips, small = false }: { chips?: number; small?: boolean
     >
       <ChipGlyph size={small ? 14 : 20} />
       <span
-        className="tnum"
+        className="num"
         style={{
           fontWeight: 700,
           fontSize: small ? 12 : 15,

@@ -17,10 +17,16 @@
   --color-lose: var(--lose);
   --color-info: var(--info);
   --color-card: var(--card-hi);
+  --color-gold: var(--gold);
+  --color-solid: var(--surface-solid);
+  --color-control: var(--control);
 
-  /* Display for names and numbers on the table, Poppins for everything else. */
-  --font-display: var(--font-dela), system-ui, sans-serif;
-  --font-sans: var(--font-poppins), system-ui, sans-serif;
+  /* Display for the name and headings, Instrument for the interface, Plex Mono
+     for anything that counts. */
+  --font-display: var(--font-bricolage), system-ui, sans-serif;
+  --font-wordmark: var(--font-dela), system-ui, sans-serif;
+  --font-sans: var(--font-instrument), system-ui, sans-serif;
+  --font-num: var(--font-plex-mono), ui-monospace, monospace;
 }
 
 * {
@@ -50,17 +56,23 @@ button {
   color: inherit;
 }
 
-/* The name in the chain's colours: purple through green, left to right,
-   with a fallback for any renderer that cannot clip a background to text.
-   The gradient midpoint leans green so the word stays legible: the purple
-   end is the darker of the two against slate. */
+/* The name keeps the face it was drawn in. Everything about the wordmark —
+   this weight, the ChipO's ring thickness, its 0.62em — was tuned to Dela
+   Gothic One, so it stays on Dela Gothic One even though the rest of the type
+   system moved. Letter-spacing is deliberately not set here: it inherits the
+   heading's, exactly as it did before. */
+.wordmark-solana {
+  font-family: var(--font-wordmark);
+  font-weight: 400;
+}
+
 .wordmark-solana,
 .sol-text {
-  background-image: linear-gradient(94deg, #b981ff 0%, #8f7bff 30%, #2fe0a8 72%, #14F195 100%);
+  background-image: var(--sol-grad);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  color: #14F195;
+  color: var(--sol-b);
 }
 @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
   .wordmark-solana,
@@ -80,7 +92,7 @@ button {
   height: 15px;
   width: auto;
   opacity: 0.62;
-  transition: opacity 0.12s ease;
+  transition: opacity var(--dur-micro) ease;
 }
 .mb-lockup:hover svg {
   opacity: 1;
@@ -115,7 +127,7 @@ button {
    connect button stops announcing that it came from somewhere else. */
 .wallet-adapter-button {
   font-family: var(--font-sans) !important;
-  font-size: 12px !important;
+  font-size: var(--t-xs) !important;
   font-weight: 700 !important;
   letter-spacing: 0.04em !important;
   text-transform: uppercase !important;
@@ -124,7 +136,7 @@ button {
   border-radius: var(--r-panel) !important;
   background: var(--sol-grad-flat) !important;
   color: var(--on-sol) !important;
-  transition: transform 0.12s ease, filter 0.12s ease;
+  transition: transform var(--dur-micro) ease, filter var(--dur-micro) ease;
 }
 .wallet-adapter-button:not([disabled]):hover {
   background: var(--sol-grad-flat) !important;
@@ -177,7 +189,7 @@ button {
   border-radius: var(--r-control) !important;
   height: 56px !important;
   font-size: var(--t-base) !important;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition: border-color var(--dur-micro) ease, background var(--dur-micro) ease;
 }
 .wallet-adapter-modal-list li button:hover {
   background: var(--surface-2) !important;
@@ -209,7 +221,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 50%;
   background: var(--sol-grad-flat);
   border: 3px solid var(--bg);
-  box-shadow: 0 0 0 1px rgba(153, 69, 255, 0.55);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sol-a) 55%, transparent);
 }
 input[type="range"]::-moz-range-track {
   height: 4px;
@@ -217,12 +229,12 @@ input[type="range"]::-moz-range-track {
   background: var(--surface-2);
 }
 input[type="range"]::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--sol-grad-flat);
   border: 3px solid var(--bg);
-  box-shadow: 0 0 0 1px rgba(153, 69, 255, 0.55);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sol-a) 55%, transparent);
 }
 
 /* ------------------------------------------------------------------ */

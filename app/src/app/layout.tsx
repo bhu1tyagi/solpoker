@@ -1,30 +1,59 @@
 import type { Metadata, Viewport } from "next";
-import { Dela_Gothic_One, Poppins } from "next/font/google";
+import {
+  Bricolage_Grotesque,
+  Dela_Gothic_One,
+  IBM_Plex_Mono,
+  Instrument_Sans,
+} from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { Providers } from "./providers";
 
-// Two voices, as the design spec uses them: a heavy display face for anything
-// that is a name or a number on the table, and Poppins for ordinary interface
-// text. Dela Gothic One ships a single weight, which is the point of it.
-const dela = Dela_Gothic_One({
+// Three voices, and the third is the one that matters most here.
+//
+// Bricolage Grotesque carries the name and the headings: a grotesque with
+// enough width and weight to hold a wordmark, without the novelty of the
+// single-weight display face it replaces. Instrument Sans is the interface.
+//
+// And every amount is set in IBM Plex Mono. This is not a stylistic choice.
+// Amounts were previously set in the display face wearing a `tnum` class, and
+// that face has no tabular figures — so the request silently did nothing, and
+// the pot, the stacks and the bet field, the three numbers that change most
+// often, each re-measured themselves as they ticked. In a mono face even
+// columns are the default rather than a request that can be ignored.
+const display = Bricolage_Grotesque({
+  subsets: ["latin"],
+  variable: "--font-bricolage",
+  display: "swap",
+});
+
+// The name keeps its own face. Dela Gothic One is the wordmark and only the
+// wordmark — a logo is a drawing of a word, and redrawing it because the rest
+// of the type system moved is how a brand quietly stops being recognisable.
+const wordmark = Dela_Gothic_One({
   subsets: ["latin"],
   variable: "--font-dela",
   weight: "400",
   display: "swap",
 });
 
-const poppins = Poppins({
+const sans = Instrument_Sans({
   subsets: ["latin"],
-  variable: "--font-poppins",
-  weight: ["400", "500", "600", "700"],
+  variable: "--font-instrument",
+  display: "swap",
+});
+
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-plex-mono",
+  weight: ["400", "500", "600"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "Pokerable",
   description:
-    "Play poker with SOL. Real-time six-max Texas Hold'em on Solana: buy chips, play, cash out. Provably fair shuffle, TEE-protected hole cards.",
+    "Play poker with stablecoins. Real-time six-max Texas Hold'em on Solana: deposit USDC, play, cash out. Provably fair shuffle, TEE-protected hole cards.",
 };
 
 // cover lets the room paint behind the notch and home bar; the HUD then keeps
@@ -40,7 +69,10 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${dela.variable} ${poppins.variable}`}>
+    <html
+      lang="en"
+      className={`${display.variable} ${wordmark.variable} ${sans.variable} ${mono.variable}`}
+    >
       <body>
         <Providers>{children}</Providers>
         {/*

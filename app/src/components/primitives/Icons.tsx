@@ -161,6 +161,27 @@ export function MutedIcon({ size = 20 }: Props) {
 }
 
 /** A wallet, for the connect control. */
+/**
+ * A dollar coin, for the deposit currency. Deliberately our own mark and not
+ * Circle's: this stands for "the stablecoin you deposit", and borrowing a
+ * company's logo to say that would claim an endorsement nobody gave.
+ */
+export function UsdcMark({ size = 20 }: Props) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="10.5" fill="#2775ca" />
+      <path d="M12 6.1v11.8" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M14.75 9.2c0-1.1-1.23-1.85-2.75-1.85S9.25 8.1 9.25 9.3c0 1.1.9 1.62 2.75 2 1.97.42 2.85 1 2.85 2.15 0 1.25-1.27 2-2.85 2s-2.85-.8-2.85-1.95"
+        stroke="#fff"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function WalletIcon({ size = 20 }: Props) {
   return (
     <svg {...frame(size)}>

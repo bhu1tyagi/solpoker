@@ -960,6 +960,65 @@ per hand. "Pause table" is now visible to the creator alone, because deleting a
 table still needs it, and is no longer something a player at the table has to
 reach for.
 
+## Chips became dollars, 24 August
+
+Chips were bought with SOL and sold back for SOL. That is a fine way to hold a
+balance and a bad way to hold a stack: a player who sat down with 200 chips and
+stood up with 200 chips could still be down eleven percent, because the thing
+underneath the chips moved while they were playing. Deposits are USDC now, at a
+fixed **ten cents a chip**, and a stack is worth the same at the end of a session
+as it was at the start.
+
+**What it cost to change was almost nothing, and that was not luck.** Every
+monetary field on chain — balances, blinds, buy-ins, stacks, the pot, accrued
+rake — was already a chip-denominated `u64`. The currency existed at exactly two
+places in the program, `buy_chips` and `sell_chips`, so the swap changed no
+account layout, migrated no state, and touched no rule of the game. The vault PDA
+kept its seeds and its job; it simply stopped holding the money itself and
+started owning the token account that does.
+
+Three things were less obvious.
+
+**The mint has to be an allowlist, checked on both sides.** Opening an
+associated token account is permissionless, so anybody can create the vault's
+account for a mint they control. Without an address check, an attacker prints
+their own token, buys chips with it, and sells those chips for real USDC — the
+ledger cannot tell the difference, because to the ledger a chip is a chip. The
+program hardcodes two mints, Circle's on mainnet and a devnet test mint, and
+refuses everything else in `buy_chips` **and** `sell_chips`.
+
+The devnet mint is one we made and then destroyed the keypair for. That is what
+makes it safe to compile into the same binary that serves mainnet: creating an
+account at a keypair address requires that key's signature, so with the secret
+gone the devnet entry is permanently uninstantiable on mainnet, where
+`Account<Mint>` will simply find nothing there. Minting more test dollars needs
+only the operator key, which we still have.
+
+**`VAULT_FLOOR_LAMPORTS` was deleted rather than converted.** It existed because
+an exact-drain sell could close a system account out from under the players. A
+token account's rent is its own lamports and has nothing to do with its balance,
+so the floor has no analogue; the solvency check is now just
+`vault_ata.amount >= payout`.
+
+**A wallet can afford chips it cannot buy.** USDC is what a chip costs and SOL
+is what a transaction costs, and they are no longer the same asset. A wallet
+holding fifty dollars and no SOL used to be impossible and is now ordinary, so
+`usePlayer` reads both balances and the deposit screen says which one is
+missing, before signing rather than after.
+
+The one change with teeth outside the program was in `assertClusterMatch`. It
+refused a devnet endpoint under `NEXT_PUBLIC_CLUSTER=mainnet` and said nothing
+about the reverse — and the reverse is what happened here: a devnet build
+inherited the paid **mainnet** RPC from `.env.local`, read every balance off the
+wrong chain, reported the funded gate wallets as empty, and greyed out the
+deposit button with no explanation. Two gate runs went into finding that. Both
+directions throw now.
+
+Proof, in order of how much it is worth: `scripts/usdc-smoke.mjs` buys, sells,
+sells again with the seller's token account deliberately closed, and then prints
+a worthless mint, opens the vault's account for it permissionlessly, and
+confirms it buys nothing and redeems nothing. Ten checks, green on devnet.
+
 ## Known problems
 
 **50 test `Player` accounts are on chain and 48 of them cannot be removed.** They

@@ -13,6 +13,12 @@
 import { chromium } from "playwright";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import {
+  createAssociatedTokenAccountIdempotentInstruction,
+  createMintToInstruction,
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
 import nacl from "tweetnacl";
 
 const PORT = process.argv[2] ?? "3111";
@@ -21,6 +27,12 @@ const BASE = `http://localhost:${PORT}`;
 // wallets get funded on one cluster and play on another. Devnet by default;
 // a mainnet run passes GATE_RPC explicitly.
 const RPC = process.env.GATE_RPC ?? "https://rpc.magicblock.app/devnet";
+// The mint chips are bought with, matching the client's per-cluster constant.
+const USDC_MINT = new PublicKey(
+  /devnet/i.test(process.env.GATE_RPC ?? "devnet")
+    ? "CzZoUHtyZkarrnRbsjPVEge6UANgCYrq8Bb8ambjjTxq"
+    : "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+);
 const SHOTS = "/tmp/solpoker-gate";
 mkdirSync(SHOTS, { recursive: true });
 
@@ -111,9 +123,86 @@ function testWallets() {
   }
 }
 
-// What each test wallet needs on hand for a run: two buy-ins, a session key,
-// and fees.
-const TARGET_LAMPORTS = 0.35 * LAMPORTS_PER_SOL;
+// What each test wallet needs on hand for a run. SOL is only postage now — a
+// session key's float plus fees plus the rent for a token account — because
+// buy-ins are paid in USDC.
+const TARGET_LAMPORTS = 0.15 * LAMPORTS_PER_SOL;
+
+// And the buy-in currency. Twenty-five dollars is a comfortable float for a
+// run that buys 100 chips ($10) twice over with room for a second hand.
+const TARGET_MICRO_USDC = 25 * 1_000_000;
+
+/**
+ * Give each wallet its buy-in money.
+ *
+ * On devnet the funder is the test mint's mint authority, so this prints what
+ * it needs rather than depending on a faucet with a queue. On mainnet there is
+ * no minting: the same code path transfers out of the funder's own USDC.
+ */
+async function fundUsdc(players) {
+  const devnet = /devnet/i.test(RPC);
+  const funderAta = getAssociatedTokenAddressSync(USDC_MINT, funder.publicKey);
+  const ixs = [];
+  const shortfalls = [];
+
+  for (const p of players) {
+    const ata = getAssociatedTokenAddressSync(USDC_MINT, p.publicKey);
+    const info = await conn.getAccountInfo(ata);
+    const held = info
+      ? Number(new DataView(info.data.buffer, info.data.byteOffset, info.data.byteLength)
+          .getBigUint64(64, true))
+      : 0;
+    const need = TARGET_MICRO_USDC - held;
+    if (need <= 0) continue;
+
+    // Idempotent: a wallet reused across runs already has its account.
+    ixs.push(
+      createAssociatedTokenAccountIdempotentInstruction(
+        funder.publicKey,
+        ata,
+        p.publicKey,
+        USDC_MINT,
+      ),
+    );
+    ixs.push(
+      devnet
+        ? createMintToInstruction(USDC_MINT, ata, funder.publicKey, need)
+        : createTransferCheckedInstruction(
+            funderAta,
+            USDC_MINT,
+            ata,
+            funder.publicKey,
+            need,
+            6,
+          ),
+    );
+    shortfalls.push(`${p.publicKey.toBase58().slice(0, 8)} (+$${(need / 1e6).toFixed(2)})`);
+  }
+
+  if (ixs.length === 0) {
+    log("usdc: both wallets already funded");
+    return;
+  }
+  log(`usdc ${devnet ? "mint" : "transfer"}: ${shortfalls.join(", ")}`);
+  const tx = new Transaction().add(...ixs);
+  const bh = await conn.getLatestBlockhash();
+  tx.feePayer = funder.publicKey;
+  tx.recentBlockhash = bh.blockhash;
+  tx.sign(funder);
+  const sig = await conn.sendRawTransaction(tx.serialize());
+  await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
+  log("  usdc funded");
+}
+
+/** A wallet's USDC balance in base units; a missing account reads as zero. */
+async function usdcBalance(owner) {
+  const info = await conn.getAccountInfo(getAssociatedTokenAddressSync(USDC_MINT, owner));
+  if (!info) return 0;
+  return Number(
+    new DataView(info.data.buffer, info.data.byteOffset, info.data.byteLength)
+      .getBigUint64(64, true),
+  );
+}
 
 async function main() {
   const players = testWallets();
@@ -152,6 +241,8 @@ async function main() {
     log("  funded");
   }
 
+  await fundUsdc(players);
+
   // One PROCESS per player, not one context: two contexts share the
   // browser's HTTP/2 connection pool to the RPC, and the creator's heavier
   // traffic kept poisoning the shared connection — every fetch in that
@@ -172,17 +263,24 @@ async function main() {
     await connectWallet(A);
     await connectWallet(B);
 
-    log("\n2. buy chips with SOL");
+    log("\n2. deposit USDC for chips");
     for (const b of [A, B]) {
       await b.page.getByRole("button", { name: /^buy chips$/i }).click();
-      await b.page.waitForTimeout(1200);
-      await b.page.getByRole("button", { name: /^100$/ }).click();
-      await b.page.getByRole("button", { name: /^buy$/i }).click();
+      // Wait for the balance to arrive rather than for a fixed interval: the
+      // presets are disabled until the wallet's USDC is known, and a timeout
+      // that happened to be long enough on one RPC is not a check.
+      await b.page
+        .getByRole("button", { name: /^\$10$/ })
+        .and(b.page.locator("button:not([disabled])"))
+        .waitFor({ timeout: 60_000 });
+      // The presets are priced now, so $10 is the 100-chip button.
+      await b.page.getByRole("button", { name: /^\$10$/ }).click();
+      await b.page.getByRole("button", { name: /^deposit \$10$/i }).click();
       await b.page.waitForFunction(
         () => /Bought 100 chips/i.test(document.body.innerText),
         { timeout: 90_000 },
       );
-      log(`  ${b.name}: bought 100 chips for 0.1 SOL`);
+      log(`  ${b.name}: bought 100 chips for $10 USDC`);
     }
     await shot(A, "1-lobby");
 
@@ -575,10 +673,10 @@ async function main() {
       .catch(() => false);
     check(!bCanDelete, "a non-creator is not offered a delete button");
 
-    log("\n13. cashing out: chips become SOL again");
+    log("\n13. cashing out: chips become USDC again");
     await A.page.goto(BASE, { waitUntil: "networkidle" });
     await A.page.waitForTimeout(2500);
-    const solBefore = await conn.getBalance(players[0].publicKey);
+    const usdcBefore = await usdcBalance(players[0].publicKey);
     const cashOutBtn = A.page.getByRole("button", { name: /^cash out$/i }).first();
     const canSell = await cashOutBtn.isVisible().catch(() => false);
     check(canSell, "the lobby offers cash out when chips are held");
@@ -586,7 +684,11 @@ async function main() {
       await cashOutBtn.click();
       await A.page.waitForTimeout(1200);
       await A.page.getByRole("button", { name: /^max$/i }).click();
-      await A.page.getByRole("button", { name: /^cash out$/i }).last().click();
+      // The modal's own button carries the amount ("Cash out $6.00"). Matching
+      // bare "Cash out" finds the header icon instead, which is behind the
+      // scrim, and Playwright waits thirty seconds for a click it will never
+      // land.
+      await A.page.getByRole("button", { name: /^cash out \$/i }).click();
       const sold = await A.page
         .waitForFunction(() => /Sold [\d,]+ chips/i.test(document.body.innerText), {
           timeout: 90_000,
@@ -595,10 +697,13 @@ async function main() {
         .catch(() => false);
       check(sold, "chips sell back to the wallet");
       await sleep(3000);
-      const solAfter = await conn.getBalance(players[0].publicKey);
+      const usdcAfter = await usdcBalance(players[0].publicKey);
+      // USDC, not SOL: the SOL balance falls on a cash-out now, because the
+      // only lamports that move are the fee. A gate asserting SOL went up
+      // would fail on a working sale.
       check(
-        solAfter > solBefore,
-        `the wallet's SOL went up (${((solAfter - solBefore) / 1e9).toFixed(4)} SOL received)`,
+        usdcAfter > usdcBefore,
+        `the wallet's USDC went up ($${((usdcAfter - usdcBefore) / 1e6).toFixed(2)} received)`,
       );
       await shot(A, "10-cashed-out");
     }

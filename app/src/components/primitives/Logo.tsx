@@ -21,9 +21,11 @@ export const SPADE_PATH =
 /**
  * The chip as a letterform: the 'o' of the wordmark. Same geometry as the
  * mark, redrawn with the ring fattened to Dela Gothic's stroke weight so it
- * reads as a letter among letters rather than an icon that wandered in. The
- * hidden 'o' beside it keeps the word whole for screen readers, searches and
- * the page checks: the visible text alone would spell "Pkerable".
+ * reads as a letter among letters rather than an icon that wandered in. Both
+ * numbers are tuned to that face specifically, which is why the wordmark keeps
+ * it even though the rest of the type system moved on. The hidden 'o' beside
+ * it keeps the word whole for screen readers, searches and the page checks:
+ * the visible text alone would spell "Pkerable".
  */
 export function ChipO({ size = "0.62em" }: { size?: string }) {
   const id = "pokerable-chip-o";

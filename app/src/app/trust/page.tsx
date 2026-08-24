@@ -157,20 +157,26 @@ export default function TrustPage() {
         unattended player only loses a pot they had already put money into.
       </P>
 
-      <H2>Chips and SOL</H2>
+      <H2>Chips and USDC</H2>
       <P>
-        Chips are bought with SOL and sold back for SOL, at a rate fixed in the
-        program: 1 SOL is exactly 1,000 chips, so a chip is 0.001 SOL. The SOL
-        sits in a program vault, and
-        chips only exist because someone paid that rate, so every chip is
-        backed the moment it is minted. Buying and selling need your wallet;
-        session keys cannot touch either.
+        Chips are bought with USDC and sold back for USDC, at a rate fixed in
+        the program: one chip is ten cents. The USDC sits in a token account
+        owned by a program vault, and chips only exist because someone paid that
+        rate, so every chip is backed the moment it is minted. Buying and
+        selling need your wallet; session keys cannot touch either.
+      </P>
+      <P>
+        The program accepts one mint and refuses every other, because opening a
+        token account is permissionless and a token anyone can print would
+        otherwise buy chips that cash out as real dollars. Solana still charges
+        its network fee in SOL, so a wallet needs a little of that too — but
+        what a chip is worth no longer moves while you are sitting at the table.
       </P>
       {MAINNET ? (
         <P>
-          This build runs on mainnet, where SOL is real money. That means the
-          enclave assumptions on this page bound custody of funds, not just the
-          fairness of a game; the attestation gap above is financially
+          This build runs on mainnet, where the USDC is real money. That means
+          the enclave assumptions on this page bound custody of funds, not just
+          the fairness of a game; the attestation gap above is financially
           material; the program&apos;s upgrade authority could replace the
           program that holds the vault; and real-stakes poker is a licensed,
           regulated activity in most places. None of that is solved here, and
@@ -178,14 +184,14 @@ export default function TrustPage() {
         </P>
       ) : (
         <P>
-          This build runs on devnet, where SOL is valueless test currency, so
-          the architecture is real money and the stakes are not. Be clear-eyed
-          about what changes if that ever stops being true: the enclave
-          assumptions on this page stop bounding a spoiled game and start
-          bounding custody of funds, the attestation gap above becomes
-          financially material, and real-stakes poker is a licensed, regulated
-          activity in most places. None of that is solved here, and this page
-          will say so for as long as it is true.
+          This build runs on devnet against a test mint we created ourselves,
+          which is valueless — so the architecture is real money and the stakes
+          are not. Be clear-eyed about what changes if that ever stops being
+          true: the enclave assumptions on this page stop bounding a spoiled
+          game and start bounding custody of funds, the attestation gap above
+          becomes financially material, and real-stakes poker is a licensed,
+          regulated activity in most places. None of that is solved here, and
+          this page will say so for as long as it is true.
         </P>
       )}
 
@@ -209,8 +215,8 @@ export default function TrustPage() {
             [
               "Funds at risk",
               MAINNET
-                ? "Real SOL, plus trust in the program's upgrade authority"
-                : "Devnet SOL, which is valueless test currency",
+                ? "Real USDC, plus trust in the program's upgrade authority"
+                : "A devnet test mint, which is valueless",
             ],
           ].map(([k, v]) => (
             <tr key={k} style={{ borderTop: "1px solid var(--line)" }}>

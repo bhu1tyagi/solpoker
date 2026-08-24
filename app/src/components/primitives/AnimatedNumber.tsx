@@ -52,7 +52,7 @@ export function AnimatedNumber({
   }, [value, duration, reduce]);
 
   return (
-    <span className={`tnum ${className ?? ""}`} style={style}>
+    <span className={`num ${className ?? ""}`} style={style}>
       {shown.toLocaleString()}
     </span>
   );

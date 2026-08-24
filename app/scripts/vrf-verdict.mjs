@@ -28,6 +28,7 @@ import {
 } from "@solana/web3.js";
 import anchorPkg from "@coral-xyz/anchor";
 const { AnchorProvider, BN, Program, Wallet } = anchorPkg;
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { sha256 } from "@noble/hashes/sha256";
 import nacl from "tweetnacl";
 import bs58pkg from "bs58";
@@ -41,6 +42,12 @@ const SESSION_PROGRAM = new PublicKey("KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwd
 
 const enc = (s) => new TextEncoder().encode(s);
 const pda = (...seeds) => PublicKey.findProgramAddressSync(seeds, P)[0];
+const VAULT = pda(enc("vault"));
+const USDC_MINT = new PublicKey(
+  /devnet/i.test(process.env.RPC ?? "")
+    ? "CzZoUHtyZkarrnRbsjPVEge6UANgCYrq8Bb8ambjjTxq"
+    : "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const now = () => new Date().toISOString().slice(11, 19);
 const log = (...a) => console.log(`[${now()}]`, ...a);
@@ -125,7 +132,7 @@ async function main() {
   const need = [];
   for (const p of players) {
     const bal = await base.getBalance(p.publicKey);
-    if (bal < 0.12e9) need.push({ p, amt: Math.ceil(0.12e9 - bal) });
+    if (bal < 0.07e9) need.push({ p, amt: Math.ceil(0.07e9 - bal) });
   }
   if (need.length) {
     await send(base, need.map(({ p, amt }) =>
@@ -167,7 +174,14 @@ async function main() {
     const ixs = [];
     if (!info) ixs.push(await progBase.methods.initPlayer().accountsPartial({ player: playerPda, authority: p.publicKey }).instruction());
     if (chips < 40n) {
-      ixs.push(await progBase.methods.buyChips(new BN(60)).accountsPartial({ player: playerPda, vault: pda(enc("vault")), authority: p.publicKey }).instruction());
+      ixs.push(await progBase.methods.buyChips(new BN(60)).accountsPartial({
+        player: playerPda,
+        vault: VAULT,
+        usdcMint: USDC_MINT,
+        vaultAta: getAssociatedTokenAddressSync(USDC_MINT, VAULT, true),
+        buyerAta: getAssociatedTokenAddressSync(USDC_MINT, p.publicKey),
+        authority: p.publicKey,
+      }).instruction());
     }
     ixs.push(await progBase.methods.joinTable(i, new BN(40))
       .accountsPartial({ table, config, seat: seatAt(i), player: playerPda, authority: p.publicKey }).instruction());

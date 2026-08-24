@@ -135,7 +135,7 @@ export function ChipStack({
       </div>
       {showAmount && (
         <span
-          className="tnum"
+          className="num"
           style={{
             fontFamily: "var(--font-display)",
             fontSize: compact ? "var(--t-xs)" : "var(--t-sm)",

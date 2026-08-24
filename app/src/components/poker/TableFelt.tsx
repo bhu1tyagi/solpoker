@@ -256,9 +256,8 @@ export function TableFelt({
                 total pot :
               </span>
               <span
-                className="tnum"
+                className="num"
                 style={{
-                  fontFamily: "var(--font-display)",
                   fontSize: compact ? 14 : 17,
                   color: "var(--gold)",
                 }}
@@ -474,7 +473,7 @@ export function TableFelt({
                     boxShadow: "0 0 26px var(--accent-glow)",
                   }}
                 >
-                  <span className="tnum">+{award.amount.toLocaleString()}</span>
+                  <span className="num">+{award.amount.toLocaleString()}</span>
                 </div>
               </motion.div>
             );

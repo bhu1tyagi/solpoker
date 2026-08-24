@@ -23,13 +23,14 @@ import {
 import { MAX_SEATS } from "@/lib/constants";
 import { playerPda, tablePda } from "@/lib/pdas";
 import { friendlyError } from "@/lib/net";
+import { formatUsdRange } from "@/lib/money";
 import { sweepTransactions } from "@/lib/sweep";
 import { toast } from "@/stores/ui-store";
 import type { LobbyTable } from "@/hooks/use-tables";
 
-// Chips are 0.001 SOL each, so these read directly in money: a Micro buy-in
-// is 0.04 to 0.2 SOL, and the High table seats 1 to 5 SOL. The shape is the
-// classic one — min 20 big blinds, max 100 — at every level.
+// Chips are ten cents each, so these read directly in money: a Micro buy-in is
+// $4 to $20, and the High table seats $100 to $500. The shape is the classic
+// one — min 20 big blinds, max 100 — at every level.
 const STAKES = [
   { label: "Micro", sb: 1, bb: 2, min: 40, max: 200 },
   { label: "Low", sb: 5, bb: 10, min: 200, max: 1_000 },
@@ -197,13 +198,13 @@ export function CreateTableModal({
                   {s.label}
                 </span>
                 <span
-                  className="tnum"
-                  style={{ fontFamily: "var(--font-display)", fontSize: "var(--t-lg)", lineHeight: 1.1 }}
+                  className="num"
+                  style={{ fontSize: "var(--t-lg)", fontWeight: 600, lineHeight: 1.1 }}
                 >
                   {s.sb}/{s.bb}
                 </span>
                 <span
-                  className="tnum"
+                  className="num"
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -215,8 +216,8 @@ export function CreateTableModal({
                   <ChipGlyph size={12} />
                   {s.min}–{s.max}
                 </span>
-                <span className="tnum" style={{ fontSize: "var(--t-xs)", color: "var(--text-dim)" }}>
-                  {s.min / 1000}–{s.max / 1000} SOL
+                <span className="num" style={{ fontSize: "var(--t-xs)", color: "var(--text-dim)" }}>
+                  {formatUsdRange(s.min, s.max)}
                 </span>
               </motion.button>
             );

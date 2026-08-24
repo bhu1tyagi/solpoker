@@ -69,7 +69,7 @@ export function VerifyCard({ hand }: { hand: StoredHand }) {
               hand
             </div>
             <div
-              className="tnum"
+              className="num"
               style={{ fontFamily: "var(--font-display)", fontSize: "var(--t-md)" }}
             >
               {hand.handNumber}

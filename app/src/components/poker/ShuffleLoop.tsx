@@ -42,11 +42,14 @@ export function ShuffleLoop({ label }: { label?: string }) {
           width: 40,
           height: 56,
           borderRadius: 7,
-          background: "var(--card-back)",
-          border: "1px solid var(--card-back-line)",
+          // These named two tokens that have never existed, so the shuffling
+          // cards rendered as transparent rectangles with no border. The real
+          // card-back pair is `--card-back-hi` / `--card-back-lo`.
+          background: `linear-gradient(180deg, var(--card-back-hi), var(--card-back-lo))`,
+          border: "1px solid var(--line)",
           boxShadow: "var(--shadow-1)",
           backgroundImage:
-            "repeating-linear-gradient(45deg, var(--card-back-line) 0 1px, transparent 1px 7px)",
+            "repeating-linear-gradient(45deg, var(--line) 0 1px, transparent 1px 7px)",
         }}
       />
     );

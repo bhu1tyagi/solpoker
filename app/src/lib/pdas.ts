@@ -1,6 +1,12 @@
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
-import { PERMISSION_PROGRAM, PROGRAM_ID, SESSION_PROGRAM } from "./constants";
+import {
+  PERMISSION_PROGRAM,
+  PROGRAM_ID,
+  SESSION_PROGRAM,
+  USDC_MINT,
+} from "./constants";
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
@@ -12,6 +18,17 @@ const u64 = (n: BN) => Uint8Array.from(n.toArray("le", 8));
 
 export const playerPda = (owner: PublicKey) =>
   find([enc("player"), owner.toBytes()]);
+
+/** Owns the token account holding every outstanding chip's backing. */
+export const vaultPda = () => find([enc("vault")]);
+
+/**
+ * A wallet's USDC account. `allowOwnerOffCurve` is on because the vault is a
+ * PDA and has no private key; without it this throws on the one address that
+ * matters most.
+ */
+export const usdcAta = (owner: PublicKey) =>
+  getAssociatedTokenAddressSync(USDC_MINT, owner, true);
 
 export const configPda = (tableId: BN) => find([enc("config"), u64(tableId)]);
 

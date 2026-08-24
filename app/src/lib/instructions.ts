@@ -23,6 +23,7 @@ import {
   PERMISSION_PROGRAM,
   PROGRAM_ID,
   TREASURY_AUTHORITY,
+  USDC_MINT,
   VALIDATOR,
 } from "./constants";
 import {
@@ -36,6 +37,8 @@ import {
   seatAccountsMap,
   seatPda,
   tablePda,
+  usdcAta,
+  vaultPda,
 } from "./pdas";
 
 export type Move =
@@ -66,27 +69,43 @@ export async function initPlayerIx(program: SolpokerProgram, authority: PublicKe
   return program.methods.initPlayer().accounts({ authority }).instruction();
 }
 
-/** Wallet only: SOL leaves the wallet and chips appear, fully backed. */
+/** Wallet only: USDC leaves the wallet and chips appear, fully backed. */
 export async function buyChipsIx(
   program: SolpokerProgram,
   authority: PublicKey,
   chips: number,
 ) {
+  const vault = vaultPda();
   return program.methods
     .buyChips(new BN(chips))
-    .accountsPartial({ player: playerPda(authority), authority })
+    .accountsPartial({
+      player: playerPda(authority),
+      vault,
+      usdcMint: USDC_MINT,
+      vaultAta: usdcAta(vault),
+      buyerAta: usdcAta(authority),
+      authority,
+    })
     .instruction();
 }
 
-/** Wallet only: chips leave the balance and the vault pays SOL back. */
+/** Wallet only: chips leave the balance and the vault pays USDC back. */
 export async function sellChipsIx(
   program: SolpokerProgram,
   authority: PublicKey,
   chips: number,
 ) {
+  const vault = vaultPda();
   return program.methods
     .sellChips(new BN(chips))
-    .accountsPartial({ player: playerPda(authority), authority })
+    .accountsPartial({
+      player: playerPda(authority),
+      vault,
+      usdcMint: USDC_MINT,
+      vaultAta: usdcAta(vault),
+      sellerAta: usdcAta(authority),
+      authority,
+    })
     .instruction();
 }
 

@@ -191,9 +191,8 @@ export function SeatPod({
         >
           {avatarOn === "right" && <ChipGlyph size={d.glyph} />}
           <span
-            className="tnum"
+            className="num"
             style={{
-              fontFamily: "var(--font-display)",
               fontSize: d.stackFont,
               color: "var(--gold)",
               lineHeight: 1.32,
