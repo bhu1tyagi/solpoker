@@ -1029,6 +1029,52 @@ the count is zero. As of 24 August it reports one blocker, and it is only money
 in the wrong place: the write buffer for the larger binary costs 7.74 SOL and
 the authority holds 6.10. The buffer is refunded when it closes.
 
+## The USDC cutover, 24 August
+
+pokerable.fun takes dollars now. The mainnet program is the same address it has
+always been, `Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker`, upgraded in place.
+
+Preconditions were checked rather than assumed, by `cutover-preflight.mjs`:
+**zero outstanding chips** in balances and on seats, so nothing redenominated at
+the moment of the swap; the binary inside the allocation bought at launch, so no
+`extend`; the buffer affordable. The pre-USDC binary is kept at
+`rollback/solpoker-pre-usdc-mainnet.so` and the source tagged
+`pre-usdc-mainnet` — with zero chips outstanding on both sides, a downgrade
+would have been clean.
+
+**The first deploy attempt failed, and how it failed is worth recording.** 212
+write transactions dropped: the CLI fires program writes at validators over UDP
+by default, which is fine for a small program and not for 1.1MB. That left 7.69
+SOL in an orphaned buffer whose ephemeral keypair was in output we had piped
+through `tail` and lost. It was recoverable anyway — the buffer's *authority* is
+the operator key, so `solana program close` returned every lamport.
+
+The retry did three things differently. `--use-rpc`, so writes go through the
+RPC instead of the transaction-processing unit. An explicit buffer keypair we
+keep, so a partial upload resumes instead of restarting. And a priority fee of
+30,000 rather than 300,000 micro-lamports per compute unit — the first retry
+died instantly because at 300k the fee across ~2,000 write transactions came to
+0.49 SOL *on top of* the 7.69 rent, more than the wallet held. The buffer's hash
+was compared against the verified build before the swap, not after.
+
+Cost of the upgrade, end to end: **0.0059 SOL**. The buffer refunded in full.
+
+Then, in order: the vault's token account created and rent-paid by the house
+rather than by whichever player deposited first; ten chips bought for a real
+dollar and sold straight back, asserted to the penny in both directions;
+`reclaim_legacy_vault` emptying the old SOL vault, which is now a deleted
+account; the client deployed.
+
+**The program is verifiable now, and says who to tell.** `solana-verify` builds
+it reproducibly in Docker and the hash matches what is deployed, so the
+"Verified: false" an explorer used to show has a real answer behind it. Getting
+there needed the `3.1.14` base image: the default container's cargo is 1.84 and
+cannot parse a crate that reaches the tree through `anchor-attribute-account`
+1.0.2, which hard-pins `anchor-syn =1.1.2`, which wants `sha2 0.11`. It is a
+build-time proc macro that never enters the binary, but it still has to compile.
+security.txt is compiled in beside it, with a contact, a policy, and an honest
+"Unaudited".
+
 ## Known problems
 
 **50 test `Player` accounts are on chain and 48 of them cannot be removed.** They
