@@ -7,36 +7,23 @@ import { spring } from "@/styles/theme";
 type Size = "sm" | "md" | "lg";
 
 /**
- * Card geometry: the corner index (rank over suit, both corners, one rotated)
- * and a big centre pip — the anatomy of an actual playing card, which is the
- * fastest thing in the world to read because everyone has been reading it
- * their whole life. The previous design was a dark slab with a lone rank
- * floating in it, which read as a tile from some other game.
+ * Card geometry, in the proportions the design spec draws: a 96 by 136 slab for
+ * the board, smaller ones for hands. The rank is set large and low, with the
+ * suit above it, so a fanned hand reads from the top corner.
  */
-const SIZES: Record<
-  Size,
-  { w: number; h: number; rank: number; cornerSuit: number; pip: number; pad: number }
-> = {
-  sm: { w: 40, h: 57, rank: 13, cornerSuit: 9, pip: 19, pad: 3 },
-  md: { w: 56, h: 80, rank: 17, cornerSuit: 12, pip: 27, pad: 4 },
-  lg: { w: 72, h: 102, rank: 21, cornerSuit: 14, pip: 35, pad: 6 },
+const SIZES: Record<Size, { w: number; h: number; rank: number; suit: number }> = {
+  sm: { w: 40, h: 57, rank: 24, suit: 11 },
+  md: { w: 56, h: 80, rank: 32, suit: 14 },
+  lg: { w: 72, h: 102, rank: 40, suit: 17 },
 };
 
-/** The four colour deck on dark grounds (seat tags, verify view). */
+/** The four colour deck, straight from the spec. */
 export const SUIT_COLORS = [
   "var(--suit-clubs)",
   "var(--suit-diamonds)",
   "var(--suit-hearts)",
   "var(--suit-spades)",
 ];
-
-/**
- * The same four suits as ink on the paper face. The pastel set above is tuned
- * for dark slabs and washes out on white, so the faces get full-strength ink:
- * green clubs, orange diamonds, red hearts, blue spades — the four colour deck
- * every poker tool uses, where a flush cannot be misread at a glance.
- */
-const SUIT_INKS = ["#137a4a", "#c2601e", "#cc2438", "#2b5fc2"];
 
 interface Props {
   /** Card byte, or NO_CARD. */
@@ -98,48 +85,6 @@ export function PlayingCard({
   );
 }
 
-/** One corner index: rank with its suit tucked under it. */
-function CornerIndex({
-  rank,
-  suit,
-  s,
-  flipped,
-}: {
-  rank: string;
-  suit: string;
-  s: (typeof SIZES)[Size];
-  flipped?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top: flipped ? undefined : s.pad,
-        left: flipped ? undefined : s.pad + 1,
-        bottom: flipped ? s.pad : undefined,
-        right: flipped ? s.pad + 1 : undefined,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        lineHeight: 1,
-        transform: flipped ? "rotate(180deg)" : undefined,
-      }}
-    >
-      <span
-        className="num"
-        style={{
-          fontSize: rank === "10" ? s.rank * 0.82 : s.rank,
-          fontWeight: 600,
-          letterSpacing: rank === "10" ? "-0.08em" : "-0.02em",
-        }}
-      >
-        {rank}
-      </span>
-      <span style={{ fontSize: s.cornerSuit, marginTop: 1 }}>{suit}</span>
-    </div>
-  );
-}
-
 function Face({
   card,
   s,
@@ -150,7 +95,7 @@ function Face({
   highlighted: boolean;
 }) {
   const known = card !== undefined && card !== NO_CARD && card < 52;
-  const ink = known ? SUIT_INKS[suitOf(card)] : "var(--text-faint)";
+  const color = known ? SUIT_COLORS[suitOf(card)] : "var(--text-faint)";
   const rank = known ? RANK_CHARS[rankOf(card)].replace("T", "10") : "";
   const suit = known ? SUIT_SYMBOLS[suitOf(card)] : "";
 
@@ -161,32 +106,37 @@ function Face({
         inset: 0,
         backfaceVisibility: "hidden",
         borderRadius: "var(--r-card)",
-        // Paper, not slate. A slight warm fall-off keeps it from reading as a
-        // dead white rectangle under the felt lighting.
-        background: "linear-gradient(180deg, #fdfbf5 0%, #f1ecdf 100%)",
-        color: ink,
+        // Lit from the bottom edge, as the spec's radial gradient does.
+        background:
+          "radial-gradient(98.12% 100% at 50% 100%, var(--card-hi) 0%, var(--card-lo) 100%)",
+        color,
         boxShadow: highlighted
-          ? "0 0 0 1.5px var(--accent), 0 0 20px var(--accent-glow), var(--card-shadow)"
-          : "var(--card-shadow), inset 0 0 0 1px rgba(20, 28, 33, 0.08)",
+          ? "0 0 0 1px var(--accent), 0 0 20px var(--accent-glow), var(--card-shadow)"
+          : "var(--card-shadow)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: s.rank * 0.06,
+        lineHeight: 1,
         userSelect: "none",
       }}
     >
-      <CornerIndex rank={rank} suit={suit} s={s} />
-      <CornerIndex rank={rank} suit={suit} s={s} flipped />
-      {/* The centre pip carries the suit at a glance across the table. */}
-      <div
+      <span style={{ fontSize: s.suit, lineHeight: 1 }}>{suit}</span>
+      <span
         style={{
-          position: "absolute",
-          inset: 0,
-          display: "grid",
-          placeItems: "center",
-          fontSize: s.pip,
-          lineHeight: 1,
-          paddingTop: s.pad,
+          // The wordmark face, on purpose. These cards were drawn around Dela
+          // Gothic's heavy single weight — when the display token moved to
+          // Bricolage the ranks thinned out and the deck stopped looking like
+          // itself. `--font-wordmark` is where Dela lives now.
+          fontFamily: "var(--font-wordmark)",
+          fontSize: rank === "10" ? s.rank * 0.78 : s.rank,
+          lineHeight: 1.08,
+          letterSpacing: "-0.02em",
         }}
       >
-        {suit}
-      </div>
+        {rank}
+      </span>
     </div>
   );
 }
