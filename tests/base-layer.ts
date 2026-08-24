@@ -94,6 +94,35 @@ describe("SolPoker Phase 2, base layer", () => {
     authority: owner,
   });
 
+  /**
+   * Everything a fresh wallet needs to play: SOL for the fee, USDC for the
+   * buy-in. Funded from the provider wallet rather than an airdrop, because
+   * the provider is the test mint's authority and devnet airdrops queue.
+   */
+  async function fundPlayer(who: PublicKey, dollars = STARTING_CHIPS * 2 / 10) {
+    const funder = (provider.wallet as anchor.Wallet).payer;
+    const tx = new anchor.web3.Transaction().add(
+      web3.SystemProgram.transfer({
+        fromPubkey: funder.publicKey,
+        toPubkey: who,
+        lamports: 0.05 * LAMPORTS_PER_SOL,
+      }),
+      createAssociatedTokenAccountIdempotentInstruction(
+        funder.publicKey,
+        ata(who),
+        who,
+        USDC_MINT,
+      ),
+      createMintToInstruction(
+        USDC_MINT,
+        ata(who),
+        funder.publicKey,
+        Math.round(dollars * 1e6),
+      ),
+    );
+    await provider.sendAndConfirm(tx, [], { commitment: "confirmed" });
+  }
+
   /** A token balance, where a missing account reads as zero rather than throwing. */
   async function tokenAmount(address: PublicKey): Promise<number> {
     const info = await connection.getAccountInfo(address);
@@ -361,11 +390,7 @@ describe("SolPoker Phase 2, base layer", () => {
 
   it("rejects a buy-in outside the table limits", async () => {
     const p = Keypair.generate();
-    const sig = await connection.requestAirdrop(
-      p.publicKey,
-      0.05 * LAMPORTS_PER_SOL,
-    );
-    await connection.confirmTransaction(sig, "confirmed");
+    await fundPlayer(p.publicKey);
     await program.methods
       .initPlayer()
       .accounts({ authority: p.publicKey })
@@ -373,7 +398,7 @@ describe("SolPoker Phase 2, base layer", () => {
       .rpc({ commitment: "confirmed" });
     await program.methods
       .buyChips(new BN(STARTING_CHIPS))
-      .accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey })
+      .accountsPartial(tradeAccounts(p.publicKey, "buy"))
       .signers([p])
       .rpc({ commitment: "confirmed" });
 
@@ -398,11 +423,7 @@ describe("SolPoker Phase 2, base layer", () => {
 
   it("rejects taking an occupied seat", async () => {
     const p = Keypair.generate();
-    const sig = await connection.requestAirdrop(
-      p.publicKey,
-      0.05 * LAMPORTS_PER_SOL,
-    );
-    await connection.confirmTransaction(sig, "confirmed");
+    await fundPlayer(p.publicKey);
     await program.methods
       .initPlayer()
       .accounts({ authority: p.publicKey })
@@ -410,7 +431,7 @@ describe("SolPoker Phase 2, base layer", () => {
       .rpc({ commitment: "confirmed" });
     await program.methods
       .buyChips(new BN(STARTING_CHIPS))
-      .accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey })
+      .accountsPartial(tradeAccounts(p.publicKey, "buy"))
       .signers([p])
       .rpc({ commitment: "confirmed" });
 
