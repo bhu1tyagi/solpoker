@@ -12,7 +12,7 @@
  * With no address it funds the operator's own wallet.
  */
 import { readFileSync } from "node:fs";
-import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountIdempotentInstruction,
   createMintToInstruction,
@@ -38,8 +38,7 @@ if (/mainnet/i.test(RPC)) {
 }
 
 const ata = getAssociatedTokenAddressSync(MINT, target);
-
-const tx = new Transaction().add(
+const ixs = [
   createAssociatedTokenAccountIdempotentInstruction(
     authority.publicKey,
     ata,
@@ -47,7 +46,25 @@ const tx = new Transaction().add(
     MINT,
   ),
   createMintToInstruction(MINT, ata, authority.publicKey, Math.round(dollars * 1e6)),
-);
+];
+
+// Dollars buy chips; SOL pays the network. A wallet with one and not the other
+// can do exactly nothing, so top up both in one go rather than leaving someone
+// to discover the second half at the signing prompt.
+const GAS_TARGET = 0.3e9;
+const gasHeld = await conn.getBalance(target);
+if (gasHeld < GAS_TARGET && !target.equals(authority.publicKey)) {
+  ixs.unshift(
+    SystemProgram.transfer({
+      fromPubkey: authority.publicKey,
+      toPubkey: target,
+      lamports: GAS_TARGET - gasHeld,
+    }),
+  );
+  console.log(`  topping up gas to ${(GAS_TARGET / 1e9).toFixed(2)} SOL (had ${(gasHeld / 1e9).toFixed(4)})`);
+}
+
+const tx = new Transaction().add(...ixs);
 
 const bh = await conn.getLatestBlockhash();
 tx.feePayer = authority.publicKey;
