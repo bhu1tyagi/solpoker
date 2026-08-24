@@ -209,15 +209,21 @@ export const GAS_FLOOR_LAMPORTS = 3_000_000;
 
 /**
  * SOL a wallet needs to actually sit down and play, as opposed to merely buy
- * chips. The session key's float dominates it.
+ * chips. The session key's float dominates it: 0.05 for the key, ~0.002 for its
+ * token account, and the rest is fees and a little slack.
  *
  * Kept separate from the floor above because they answer different questions,
  * and conflating them fails in both directions: a wallet with 0.01 SOL can
  * genuinely buy chips, and blocking that would be wrong — but letting it buy
  * chips and then discover at the table that it cannot play is worse, so the
  * deposit sheet quotes this number.
+ *
+ * Only as much slack as the next transaction needs. This sat at 0.06 and
+ * nagged a wallet holding 0.0599 that could in fact have played, which is its
+ * own kind of wrong: a warning that fires when nothing is wrong teaches people
+ * to ignore warnings.
  */
-export const PLAY_FLOOR_LAMPORTS = 60_000_000;
+export const PLAY_FLOOR_LAMPORTS = 55_000_000;
 
 /** Salt protocol states, on Seat. */
 export const SALT_NONE = 0;

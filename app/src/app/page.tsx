@@ -10,7 +10,7 @@ import { Button } from "@/components/primitives/Button";
 import { Modal, Skeleton } from "@/components/primitives/Surface";
 import { ChipGlyph } from "@/components/primitives/Chip";
 import { ChipO, Logo } from "@/components/primitives/Logo";
-import { StackCredit } from "@/components/primitives/StackCredit";
+import { SolanaMark, StackCredit } from "@/components/primitives/StackCredit";
 import { Avatar, shortKey } from "@/components/primitives/Avatar";
 import {
   CashOutIcon,
@@ -174,42 +174,15 @@ export default function Lobby() {
 
               {/* SOL is not what a chip is made of, but it is what every
                   transaction costs, and a wallet can hold plenty of dollars and
-                  still be unable to sit down. That used to be discoverable only
-                  by failing, so the number is on screen from the start. */}
-              {connected && state && (
-                <div
-                  title={
-                    state.lamports >= PLAY_FLOOR_LAMPORTS
-                      ? "Enough SOL for network fees"
-                      : `Playing needs about ${(PLAY_FLOOR_LAMPORTS / 1e9).toFixed(2)} SOL for fees and the session key`
-                  }
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 7,
-                    height: 44,
-                    padding: "0 12px",
-                    borderRadius: "var(--r-panel)",
-                    background: "var(--surface)",
-                    border:
-                      state.lamports >= PLAY_FLOOR_LAMPORTS
-                        ? "1px solid var(--line)"
-                        : "1px solid var(--info)",
-                    fontSize: "var(--t-sm)",
-                    whiteSpace: "nowrap",
-                    color:
-                      state.lamports >= PLAY_FLOOR_LAMPORTS
-                        ? "var(--text-dim)"
-                        : "var(--info)",
-                  }}
-                >
-                  <span className="num">{(state.lamports / 1e9).toFixed(3)}</span>
-                  <span style={{ opacity: 0.75 }}>SOL</span>
-                  {state.lamports < PLAY_FLOOR_LAMPORTS && (
-                    <span style={{ opacity: 0.9 }}>· top up to play</span>
-                  )}
-                </div>
-              )}
+                  still be unable to sit down.
+
+                  Two states, and they say different things on purpose. When
+                  there is enough, the balance is a quiet fact and gets out of
+                  the way. When there is not, the balance is the wrong number to
+                  show — what you need is the shortfall, because that is the
+                  amount you are about to go and send. "Top up to play" made
+                  someone work that out for themselves. */}
+              {connected && state && <SolGauge lamports={state.lamports} />}
 
               <WalletMultiButton />
             </div>
@@ -839,6 +812,50 @@ function LabelButton({
   );
 }
 
+/**
+ * What the wallet holds in SOL, and — when that is not enough — exactly how
+ * much more to send.
+ *
+ * The shortfall is rounded up to the thousandth. Quoting the precise deficit
+ * would have someone send it and land a hair short.
+ */
+function SolGauge({ lamports }: { lamports: number }) {
+  const ok = lamports >= PLAY_FLOOR_LAMPORTS;
+  const short = Math.ceil(((PLAY_FLOOR_LAMPORTS - lamports) / 1e9) * 1000) / 1000;
+
+  return (
+    <div
+      title={
+        ok
+          ? "Enough SOL for network fees and a session key"
+          : `Sitting down costs about ${(PLAY_FLOOR_LAMPORTS / 1e9).toFixed(3)} SOL in fees and session float. Most of it comes back when the session is swept.`
+      }
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 7,
+        height: 44,
+        padding: ok ? "0 12px" : "0 14px",
+        borderRadius: "var(--r-panel)",
+        background: ok ? "transparent" : "var(--surface)",
+        border: ok ? "1px solid transparent" : "1px solid var(--info)",
+        fontSize: "var(--t-sm)",
+        whiteSpace: "nowrap",
+        color: ok ? "var(--text-faint)" : "var(--info)",
+      }}
+    >
+      <SolanaMark size={12} />
+      {ok ? (
+        <span className="num">{(lamports / 1e9).toFixed(3)}</span>
+      ) : (
+        <span>
+          Add <span className="num">{short.toFixed(3)}</span> to play
+        </span>
+      )}
+    </div>
+  );
+}
+
 function IconButton({
   children,
   title,
@@ -1021,7 +1038,7 @@ function ExchangeModal({
         }}
       >
         {buying
-          ? "Chips are backed one for one by the USDC you deposit, at ten cents a chip. Solana charges its fees in SOL, not USDC — keep at least 0.06 SOL here, or you will be able to buy chips and not sit down with them."
+          ? `Chips are backed one for one by the USDC you deposit, at ten cents a chip. Solana charges its fees in SOL, not USDC — keep at least ${(PLAY_FLOOR_LAMPORTS / 1e9).toFixed(3)} SOL here, or you will be able to buy chips and not sit down with them.`
           : "Cashing out returns USDC to this wallet at the same ten cents a chip. Chips on a table have to be picked up first."}
       </p>
 
