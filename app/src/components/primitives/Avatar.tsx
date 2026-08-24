@@ -25,6 +25,17 @@ const GROUNDS: [string, string][] = [
 /** Head tones, warm to deep, all carrying dark features well. */
 const SKINS = ["#f5d7b8", "#e8b98a", "#c9895c", "#9c6644"];
 
+/**
+ * Pick from a list by hash, without any way to land outside it.
+ *
+ * The previous arithmetic could produce a negative index, and every consequence
+ * of that was silent: an undefined colour is a black fill, an undefined variant
+ * is whatever `switch` falls through to. Nothing throws, so nothing gets
+ * noticed until half the seats are wearing the same blank face.
+ */
+const pick = <T,>(list: readonly T[], h: number, shift: number): T =>
+  list[(h >>> shift) % list.length];
+
 const INK = "#2b2118";
 
 function hashOf(seed: string): number {
@@ -97,13 +108,19 @@ export function Avatar({
   /** Fill a square tile, the way the seat plates use it. */
   square?: boolean;
 }) {
+  // `>>>`, not `>>`, and it matters. `hashOf` returns an unsigned 32-bit value,
+  // so roughly half of all keys exceed 2^31 — and the signed shift reinterprets
+  // those as negative. A negative remainder in JavaScript stays negative, so
+  // `SKINS[-1]` was `undefined`, and an SVG `fill` of `undefined` is black.
+  // That is why half the table had featureless dark faces while the gradient
+  // behind them, indexed without a shift, was always fine.
   const h = hashOf(pubkey);
-  const [c1, c2] = GROUNDS[h % GROUNDS.length];
-  const skin = SKINS[(h >> 3) % SKINS.length];
-  const eyeKind = (h >> 7) % 5;
-  const mouthKind = (h >> 11) % 5;
-  const angle = 120 + ((h >> 15) % 5) * 24;
-  const blush = ((h >> 19) & 3) === 0;
+  const [c1, c2] = pick(GROUNDS, h, 0);
+  const skin = pick(SKINS, h, 3);
+  const eyeKind = (h >>> 7) % 5;
+  const mouthKind = (h >>> 11) % 5;
+  const angle = 120 + ((h >>> 15) % 5) * 24;
+  const blush = ((h >>> 19) & 3) === 0;
 
   return (
     <div

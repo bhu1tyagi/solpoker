@@ -37,6 +37,12 @@ import { useTableStore } from "@/stores/table-store";
 import { handPda, seatPda } from "@/lib/pdas";
 import { friendlyError, sendEr, sleep } from "@/lib/net";
 import { tombstoneTable } from "@/hooks/use-tables";
+import {
+  SESSION_COST_LAMPORTS,
+  hasLiveSession,
+  prepareSession,
+  type SessionHandle,
+} from "@/lib/session";
 import { toast } from "@/stores/ui-store";
 import type { ActionKind } from "@/components/poker/ActionBar";
 
@@ -68,6 +74,10 @@ export function useTableActions(args: {
     async (
       build: (program: SolpokerProgram, conn: Connection) => Promise<Transaction>,
       label: string,
+      // Keys that are not the wallet but must still sign — a freshly minted
+      // session key proving it exists, for instance. They sign first so the
+      // wallet sees the finished transaction it is being asked to approve.
+      extraSigners: Keypair[] = [],
     ) => {
       if (!publicKey || !signTransaction) throw new Error("connect a wallet first");
       const conn = getBaseConnection();
@@ -76,6 +86,7 @@ export function useTableActions(args: {
       const bh = await conn.getLatestBlockhash();
       tx.feePayer = publicKey;
       tx.recentBlockhash = bh.blockhash;
+      if (extraSigners.length) tx.partialSign(...extraSigners);
       const signed = await signTransaction(tx);
       // Preflight on purpose. A join against a seat someone took first is
       // doomed, and with preflight skipped it does not fail until the
@@ -92,24 +103,58 @@ export function useTableActions(args: {
   );
 
   /** Wallet only. This takes chips out of your balance. */
+  /**
+   * Take a seat, and quietly acquire the key that lets you act at it.
+   *
+   * A session key is only ever wanted because someone is sitting down, so it
+   * rides in the same transaction rather than being a second thing to approve.
+   * One prompt, one signature, and nothing to find afterwards.
+   *
+   * Returns the session it created, or null if one already existed, so the
+   * caller can put it straight into state without a round trip.
+   */
   const join = useCallback(
-    async (seatIndex: number, buyIn: number) => {
-      if (!tableId) return;
+    async (seatIndex: number, buyIn: number): Promise<SessionHandle | null> => {
+      if (!tableId || !publicKey) return null;
       setBusy("join");
       try {
-        await sendBase(
-          async (program, conn) => {
-            const tx = new Transaction().add(
-              await joinTableIx(program, tableId, seatIndex, buyIn, publicKey!),
+        const conn = getBaseConnection();
+
+        // Checked before signing rather than discovered inside a CPI, where
+        // running out of lamports comes back as `custom program error: 0x1`.
+        const needSession = !(await hasLiveSession(conn, publicKey));
+        if (needSession) {
+          const bal = await conn.getBalance(publicKey);
+          if (bal < SESSION_COST_LAMPORTS) {
+            throw new Error(
+              `This wallet needs about ${(SESSION_COST_LAMPORTS / 1e9).toFixed(3)} SOL to sit down and ` +
+                `it holds ${(bal / 1e9).toFixed(4)}. Chips are bought with USDC, but Solana charges ` +
+                `its fees in SOL. Top it up and take the seat again.`,
             );
-            tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+          }
+        }
+
+        const prepared = needSession ? prepareSession(publicKey) : null;
+        await sendBase(
+          async (program, conn2) => {
+            const tx = new Transaction();
+            if (prepared) tx.add(prepared.ix);
+            tx.add(await joinTableIx(program, tableId, seatIndex, buyIn, publicKey));
+            tx.recentBlockhash = (await conn2.getLatestBlockhash()).blockhash;
             return tx;
           },
           "join",
+          prepared ? [prepared.keypair] : [],
         );
+
+        // Only now is the key real. Storing it before the transaction landed
+        // would leave one on disk that does not exist on chain.
+        const handle = prepared ? prepared.commit() : null;
         toast(`Sat down with ${buyIn.toLocaleString()} chips`, "good");
+        return handle;
       } catch (e) {
         toast(friendlyError(e), "bad");
+        return null;
       } finally {
         setBusy(null);
       }

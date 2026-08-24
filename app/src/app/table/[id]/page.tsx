@@ -789,7 +789,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
                 lineHeight: 1.05,
               }}
             >
-              <AnimatedNumber value={buyIn} />
+              {buyIn.toLocaleString()}
             </span>
             <span style={{ fontSize: "var(--t-sm)", color: "var(--text-dim)" }}>
               chips · <span className="num">{formatUsd(buyIn)}</span>
@@ -801,7 +801,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           type="range"
           min={minBuyIn}
           max={Math.max(minBuyIn, maxAffordable)}
-          step={10}
+          step={1}
           value={buyIn}
           disabled={!canAfford}
           aria-label="Buy-in"
@@ -873,17 +873,22 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           variant="primary"
           fullWidth
           disabled={!canAfford}
-          loading={actions.busy === "join" || authorising}
+          loading={actions.busy === "join"}
           onClick={async () => {
             if (sitting === null) return;
-            await actions.join(sitting, Math.min(Math.max(buyIn, minBuyIn), maxAffordable));
+            // One signature covers the seat and the key that lets you act at
+            // it; `join` bundles them. Whatever comes back is already real on
+            // chain, so it goes straight into state.
+            const s = await actions.join(
+              sitting,
+              Math.min(Math.max(buyIn, minBuyIn), maxAffordable),
+            );
+            if (s) {
+              setSession(s.keypair);
+              setSessionToken(s.tokenPda);
+            }
             setSitting(null);
             await player.refresh();
-            // Sitting down and being able to act are the same intention, so
-            // the session key is part of taking a seat rather than a second
-            // thing to go and find. Nothing is lost if it fails: the button
-            // comes back, and the seat is already yours.
-            if (!session) void authorise();
           }}
         >
           Sit down with {Math.min(Math.max(buyIn, minBuyIn), Math.max(minBuyIn, maxAffordable)).toLocaleString()} chips

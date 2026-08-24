@@ -246,6 +246,56 @@ function createSessionV2Ix(
   };
 }
 
+/**
+ * A session, prepared but not sent, so it can ride along in someone else's
+ * transaction.
+ *
+ * Authorising used to be its own transaction and therefore its own wallet
+ * prompt, which made it a step a player had to know about. A session key is
+ * only ever wanted because someone is sitting down, so the instruction is
+ * handed out here and the caller puts it in the same transaction as the join.
+ * One approval covers both, and there is no second thing to find.
+ *
+ * The wallet must still sign — the key is funded out of the wallet and the
+ * session program requires the authority's signature. That part is not
+ * removable, and pretending otherwise would mean minting a key that can bet
+ * without anyone approving it.
+ *
+ * Call `commit()` only once the transaction has confirmed. Storing before then
+ * would leave a key on disk that does not exist on chain.
+ */
+export function prepareSession(wallet: PublicKey): {
+  ix: TransactionInstruction;
+  keypair: Keypair;
+  tokenPda: PublicKey;
+  validUntil: number;
+  commit: () => SessionHandle;
+} {
+  const keypair = Keypair.generate();
+  const validUntil = Math.floor(Date.now() / 1000) + VALIDITY_SECS;
+  const { ix, tokenPda } = createSessionV2Ix(keypair.publicKey, wallet, validUntil);
+  return {
+    ix,
+    keypair,
+    tokenPda,
+    validUntil,
+    commit: () => {
+      storeSession(wallet, keypair, tokenPda, validUntil);
+      return { keypair, tokenPda, validUntil };
+    },
+  };
+}
+
+/** Is there already a usable session, so nothing needs preparing? */
+export async function hasLiveSession(
+  connection: Connection,
+  wallet: PublicKey,
+): Promise<boolean> {
+  const existing = loadSession(wallet);
+  if (!existing) return false;
+  return (await connection.getAccountInfo(existing.tokenPda)) !== null;
+}
+
 export interface SessionHandle {
   keypair: Keypair;
   tokenPda: PublicKey;

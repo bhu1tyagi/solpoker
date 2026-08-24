@@ -27,7 +27,7 @@ import { usePlayer } from "@/hooks/use-player";
 import { useLeaderboard, type LeaderRow } from "@/hooks/use-leaderboard";
 import { isJoinable, useTables, type LobbyTable } from "@/hooks/use-tables";
 import { spring, stagger } from "@/styles/theme";
-import { MAX_SEATS } from "@/lib/constants";
+import { MAX_SEATS, PLAY_FLOOR_LAMPORTS } from "@/lib/constants";
 import { formatUsd, formatUsdRange } from "@/lib/money";
 
 const WalletMultiButton = dynamic(
@@ -170,6 +170,45 @@ export default function Lobby() {
                     <CashOutIcon />
                   </IconButton>
                 </>
+              )}
+
+              {/* SOL is not what a chip is made of, but it is what every
+                  transaction costs, and a wallet can hold plenty of dollars and
+                  still be unable to sit down. That used to be discoverable only
+                  by failing, so the number is on screen from the start. */}
+              {connected && state && (
+                <div
+                  title={
+                    state.lamports >= PLAY_FLOOR_LAMPORTS
+                      ? "Enough SOL for network fees"
+                      : `Playing needs about ${(PLAY_FLOOR_LAMPORTS / 1e9).toFixed(2)} SOL for fees and the session key`
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                    height: 44,
+                    padding: "0 12px",
+                    borderRadius: "var(--r-panel)",
+                    background: "var(--surface)",
+                    border:
+                      state.lamports >= PLAY_FLOOR_LAMPORTS
+                        ? "1px solid var(--line)"
+                        : "1px solid var(--info)",
+                    fontSize: "var(--t-sm)",
+                    whiteSpace: "nowrap",
+                    color:
+                      state.lamports >= PLAY_FLOOR_LAMPORTS
+                        ? "var(--text-dim)"
+                        : "var(--info)",
+                  }}
+                >
+                  <span className="num">{(state.lamports / 1e9).toFixed(3)}</span>
+                  <span style={{ opacity: 0.75 }}>SOL</span>
+                  {state.lamports < PLAY_FLOOR_LAMPORTS && (
+                    <span style={{ opacity: 0.9 }}>· top up to play</span>
+                  )}
+                </div>
               )}
 
               <WalletMultiButton />
@@ -947,7 +986,7 @@ function ExchangeModal({
         type="range"
         min={0}
         max={Math.max(max, 1)}
-        step={10}
+        step={1}
         value={clamped}
         disabled={max === 0}
         aria-label={buying ? "Chips to buy" : "Chips to cash out"}
