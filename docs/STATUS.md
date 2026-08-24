@@ -1014,10 +1014,20 @@ wrong chain, reported the funded gate wallets as empty, and greyed out the
 deposit button with no explanation. Two gate runs went into finding that. Both
 directions throw now.
 
-Proof, in order of how much it is worth: `scripts/usdc-smoke.mjs` buys, sells,
+Proof, in order of how much it is worth. `scripts/usdc-smoke.mjs` buys, sells,
 sells again with the seller's token account deliberately closed, and then prints
 a worthless mint, opens the vault's account for it permissionlessly, and
-confirms it buys nothing and redeems nothing. Ten checks, green on devnet.
+confirms it buys nothing and redeems nothing: ten checks, green on devnet. Then
+the two-browser gate, unchanged in what it asks except that the money is now
+dollars — **27 of 27, no console errors**, ending in `the wallet's USDC went up
+($10.20 received)`.
+
+`scripts/cutover-preflight.mjs` is what says whether mainnet may be upgraded. It
+counts chips in balances and on seats, because a chip that exists at the moment
+of the upgrade quietly changes what it is worth, and refuses to say "go" until
+the count is zero. As of 24 August it reports one blocker, and it is only money
+in the wrong place: the write buffer for the larger binary costs 7.74 SOL and
+the authority holds 6.10. The buffer is refunded when it closes.
 
 ## Known problems
 
