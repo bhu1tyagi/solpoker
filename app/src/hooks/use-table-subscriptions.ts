@@ -129,6 +129,7 @@ export function useTableSubscriptions(
 
     // Watchdog. Only polls when the socket has gone quiet.
     poller.current = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
       const { lastUpdate, table: t } = store.getState();
       const staleAfter = t?.state === 1 ? STALE_LIVE_MS : STALE_IDLE_MS;
       if (Date.now() - lastUpdate > staleAfter) void readAll();

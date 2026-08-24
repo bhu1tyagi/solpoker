@@ -228,7 +228,12 @@ export function useTables() {
     // Six seconds keeps the players column honest while someone is watching
     // the room fill; twelve read as frozen. Coming back to the tab refreshes
     // immediately, because that is the moment a person is actually looking.
-    const id = setInterval(() => void refresh(), 6_000);
+    const id = setInterval(() => {
+      // A hidden tab keeps its place but stops spending the shared RPC
+      // budget; the focus handler below catches it up the moment it returns.
+      if (document.visibilityState === "hidden") return;
+      void refresh();
+    }, 6_000);
     const onVisible = () => {
       if (document.visibilityState === "visible") void refresh();
     };

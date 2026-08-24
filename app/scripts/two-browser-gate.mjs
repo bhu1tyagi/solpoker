@@ -307,13 +307,26 @@ async function main() {
       .catch(() => false);
     check(startVisible, "Start playing appears once two players are seated");
     if (startVisible) {
-      await A.page.getByRole("button", { name: /start playing/i }).click();
-      const live = await A.page
-        .waitForFunction(() => /preflop|shuffling|flop|dealing/i.test(document.body.innerText), {
-          timeout: 300_000,
-        })
-        .then(() => true)
-        .catch(() => false);
+      // Starting spans eight transactions and two layers; one flaky
+      // confirmation aborts it and puts the button back. The flow is
+      // resumable on chain, so a player would press again — the gate does
+      // too, and prints the browser's own error when it has to.
+      let live = false;
+      for (let attempt = 0; attempt < 3 && !live; attempt++) {
+        await A.page
+          .getByRole("button", { name: /start playing/i })
+          .click({ timeout: 5_000 })
+          .catch(() => {});
+        live = await A.page
+          .waitForFunction(() => /preflop|shuffling|flop|dealing/i.test(document.body.innerText), {
+            timeout: 100_000,
+          })
+          .then(() => true)
+          .catch(() => false);
+        if (!live) {
+          (A.page.__toasts ?? []).slice(-3).forEach((t) => log(`      A console: ${t}`));
+        }
+      }
       check(live, "table goes live and a hand begins");
       await A.page.waitForTimeout(6000);
       await shot(A, "6-hand-live");

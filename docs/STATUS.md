@@ -126,6 +126,19 @@ buffer refunded in the same command, and the same on-chain proof — 10 chips
 moved exactly 10,000,000 lamports into the mainnet vault and back out. Both
 clusters now run 1 SOL = 1,000 chips, byte-identical programs.
 
+**24 August: mainnet is one steady oracle away.** MagicBlock's mainnet VRF
+was confirmed fixed by their team and immediately passed a full two-browser
+gate — 27 checks, two real hands, real SOL, hole cards visible, per-wallet
+privacy enforced by the TEE — the first fully clean mainnet run this project
+has had. The next run stalled five minutes on an unanswered randomness
+request with every client-side step provably complete, so the oracle is
+intermittent rather than fixed, and the cutover criterion is two consecutive
+clean gates. Two operational facts learned the hard way are now load-bearing:
+every browser shares one base-RPC key, so hidden tabs no longer poll and a
+paid RPC tier is a launch requirement, not an optimisation; and the start
+flow is resumable, because eight transactions with one flaky confirmation
+must not strand a half-delegated table.
+
 **The mainnet program is deployed but the client still points at devnet.** The
 program went up on 22 August with 1,150,000 bytes allocated against a
 1,049,800-byte binary, so there is ~100 KB of upgrade headroom and a redeploy

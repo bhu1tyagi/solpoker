@@ -159,7 +159,10 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
 
   useEffect(() => {
     void refreshDelegation();
-    const t = setInterval(() => void refreshDelegation(), 6000);
+    const t = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      void refreshDelegation();
+    }, 10_000);
     return () => clearInterval(t);
   }, [refreshDelegation]);
 

@@ -249,6 +249,14 @@ export function useTableActions(args: {
 
         // Delegation, one account group per transaction: these carry a buffer,
         // a record and a metadata account each and do not fit together.
+        //
+        // Resumable on purpose. A start that dies halfway — one flaky
+        // confirmation out of eight — used to leave a half-delegated table
+        // that a second press could not repair: the retry tripped over its
+        // own first attempt's work and threw before ever reaching the secure
+        // step. Now already-delegated accounts are skipped, a failed send of
+        // an already-done step is tolerated, and the truth is checked at the
+        // end: either the rollup serves the table or the start failed.
         setBusy("start:delegating");
         const sendAsSession = async (ix: Awaited<ReturnType<typeof delegateCoreIx>>, label: string) => {
           const tx = new Transaction().add(ix);
@@ -262,16 +270,32 @@ export function useTableActions(args: {
             throw new Error(`${label} failed: ${JSON.stringify(conf.value.err)}`);
           }
         };
+        const delegatedAlready = async (account: PublicKey) => {
+          const info = await conn.getAccountInfo(account);
+          return !!info && !info.owner.equals(PROGRAM_ID);
+        };
 
-        await sendAsSession(
-          await delegateCoreIx(program, tableId, session.publicKey),
-          "delegate table",
-        );
+        if (!(await delegatedAlready(table))) {
+          try {
+            await sendAsSession(
+              await delegateCoreIx(program, tableId, session.publicKey),
+              "delegate table",
+            );
+          } catch (e) {
+            if (!(await delegatedAlready(table))) throw e;
+          }
+        }
         for (let i = 0; i < MAX_SEATS; i++) {
-          await sendAsSession(
-            await delegateSeatIx(program, table, i, session.publicKey),
-            `delegate seat ${i}`,
-          );
+          const seat = seatPda(table, i);
+          if (await delegatedAlready(seat)) continue;
+          try {
+            await sendAsSession(
+              await delegateSeatIx(program, table, i, session.publicKey),
+              `delegate seat ${i}`,
+            );
+          } catch (e) {
+            if (!(await delegatedAlready(seat))) throw e;
+          }
         }
 
         // Delegation takes a moment to reach the rollup, and the base layer
@@ -350,6 +374,7 @@ export function useTableActions(args: {
           toast("Table is live. Cards are locked down.", "good");
         }
       } catch (e) {
+        console.error("start table failed:", e);
         toast(friendlyError(e), "bad");
       } finally {
         setBusy(null);
