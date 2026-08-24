@@ -1075,6 +1075,21 @@ build-time proc macro that never enters the binary, but it still has to compile.
 security.txt is compiled in beside it, with a contact, a policy, and an honest
 "Unaudited".
 
+**Writing the on-chain PDA is only half of it, which is worth knowing before
+someone else rediscovers it.** `solana-verify verify-from-repo` builds, compares
+against the deployed bytes, and records the build parameters on chain — and an
+explorer still shows "Program is verified: FALSE" afterwards, because explorers
+do not read that PDA. They read OtterSec's registry, which only knows anything
+once *their* builder has rebuilt the repo itself and agreed. Querying
+`verify.osec.io/status/<program>` after the first step showed it exactly: our
+`on_chain_hash` present, `executable_hash` and `repo_url` empty.
+
+The flag that used to queue that build, `--remote`, is deprecated. The current
+sequence is two commands: upload the PDA as the upgrade authority, then
+`solana-verify remote submit-job --program-id <id> --uploader <the authority>`.
+OtterSec rebuilt it and agreed, and the registry now answers
+`"is_verified": true` with the commit it built from.
+
 ## Known problems
 
 **50 test `Player` accounts are on chain and 48 of them cannot be removed.** They
