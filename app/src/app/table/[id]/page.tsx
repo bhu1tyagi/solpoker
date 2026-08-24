@@ -758,92 +758,110 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         onClose={() => setSitting(null)}
         title={`Take seat ${(sitting ?? 0) + 1}`}
       >
-        {/* What this table is, and what you bring to it: two icon rows. */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-            padding: "12px 14px",
-            borderRadius: "var(--r-panel)",
-            background: "var(--surface-2)",
-            fontSize: "var(--t-sm)",
-          }}
-        >
-          <span
-            className="num"
-            style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--text-dim)" }}
-          >
-            <TableIcon size={15} />
-            {tableConfig?.smallBlind ?? "?"}/{tableConfig?.bigBlind ?? "?"} ·{" "}
-            {minBuyIn.toLocaleString()}–{(tableConfig?.maxBuyIn ?? 0).toLocaleString()}
-          </span>
-          <span
-            className="num"
-            style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--gold)" }}
-          >
-            <ChipGlyph size={14} />
-            {(player.state?.chips ?? 0).toLocaleString()}
-          </span>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "18px 0 6px" }}>
-          <input
-            type="range"
-            min={minBuyIn}
-            max={Math.max(minBuyIn, maxAffordable)}
-            step={10}
-            value={buyIn}
-            onChange={(e) => setBuyIn(Number(e.target.value))}
-            style={{ flex: 1 }}
-          />
-          <span
-            className="num"
-            style={{
-              fontSize: "var(--t-md)",
-              color: "var(--gold)",
-              minWidth: 84,
-              textAlign: "right",
-            }}
-          >
-            <AnimatedNumber value={buyIn} />
-          </span>
-        </div>
+        {/* The amount you are about to commit, led by the dollar figure and
+            with the chip count under it — the same shape as the deposit sheet,
+            because they are the same decision at two moments. */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            marginBottom: 16,
+            gap: "var(--sp-3)",
+            padding: "var(--sp-4)",
+            marginBottom: "var(--sp-4)",
+            background: "var(--surface)",
+            border: "1px solid var(--line)",
+            borderRadius: "var(--r-panel)",
           }}
         >
-          <div style={{ display: "flex", gap: 6 }}>
-            {([
-              ["Min", minBuyIn],
-              ["Half", Math.round((minBuyIn + maxAffordable) / 2 / 10) * 10],
-              ["Max", maxAffordable],
-            ] as const).map(([label, v]) => (
-              <Button
-                key={label}
-                size="sm"
-                variant={buyIn === v ? "primary" : "ghost"}
-                disabled={!canAfford}
-                onClick={() => setBuyIn(Math.max(minBuyIn, Math.min(v, maxAffordable)))}
-              >
-                {label}
-              </Button>
-            ))}
+          <ChipGlyph size={30} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+            <span
+              className="num"
+              style={{
+                fontSize: "var(--t-xl)",
+                fontWeight: 600,
+                color: "var(--gold)",
+                lineHeight: 1.05,
+              }}
+            >
+              <AnimatedNumber value={buyIn} />
+            </span>
+            <span style={{ fontSize: "var(--t-sm)", color: "var(--text-dim)" }}>
+              chips · <span className="num">{formatUsd(buyIn)}</span>
+            </span>
           </div>
-          <span className="num" style={{ fontSize: "var(--t-sm)", color: "var(--text-dim)" }}>
-            = {formatUsd(buyIn)}
+        </div>
+
+        <input
+          type="range"
+          min={minBuyIn}
+          max={Math.max(minBuyIn, maxAffordable)}
+          step={10}
+          value={buyIn}
+          disabled={!canAfford}
+          aria-label="Buy-in"
+          onChange={(e) => setBuyIn(Number(e.target.value))}
+          style={{ width: "100%", marginBottom: "var(--sp-3)" }}
+        />
+
+        <div style={{ display: "flex", gap: "var(--sp-2)", marginBottom: "var(--sp-4)" }}>
+          {([
+            ["Min", minBuyIn],
+            ["Half", Math.round((minBuyIn + maxAffordable) / 2 / 10) * 10],
+            ["Max", maxAffordable],
+          ] as const).map(([label, v]) => (
+            <Button
+              key={label}
+              size="sm"
+              variant={buyIn === v ? "primary" : "ghost"}
+              disabled={!canAfford}
+              onClick={() => setBuyIn(Math.max(minBuyIn, Math.min(v, maxAffordable)))}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+
+        {/* The table's own terms, demoted to a caption. They are context for
+            the number above, not a competing headline. */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "var(--sp-3)",
+            flexWrap: "wrap",
+            marginBottom: "var(--sp-4)",
+            fontSize: "var(--t-xs)",
+            color: "var(--text-faint)",
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <TableIcon size={13} />
+            Blinds <span className="num">{tableConfig?.smallBlind ?? "?"}/{tableConfig?.bigBlind ?? "?"}</span>
+            {" · "}
+            buy-in <span className="num">{minBuyIn.toLocaleString()}–{(tableConfig?.maxBuyIn ?? 0).toLocaleString()}</span>
+          </span>
+          <span>
+            you hold <span className="num">{(player.state?.chips ?? 0).toLocaleString()}</span> chips
           </span>
         </div>
+
         {!canAfford && (
-          <p style={{ color: "var(--lose)", fontSize: "var(--t-sm)", marginTop: 0 }}>
-            You need at least {minBuyIn.toLocaleString()} chips to sit here.
-            Buy some in the lobby first.
+          <p
+            role="status"
+            style={{
+              margin: "0 0 var(--sp-4)",
+              padding: "var(--sp-3)",
+              borderRadius: "var(--r-control)",
+              background: "var(--surface)",
+              borderLeft: "2px solid var(--info)",
+              fontSize: "var(--t-sm)",
+              color: "var(--text-dim)",
+              lineHeight: 1.5,
+            }}
+          >
+            You need at least {minBuyIn.toLocaleString()} chips ({formatUsd(minBuyIn)}) to sit
+            here. Deposit USDC in the lobby first.
           </p>
         )}
         <Button

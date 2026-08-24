@@ -63,8 +63,8 @@ export function Modal({
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(4, 8, 6, 0.72)",
-            backdropFilter: "blur(3px)",
+            background: "var(--scrim)",
+            backdropFilter: "blur(8px) saturate(0.7)",
             display: "grid",
             placeItems: "center",
             zIndex: z.modal,
@@ -86,11 +86,17 @@ export function Modal({
               maxHeight: "min(85dvh, 720px)",
               overflowY: "auto",
               overscrollBehavior: "contain",
-              background: "var(--surface)",
-              border: "1px solid var(--line)",
+              // Opaque, deliberately. This was `--surface`, which is 24%
+              // alpha, so a dialog opened over the felt had a poker table
+              // showing through the middle of it — every number competing with
+              // a card back behind it. A dialog is a thing on top of the room,
+              // not a window into it.
+              background:
+                "linear-gradient(180deg, #2a3640 0%, var(--surface-solid) 46%, #1e2831 100%)",
+              border: "1px solid var(--line-strong)",
               borderRadius: "var(--r-modal)",
-              boxShadow: "var(--shadow-3)",
-              padding: 24,
+              boxShadow: "var(--shadow-3), var(--highlight-soft)",
+              padding: "var(--sp-6)",
             }}
           >
             {/* The chain's colours as a hairline across the top: the one
@@ -99,13 +105,19 @@ export function Modal({
               aria-hidden
               style={{
                 height: 3,
-                margin: "-24px -24px 18px",
+                margin: "calc(var(--sp-6) * -1) calc(var(--sp-6) * -1) var(--sp-5)",
                 background: "var(--sol-grad-flat)",
                 borderRadius: "var(--r-modal) var(--r-modal) 0 0",
-                opacity: 0.85,
               }}
             />
-            <h2 className="sol-text" style={{ fontSize: "var(--t-md)", marginBottom: 16 }}>
+            <h2
+              className="sol-text"
+              style={{
+                fontSize: "var(--t-md)",
+                letterSpacing: "-0.01em",
+                marginBottom: "var(--sp-5)",
+              }}
+            >
               {title}
             </h2>
             {children}

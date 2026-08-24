@@ -89,7 +89,11 @@ export default function Lobby() {
                     gap: "clamp(10px, 1.2vw, 16px)",
                     fontSize: "clamp(34px, 4vw, 52px)",
                     color: "var(--accent)",
-                    letterSpacing: "-0.03em",
+                    // Dela Gothic sets very tight at display size and the name
+                    // was reading as one dense block. A little air lets the
+                    // letters — and the chip standing in for the 'o' — be read
+                    // as separate shapes.
+                    letterSpacing: "0.02em",
                   }}
                 >
                   <span className="wordmark-solana" style={{ whiteSpace: "nowrap" }}>
