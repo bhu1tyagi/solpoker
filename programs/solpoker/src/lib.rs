@@ -1,11 +1,11 @@
 //! SolPoker, real-time on-chain Texas Hold'em.
 //!
-//! **Not play money.** Chips are bought with SOL and sold back for SOL at a
-//! fixed rate, backed one to one by lamports in the program vault, so every
-//! instruction that touches one is handling somebody's money. The faucet this
-//! comment used to describe was removed; nothing here can mint an unbacked
-//! chip. The house takes a percentage of raked pots, which redistributes chips
-//! that already existed rather than creating any.
+//! **Not play money.** Chips are bought with USDC and sold back for USDC at a
+//! fixed rate, backed one to one by the balance of a token account the program
+//! vault owns, so every instruction that touches one is handling somebody's
+//! money. The faucet this comment used to describe was removed; nothing here
+//! can mint an unbacked chip. The house takes a percentage of raked pots, which
+//! redistributes chips that already existed rather than creating any.
 //!
 //! Execution is split across two layers:
 //!
@@ -55,6 +55,12 @@ pub mod solpoker {
 
     pub fn sell_chips(ctx: Context<SellChips>, chips: u64) -> Result<()> {
         instructions::player::sell_chips(ctx, chips)
+    }
+
+    /// One-time cleanup after the move to USDC: send the old SOL vault's
+    /// leftover lamports to the house key that put them there. House only.
+    pub fn reclaim_legacy_vault(ctx: Context<ReclaimLegacyVault>) -> Result<()> {
+        instructions::player::reclaim_legacy_vault(ctx)
     }
 
     // --- base layer: tables and seats --------------------------------------

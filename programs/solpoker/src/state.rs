@@ -138,6 +138,27 @@ pub fn rake_for(pot: u64, big_blind: u64, saw_flop: bool) -> u64 {
 /// the same vault. Nothing here can mint a chip.
 pub const TREASURY_AUTHORITY: Pubkey = pubkey!("FWRvqaezac9noSy2WsPSNoZZs2Vc2peA4TRLkjziS7Vq");
 
+/// The only mints this program will ever take a deposit in, or pay one out of.
+///
+/// One binary serves both clusters, so both addresses are compiled in and
+/// exactly one of them exists at a time. Circle's USDC has no account on
+/// devnet; the test mint's own keypair was destroyed the moment it was created,
+/// and instantiating an account at a keypair address needs that key's
+/// signature, so nothing can ever bring it into being on mainnet. In both
+/// directions the wrong mint simply has no account behind it, and
+/// `Account<Mint>` refuses to load.
+///
+/// The list is not decoration. Creating an associated token account is
+/// permissionless: without this check anyone could open the vault's ATA for a
+/// mint they print themselves, buy chips with worthless tokens, and sell those
+/// chips back for real USDC. Both buy and sell check it.
+pub const USDC_MINT_MAINNET: Pubkey = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+pub const USDC_MINT_DEVNET_TEST: Pubkey = pubkey!("CzZoUHtyZkarrnRbsjPVEge6UANgCYrq8Bb8ambjjTxq");
+
+pub fn is_allowed_usdc_mint(mint: &Pubkey) -> bool {
+    *mint == USDC_MINT_MAINNET || *mint == USDC_MINT_DEVNET_TEST
+}
+
 /// How long a hand may sit past its deadline before anyone may unwind it.
 ///
 /// The break-glass, and deliberately a long way out. Every ordinary way a hand
@@ -163,7 +184,8 @@ pub const ABANDON_HAND_SECS: i64 = 60 * 60;
 pub const VRF_TIMEOUT_SECS: i64 = 90;
 
 pub const PLAYER_SEED: &[u8] = b"player";
-/// The SOL that backs every outstanding chip lives here.
+/// Owns the token account holding the USDC that backs every outstanding chip.
+/// The PDA itself holds nothing; it signs for the account that does.
 pub const VAULT_SEED: &[u8] = b"vault";
 pub const CONFIG_SEED: &[u8] = b"config";
 pub const TABLE_SEED: &[u8] = b"table";
@@ -179,9 +201,9 @@ pub const HISTORY_SEED: &[u8] = b"history";
 /// layer so a player's balance is always settled on Solana rather than living
 /// inside a rollup.
 ///
-/// Chips are **not** play money. They are bought with SOL and sold back for SOL
-/// at a fixed rate, one to one against the program vault, so a chip is a claim
-/// on real lamports and every instruction that touches one is handling
+/// Chips are **not** play money. They are bought with USDC and sold back for
+/// USDC at a fixed rate, one to one against the program vault, so a chip is a
+/// claim on real dollars and every instruction that touches one is handling
 /// somebody's money. An earlier version of this comment said the opposite,
 /// which was true when a faucet minted them and has been wrong since it was
 /// removed. `last_faucet_ts` survives only so the layout does not move.
@@ -559,6 +581,28 @@ impl HoleCards {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A typo here is not a bug that shows up in review, it is a mainnet where
+    /// nobody can deposit: `Account<Mint>` would find no account at a
+    /// mistyped address and every buy would fail account validation. The
+    /// address is famous enough to have near-misses in circulation, so pin it
+    /// to the one anchor-spl ships rather than to a human's reading of it.
+    #[test]
+    fn the_mainnet_mint_is_circles_usdc() {
+        assert_eq!(USDC_MINT_MAINNET, anchor_spl::mint::USDC);
+    }
+
+    /// Both allowlisted mints pass, nothing else does. The devnet entry is a
+    /// mint whose keypair no longer exists, so it can never be created on
+    /// mainnet; the check is what stops a mint anyone *can* create from
+    /// standing in for the real one.
+    #[test]
+    fn the_allowlist_admits_exactly_two_mints() {
+        assert!(is_allowed_usdc_mint(&USDC_MINT_MAINNET));
+        assert!(is_allowed_usdc_mint(&USDC_MINT_DEVNET_TEST));
+        assert!(!is_allowed_usdc_mint(&Pubkey::default()));
+        assert!(!is_allowed_usdc_mint(&TREASURY_AUTHORITY));
+    }
 
     /// The attack the floor exists for.
     ///

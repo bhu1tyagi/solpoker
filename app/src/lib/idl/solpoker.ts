@@ -242,9 +242,8 @@ export type Solpoker = {
         {
           "name": "vault",
           "docs": [
-            "the guarantee; it has no data to check."
+            "the token account that does, and signs for it by its seeds."
           ],
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -261,9 +260,143 @@ export type Solpoker = {
           }
         },
         {
+          "name": "usdcMint",
+          "docs": [
+            "The one mint this cluster accepts. Anything else is refused here, before",
+            "a single token moves."
+          ]
+        },
+        {
+          "name": "vaultAta",
+          "docs": [
+            "Where the backing lives: the vault's associated token account for that",
+            "mint. The very first buy on a cluster creates it, and that buyer pays",
+            "its rent — a couple of thousandths of a SOL, once, for everyone."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "usdcMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "buyerAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "usdcMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
           "name": "authority",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "systemProgram",
@@ -2186,6 +2319,61 @@ export type Solpoker = {
       ]
     },
     {
+      "name": "reclaimLegacyVault",
+      "docs": [
+        "One-time cleanup after the move to USDC: send the old SOL vault's",
+        "leftover lamports to the house key that put them there. House only."
+      ],
+      "discriminator": [
+        10,
+        18,
+        28,
+        241,
+        190,
+        247,
+        66,
+        154
+      ],
+      "accounts": [
+        {
+          "name": "vault",
+          "docs": [
+            "good. Nothing reads its data because it has none."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "The house key, and only the house key: this moves money that was the",
+            "operator's float, not any player's deposit."
+          ],
+          "writable": true,
+          "signer": true,
+          "address": "FWRvqaezac9noSy2WsPSNoZZs2Vc2peA4TRLkjziS7Vq"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "recordHandResult",
       "docs": [
         "Base-layer target of the post-commit Magic Action."
@@ -2900,7 +3088,6 @@ export type Solpoker = {
         },
         {
           "name": "vault",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -2917,9 +3104,138 @@ export type Solpoker = {
           }
         },
         {
+          "name": "usdcMint"
+        },
+        {
+          "name": "vaultAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "usdcMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "sellerAta",
+          "docs": [
+            "Recreated on the spot if the seller closed it. Getting your money out",
+            "must never depend on having kept an account open."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "authority"
+              },
+              {
+                "kind": "account",
+                "path": "tokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "usdcMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
           "name": "authority",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "systemProgram",
@@ -3775,6 +4091,21 @@ export type Solpoker = {
       "code": 6044,
       "name": "validatorNotPinned",
       "msg": "This rollup is not the pinned TEE validator"
+    },
+    {
+      "code": 6045,
+      "name": "wrongMint",
+      "msg": "That is not the USDC this program accepts"
+    },
+    {
+      "code": 6046,
+      "name": "notTreasuryAuthority",
+      "msg": "Only the treasury authority can do that"
+    },
+    {
+      "code": 6047,
+      "name": "insufficientUsdc",
+      "msg": "Not enough USDC in the wallet for that purchase"
     }
   ],
   "types": [
@@ -4153,9 +4484,9 @@ export type Solpoker = {
         "layer so a player's balance is always settled on Solana rather than living",
         "inside a rollup.",
         "",
-        "Chips are **not** play money. They are bought with SOL and sold back for SOL",
-        "at a fixed rate, one to one against the program vault, so a chip is a claim",
-        "on real lamports and every instruction that touches one is handling",
+        "Chips are **not** play money. They are bought with USDC and sold back for",
+        "USDC at a fixed rate, one to one against the program vault, so a chip is a",
+        "claim on real dollars and every instruction that touches one is handling",
         "somebody's money. An earlier version of this comment said the opposite,",
         "which was true when a faucet minted them and has been wrong since it was",
         "removed. `last_faucet_ts` survives only so the layout does not move."

@@ -95,4 +95,10 @@ pub enum PokerError {
     TableMismatch,
     #[msg("This rollup is not the pinned TEE validator")]
     ValidatorNotPinned,
+    #[msg("That is not the USDC this program accepts")]
+    WrongMint,
+    #[msg("Only the treasury authority can do that")]
+    NotTreasuryAuthority,
+    #[msg("Not enough USDC in the wallet for that purchase")]
+    InsufficientUsdc,
 }

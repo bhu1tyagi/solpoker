@@ -9,10 +9,27 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, BN, web3 } from "@coral-xyz/anchor";
 import { Solpoker } from "../target/types/solpoker";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import {
+  MINT_SIZE,
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
+  createInitializeMint2Instruction,
+  createMintToInstruction,
+  getAssociatedTokenAddressSync,
+  getMinimumBalanceForRentExemptMint,
+} from "@solana/spl-token";
 import { assert } from "chai";
 
 const MAX_SEATS = 6;
 const STARTING_CHIPS = 10_000;
+
+/** Must match `MICRO_USDC_PER_CHIP` in the program. */
+const MICRO_USDC_PER_CHIP = 100_000;
+/** The devnet test mint, whose keypair was destroyed at creation. */
+const USDC_MINT = new PublicKey("CzZoUHtyZkarrnRbsjPVEge6UANgCYrq8Bb8ambjjTxq");
+
+const ata = (owner: PublicKey, offCurve = false) =>
+  getAssociatedTokenAddressSync(USDC_MINT, owner, offCurve);
 
 const SMALL_BLIND = new BN(5);
 const BIG_BLIND = new BN(10);
@@ -62,6 +79,27 @@ describe("SolPoker Phase 2, base layer", () => {
       program.programId,
     )[0];
 
+  const [vault] = PublicKey.findProgramAddressSync(
+    [Buffer.from("vault")],
+    program.programId,
+  );
+
+  /** The accounts a buy or a sell takes, beyond what the IDL can derive. */
+  const tradeAccounts = (owner: PublicKey, kind: "buy" | "sell") => ({
+    player: playerPda(owner),
+    vault,
+    usdcMint: USDC_MINT,
+    vaultAta: ata(vault, true),
+    ...(kind === "buy" ? { buyerAta: ata(owner) } : { sellerAta: ata(owner) }),
+    authority: owner,
+  });
+
+  /** A token balance, where a missing account reads as zero rather than throwing. */
+  async function tokenAmount(address: PublicKey): Promise<number> {
+    const info = await connection.getAccountInfo(address);
+    return info ? Number(info.data.readBigUInt64LE(64)) : 0;
+  }
+
   /** Chips in balances plus chips in seat stacks, the system-wide total. */
   async function totalChips(): Promise<number> {
     let total = 0;
@@ -77,21 +115,38 @@ describe("SolPoker Phase 2, base layer", () => {
   }
 
   before(async function () {
-    this.timeout(180_000);
+    this.timeout(300_000);
     console.log("Program:  ", program.programId.toBase58());
     console.log("Table id: ", tableId.toString());
 
-    // Fund each player wallet with SOL for rent/fees (not chips).
+    // SOL for rent and fees; the chips are bought with USDC below. The
+    // provider wallet is the test mint's mint authority, so the buy-in money
+    // is printed rather than begged from a faucet with a queue.
+    const funder = (provider.wallet as anchor.Wallet).payer;
+    const needed = STARTING_CHIPS * MICRO_USDC_PER_CHIP * 2; // room to round-trip
     for (const p of players) {
-      const sig = await connection.requestAirdrop(
-        p.publicKey,
-        0.05 * LAMPORTS_PER_SOL,
+      const tx = new anchor.web3.Transaction().add(
+        web3.SystemProgram.transfer({
+          fromPubkey: funder.publicKey,
+          toPubkey: p.publicKey,
+          lamports: 0.05 * LAMPORTS_PER_SOL,
+        }),
+        createAssociatedTokenAccountIdempotentInstruction(
+          funder.publicKey,
+          ata(p.publicKey),
+          p.publicKey,
+          USDC_MINT,
+        ),
+        createMintToInstruction(USDC_MINT, ata(p.publicKey), funder.publicKey, needed),
       );
-      await connection.confirmTransaction(sig, "confirmed");
+      await provider.sendAndConfirm(tx, [], { commitment: "confirmed" });
     }
+    console.log(
+      `  three players funded with $${(needed / 1e6).toFixed(2)} of test USDC each`,
+    );
   });
 
-  it("initializes players and grants the faucet allowance", async () => {
+  it("initializes players and buys their first chips with USDC", async () => {
     for (const p of players) {
       await program.methods
         .initPlayer()
@@ -101,10 +156,7 @@ describe("SolPoker Phase 2, base layer", () => {
 
       await program.methods
         .buyChips(new BN(STARTING_CHIPS))
-        .accountsPartial({
-          player: playerPda(p.publicKey),
-          authority: p.publicKey,
-        })
+        .accountsPartial(tradeAccounts(p.publicKey, "buy"))
         .signers([p])
         .rpc({ commitment: "confirmed" });
 
@@ -114,37 +166,38 @@ describe("SolPoker Phase 2, base layer", () => {
     console.log(`  three players bought ${STARTING_CHIPS} chips each`);
   });
 
-  it("backs every purchase with lamports in the vault", async () => {
-    const [vault] = PublicKey.findProgramAddressSync(
-      [Buffer.from("vault")],
-      program.programId,
+  it("backs every purchase with USDC in the vault", async () => {
+    const held = await tokenAmount(ata(vault, true));
+    assert.isAtLeast(
+      held,
+      3 * STARTING_CHIPS * MICRO_USDC_PER_CHIP,
+      "the vault must hold the USDC that backs the chips",
     );
-    const balance = await connection.getBalance(vault);
-    // Three purchases of 10,000 chips at 1,000 lamports each.
-    assert.isAtLeast(balance, 3 * STARTING_CHIPS * 1_000,
-      "the vault must hold the SOL that backs the chips");
-    console.log(`  vault holds ${balance} lamports`);
+    console.log(`  vault holds $${(held / 1e6).toLocaleString()}`);
   });
 
   it("sells chips back for exactly what they cost", async () => {
     const p = players[0];
-    const before = await connection.getBalance(p.publicKey);
+    const before = await tokenAmount(ata(p.publicKey));
     await program.methods
       .sellChips(new BN(1_000))
-      .accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey })
+      .accountsPartial(tradeAccounts(p.publicKey, "sell"))
       .signers([p])
       .rpc({ commitment: "confirmed" });
-    const after = await connection.getBalance(p.publicKey);
+    const after = await tokenAmount(ata(p.publicKey));
     const acct = await program.account.player.fetch(playerPda(p.publicKey));
     assert.equal(acct.chips.toNumber(), STARTING_CHIPS - 1_000);
-    // 1,000 chips at 1,000 lamports, minus the transaction fee.
-    assert.isAtLeast(after - before, 1_000 * 1_000 - 10_000,
-      "selling must pay the fixed rate back");
+    // Exactly, not approximately: the fee is paid in SOL, so nothing rounds.
+    assert.equal(
+      after - before,
+      1_000 * MICRO_USDC_PER_CHIP,
+      "selling must pay the fixed rate back to the penny",
+    );
 
     // Round-trip: buy them back so the rest of the suite sees a full stack.
     await program.methods
       .buyChips(new BN(1_000))
-      .accountsPartial({ player: playerPda(p.publicKey), authority: p.publicKey })
+      .accountsPartial(tradeAccounts(p.publicKey, "buy"))
       .signers([p])
       .rpc({ commitment: "confirmed" });
   });
@@ -153,16 +206,73 @@ describe("SolPoker Phase 2, base layer", () => {
     try {
       await program.methods
         .sellChips(new BN(999_999_999))
-        .accountsPartial({
-          player: playerPda(players[0].publicKey),
-          authority: players[0].publicKey,
-        })
+        .accountsPartial(tradeAccounts(players[0].publicKey, "sell"))
         .signers([players[0]])
         .rpc({ commitment: "confirmed" });
       assert.fail("overselling should have been rejected");
     } catch (e: any) {
       assert.include(e.toString(), "InsufficientChips");
     }
+  });
+
+  /**
+   * The reason the allowlist exists.
+   *
+   * Opening an associated token account is permissionless, so anyone can create
+   * the vault's account for a mint they control. Without the address check, the
+   * chips that buy would produce are indistinguishable from chips bought with
+   * real money — and they cash out as real money.
+   */
+  it("refuses a mint it does not recognise, in both directions", async () => {
+    const junk = Keypair.generate();
+    const funder = (provider.wallet as anchor.Wallet).payer;
+    const junkAta = getAssociatedTokenAddressSync(junk.publicKey, players[0].publicKey);
+    const junkVaultAta = getAssociatedTokenAddressSync(junk.publicKey, vault, true);
+
+    await provider.sendAndConfirm(
+      new anchor.web3.Transaction().add(
+        web3.SystemProgram.createAccount({
+          fromPubkey: funder.publicKey,
+          newAccountPubkey: junk.publicKey,
+          space: MINT_SIZE,
+          lamports: await getMinimumBalanceForRentExemptMint(connection),
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeMint2Instruction(junk.publicKey, 6, funder.publicKey, null),
+        createAssociatedTokenAccountIdempotentInstruction(
+          funder.publicKey, junkAta, players[0].publicKey, junk.publicKey,
+        ),
+        createAssociatedTokenAccountIdempotentInstruction(
+          funder.publicKey, junkVaultAta, vault, junk.publicKey,
+        ),
+        createMintToInstruction(junk.publicKey, junkAta, funder.publicKey, 1_000_000_000),
+      ),
+      [junk],
+      { commitment: "confirmed" },
+    );
+
+    for (const kind of ["buy", "sell"] as const) {
+      try {
+        await (kind === "buy"
+          ? program.methods.buyChips(new BN(100))
+          : program.methods.sellChips(new BN(100))
+        )
+          .accountsPartial({
+            player: playerPda(players[0].publicKey),
+            vault,
+            usdcMint: junk.publicKey,
+            vaultAta: junkVaultAta,
+            ...(kind === "buy" ? { buyerAta: junkAta } : { sellerAta: junkAta }),
+            authority: players[0].publicKey,
+          })
+          .signers([players[0]])
+          .rpc({ commitment: "confirmed" });
+        assert.fail(`${kind} with a printed mint should have been rejected`);
+      } catch (e: any) {
+        assert.include(e.toString(), "WrongMint");
+      }
+    }
+    console.log("  a self-printed mint buys nothing and redeems nothing");
   });
 
   it("creates a table with six seat PDAs", async () => {

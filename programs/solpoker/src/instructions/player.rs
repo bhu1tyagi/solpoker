@@ -1,32 +1,40 @@
 //! Player accounts and the chip economy.
 //!
-//! Chips are backed one to one by lamports in a program vault. They enter the
-//! system only through [`buy_chips`], which moves SOL from the buyer into the
-//! vault, and leave only through [`sell_chips`], which pays SOL back out. The
-//! rate is fixed here in the program, so the price of a chip is not a market
-//! and not a parameter anyone can move.
+//! Chips are backed one to one by USDC held in a token account the program's
+//! vault PDA owns. They enter the system only through [`buy_chips`], which
+//! moves USDC from the buyer into that account, and leave only through
+//! [`sell_chips`], which pays it back out. The rate is fixed here in the
+//! program, so the price of a chip is not a market and not a parameter anyone
+//! can move — and because the deposit is a dollar stablecoin, a stack is worth
+//! the same at the end of a session as it was at the start.
 //!
 //! There is no faucet. An unbacked chip would be a claim on someone else's
-//! deposit, so nothing in this program may mint one. The vault's lamports,
-//! minus a small rent floor, always cover every outstanding chip: buys add
-//! exactly what they mint, sells burn exactly what they pay, and no other
-//! instruction touches either side of that ledger.
+//! deposit, so nothing in this program may mint one. The vault's USDC balance
+//! always covers every outstanding chip: buys add exactly what they mint, sells
+//! burn exactly what they pay, and no other instruction touches either side of
+//! that ledger.
+//!
+//! SOL still pays for gas, as it must — but it is no longer what a chip is
+//! made of.
 
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 
 use crate::errors::PokerError;
 use crate::state::*;
 
-/// The fixed price of one chip: 1 SOL buys exactly 1,000 chips, so a chip is
-/// 0.001 SOL and the smallest blind is real but not frightening. Changing this
-/// while any chip is outstanding changes what those chips redeem for, so it
-/// can only ever move together with a fresh ledger or a deliberate migration.
-pub const LAMPORTS_PER_CHIP: u64 = 1_000_000;
+/// The fixed price of one chip: ten cents, in USDC's six-decimal base units.
+///
+/// Changing this while any chip is outstanding changes what those chips redeem
+/// for, so it can only ever move together with a fresh ledger or a deliberate
+/// migration where every outstanding chip has been cashed out first.
+pub const MICRO_USDC_PER_CHIP: u64 = 100_000;
 
-/// Lamports the vault always keeps, so the account stays rent-exempt and
-/// cannot be closed out from under the players by an exact-drain sell.
-pub const VAULT_FLOOR_LAMPORTS: u64 = 2_000_000;
+/// USDC's decimal places. `transfer_checked` takes this and refuses if the mint
+/// disagrees, which is a second lock on top of the address allowlist.
+pub const USDC_DECIMALS: u8 = 6;
 
 pub fn init_player(ctx: Context<InitPlayer>) -> Result<()> {
     let player = &mut ctx.accounts.player;
@@ -77,25 +85,35 @@ pub fn sweep_rake(ctx: Context<SweepRake>) -> Result<()> {
     Ok(())
 }
 
-/// Buy chips with SOL, at the fixed rate.
+/// Buy chips with USDC, at the fixed rate.
 ///
-/// The wallet signs and the lamports go into the vault, so every chip minted
-/// here is fully backed the moment it exists.
+/// The wallet signs and the USDC goes into the vault's token account, so every
+/// chip minted here is fully backed the moment it exists.
 pub fn buy_chips(ctx: Context<BuyChips>, chips: u64) -> Result<()> {
     require!(chips > 0, PokerError::IllegalAction);
-    let lamports = chips
-        .checked_mul(LAMPORTS_PER_CHIP)
+    let micro_usdc = chips
+        .checked_mul(MICRO_USDC_PER_CHIP)
         .ok_or(PokerError::InsufficientChips)?;
 
-    transfer(
+    // The token program would refuse this anyway; checking first turns a bare
+    // 0x1 into an error the client can name.
+    require!(
+        ctx.accounts.buyer_ata.amount >= micro_usdc,
+        PokerError::InsufficientUsdc
+    );
+
+    token::transfer_checked(
         CpiContext::new(
-            ctx.accounts.system_program.key(),
-            Transfer {
-                from: ctx.accounts.authority.to_account_info(),
-                to: ctx.accounts.vault.to_account_info(),
+            ctx.accounts.token_program.key(),
+            TransferChecked {
+                from: ctx.accounts.buyer_ata.to_account_info(),
+                mint: ctx.accounts.usdc_mint.to_account_info(),
+                to: ctx.accounts.vault_ata.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
             },
         ),
-        lamports,
+        micro_usdc,
+        USDC_DECIMALS,
     )?;
 
     let player = &mut ctx.accounts.player;
@@ -105,15 +123,15 @@ pub fn buy_chips(ctx: Context<BuyChips>, chips: u64) -> Result<()> {
         .ok_or(PokerError::InsufficientChips)?;
 
     msg!(
-        "{} bought {} chips for {} lamports",
+        "{} bought {} chips for {} micro-USDC",
         player.authority,
         chips,
-        lamports
+        micro_usdc
     );
     Ok(())
 }
 
-/// Sell chips back for SOL, at the same fixed rate.
+/// Sell chips back for USDC, at the same fixed rate.
 ///
 /// Only chips sitting in the balance can be sold; chips on a seat have to be
 /// cashed out of the table first, which keeps this instruction entirely on the
@@ -123,20 +141,61 @@ pub fn sell_chips(ctx: Context<SellChips>, chips: u64) -> Result<()> {
     let player = &mut ctx.accounts.player;
     require!(player.chips >= chips, PokerError::InsufficientChips);
 
-    let lamports = chips
-        .checked_mul(LAMPORTS_PER_CHIP)
+    let micro_usdc = chips
+        .checked_mul(MICRO_USDC_PER_CHIP)
         .ok_or(PokerError::InsufficientChips)?;
 
-    // The floor keeps the vault alive. If this fires with honest accounting it
+    // A token account's rent is its own lamports, nothing to do with its
+    // balance, so there is no floor to keep here: the only solvency question is
+    // whether the vault holds the USDC. If this fires with honest accounting it
     // means chips exist that were never paid for, which is exactly the state
     // that must never be paid out of other people's deposits.
-    let vault_lamports = ctx.accounts.vault.lamports();
     require!(
-        vault_lamports >= lamports.saturating_add(VAULT_FLOOR_LAMPORTS),
+        ctx.accounts.vault_ata.amount >= micro_usdc,
         PokerError::InsufficientVault
     );
 
     player.chips -= chips;
+
+    let bump = ctx.bumps.vault;
+    token::transfer_checked(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.key(),
+            TransferChecked {
+                from: ctx.accounts.vault_ata.to_account_info(),
+                mint: ctx.accounts.usdc_mint.to_account_info(),
+                to: ctx.accounts.seller_ata.to_account_info(),
+                authority: ctx.accounts.vault.to_account_info(),
+            },
+            &[&[VAULT_SEED, &[bump]]],
+        ),
+        micro_usdc,
+        USDC_DECIMALS,
+    )?;
+
+    msg!(
+        "{} sold {} chips for {} micro-USDC",
+        player.authority,
+        chips,
+        micro_usdc
+    );
+    Ok(())
+}
+
+/// Empty the pre-USDC SOL vault, once and for all.
+///
+/// Before the migration the same PDA held lamports and those lamports were what
+/// a chip was worth. Afterwards the chips are backed by the token account and
+/// the PDA's own balance backs nothing — it does not even need to be
+/// rent-exempt to keep signing, because a PDA signs by its seeds. So this sends
+/// the leftover home rather than leaving it stranded at an address nobody can
+/// reach any other way.
+///
+/// Draining a system account to zero deletes it; a second call finds nothing
+/// and stops on the guard below.
+pub fn reclaim_legacy_vault(ctx: Context<ReclaimLegacyVault>) -> Result<()> {
+    let lamports = ctx.accounts.vault.lamports();
+    require!(lamports > 0, PokerError::InsufficientVault);
 
     let bump = ctx.bumps.vault;
     transfer(
@@ -151,12 +210,7 @@ pub fn sell_chips(ctx: Context<SellChips>, chips: u64) -> Result<()> {
         lamports,
     )?;
 
-    msg!(
-        "{} sold {} chips for {} lamports",
-        player.authority,
-        chips,
-        lamports
-    );
+    msg!("reclaimed {} legacy lamports from the vault", lamports);
     Ok(())
 }
 
@@ -202,12 +256,36 @@ pub struct BuyChips<'info> {
         bump = player.bump
     )]
     pub player: Account<'info, Player>,
-    /// CHECK: a system-owned PDA that only ever holds lamports. Its address is
-    /// the guarantee; it has no data to check.
-    #[account(mut, seeds = [VAULT_SEED], bump)]
+    /// CHECK: the custody authority. It holds no money itself any more; it owns
+    /// the token account that does, and signs for it by its seeds.
+    #[account(seeds = [VAULT_SEED], bump)]
     pub vault: AccountInfo<'info>,
+    /// The one mint this cluster accepts. Anything else is refused here, before
+    /// a single token moves.
+    #[account(constraint = is_allowed_usdc_mint(&usdc_mint.key()) @ PokerError::WrongMint)]
+    pub usdc_mint: Account<'info, Mint>,
+    /// Where the backing lives: the vault's associated token account for that
+    /// mint. The very first buy on a cluster creates it, and that buyer pays
+    /// its rent — a couple of thousandths of a SOL, once, for everyone.
+    #[account(
+        init_if_needed,
+        payer = authority,
+        associated_token::mint = usdc_mint,
+        associated_token::authority = vault,
+        associated_token::token_program = token_program,
+    )]
+    pub vault_ata: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        associated_token::mint = usdc_mint,
+        associated_token::authority = authority,
+        associated_token::token_program = token_program,
+    )]
+    pub buyer_ata: Account<'info, TokenAccount>,
     #[account(mut)]
     pub authority: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
@@ -219,10 +297,44 @@ pub struct SellChips<'info> {
         bump = player.bump
     )]
     pub player: Account<'info, Player>,
-    /// CHECK: the same vault, paying back out under its own signature.
+    /// CHECK: the same custody PDA, signing the payout out of its token account.
+    #[account(seeds = [VAULT_SEED], bump)]
+    pub vault: AccountInfo<'info>,
+    #[account(constraint = is_allowed_usdc_mint(&usdc_mint.key()) @ PokerError::WrongMint)]
+    pub usdc_mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        associated_token::mint = usdc_mint,
+        associated_token::authority = vault,
+        associated_token::token_program = token_program,
+    )]
+    pub vault_ata: Account<'info, TokenAccount>,
+    /// Recreated on the spot if the seller closed it. Getting your money out
+    /// must never depend on having kept an account open.
+    #[account(
+        init_if_needed,
+        payer = authority,
+        associated_token::mint = usdc_mint,
+        associated_token::authority = authority,
+        associated_token::token_program = token_program,
+    )]
+    pub seller_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ReclaimLegacyVault<'info> {
+    /// CHECK: the pre-USDC SOL vault, a bare system account being emptied for
+    /// good. Nothing reads its data because it has none.
     #[account(mut, seeds = [VAULT_SEED], bump)]
     pub vault: AccountInfo<'info>,
-    #[account(mut)]
+    /// The house key, and only the house key: this moves money that was the
+    /// operator's float, not any player's deposit.
+    #[account(mut, address = TREASURY_AUTHORITY @ PokerError::NotTreasuryAuthority)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
