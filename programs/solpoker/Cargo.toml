@@ -25,6 +25,9 @@ anchor-lang = { version = "=1.0.2", features = ["init-if-needed"] }
 # CPIs. Default features on purpose: `idl-build` reaches for `token_interface`,
 # which only exists with token_2022 compiled in.
 anchor-spl = "=1.0.2"
+# Embeds the contact details for reporting a vulnerability into the binary,
+# where an explorer can read them and nobody can quietly replace them.
+solana-security-txt = "1.1.1"
 ephemeral-rollups-sdk = { version = "0.16.2", features = [
     "anchor",
     "access-control",

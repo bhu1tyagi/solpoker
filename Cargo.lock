@@ -3959,6 +3959,7 @@ dependencies = [
  "poker-engine",
  "session-keys",
  "sha2 0.10.9",
+ "solana-security-txt",
 ]
 
 [[package]]

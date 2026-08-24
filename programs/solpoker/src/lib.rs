@@ -30,6 +30,28 @@ use instructions::*;
 
 declare_id!("Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker");
 
+// How to report something wrong with this program, embedded in the binary
+// itself so a finder never has to guess who to tell.
+//
+// The explorers read this out of the deployed bytes, which is the point:
+// contact details on a website can be replaced by whoever took the website,
+// and these cannot be changed without an upgrade signed by the same key that
+// controls the program.
+//
+// `no-entrypoint` gates it out of CPI builds, where the linker would otherwise
+// pull the string into every dependent program. A `///` comment here is a doc
+// comment on a macro invocation, which nothing reads, so the compiler warns.
+#[cfg(not(feature = "no-entrypoint"))]
+solana_security_txt::security_txt! {
+    name: "Pokerable",
+    project_url: "https://pokerable.fun",
+    contacts: "email:bhuwantyagi2000@gmail.com,link:https://github.com/bhu1tyagi/solpoker/security/advisories/new",
+    policy: "https://github.com/bhu1tyagi/solpoker/blob/main/SECURITY.md",
+    preferred_languages: "en",
+    source_code: "https://github.com/bhu1tyagi/solpoker",
+    auditors: "Unaudited. Reviewed internally; see docs/STATUS.md and docs/TRUST_MODEL.md."
+}
+
 // Injects the undelegation callback the delegation program CPIs into, plus the
 // commit/undelegate intent builders. Must sit above `#[program]`.
 #[ephemeral]
