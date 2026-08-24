@@ -222,6 +222,15 @@ export default function Lobby() {
             </div>
           </header>
 
+          {/* The road from "connected a wallet" to "sitting at a table" has
+              three tolls — SOL for fees, USDC for chips, chips themselves —
+              and a newcomer meets them in the wrong order, one failure at a
+              time. This walks them in the right order and disappears the
+              moment it has nothing left to say. */}
+          {connected && state && (
+            <GetReady state={state} onDeposit={() => setExchange("buy")} />
+          )}
+
           {/* Column headings, then a row per room. On a phone the buy-in folds
               under the stakes and the seat count goes without saying. */}
           <div
@@ -809,6 +818,139 @@ function LabelButton({
       {icon}
       {title}
     </motion.button>
+  );
+}
+
+/**
+ * The three things a wallet needs before it can play, in the order it needs
+ * them, with the current one carrying its action.
+ *
+ * SOL comes first because nothing else can even be attempted without it; then
+ * dollars, because chips are bought with them; then the deposit itself. Each
+ * step is either a green check with the fact, or the thing to do next. The
+ * whole panel renders nothing once the wallet is ready — a checklist that
+ * hangs around after it is finished is furniture.
+ */
+function GetReady({
+  state,
+  onDeposit,
+}: {
+  state: { lamports: number; microUsdc: number; chips: number };
+  onDeposit: () => void;
+}) {
+  const gasOk = state.lamports >= PLAY_FLOOR_LAMPORTS;
+  const usdcOk = state.microUsdc > 0 || state.chips > 0;
+  const chipsOk = state.chips > 0;
+  if (gasOk && chipsOk) return null;
+
+  const short = Math.ceil(((PLAY_FLOOR_LAMPORTS - state.lamports) / 1e9) * 1000) / 1000;
+
+  const steps: {
+    done: boolean;
+    label: string;
+    fact: string;
+    action?: React.ReactNode;
+  }[] = [
+    {
+      done: gasOk,
+      label: "SOL for network fees",
+      fact: gasOk
+        ? `${(state.lamports / 1e9).toFixed(3)} SOL — covered`
+        : `Send ${short.toFixed(3)} SOL to this wallet. It pays fees and the session key, and most of it comes back.`,
+    },
+    {
+      done: usdcOk,
+      label: "USDC to play with",
+      fact: usdcOk
+        ? state.microUsdc > 0
+          ? `$${(state.microUsdc / 1e6).toFixed(2)} in the wallet`
+          : "covered — you already hold chips"
+        : "Swap some of your SOL for USDC, or send USDC from an exchange.",
+      action: !usdcOk && gasOk && (
+        <a
+          href="https://jup.ag/swap/SOL-USDC"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ textDecoration: "none" }}
+        >
+          <Button size="sm" variant="primary">
+            Swap SOL for USDC
+          </Button>
+        </a>
+      ),
+    },
+    {
+      done: chipsOk,
+      label: "Turn USDC into chips",
+      fact: chipsOk
+        ? `${state.chips.toLocaleString()} chips ready`
+        : "Ten cents a chip, and selling back is the same rate.",
+      action: !chipsOk && gasOk && usdcOk && (
+        <Button size="sm" variant="primary" onClick={onDeposit}>
+          Deposit USDC
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <section
+      aria-label="Get ready to play"
+      style={{
+        marginBottom: 28,
+        padding: "var(--sp-4) var(--sp-5)",
+        borderRadius: "var(--r-panel)",
+        background: "var(--surface)",
+        border: "1px solid var(--line)",
+      }}
+    >
+      <div className="label" style={{ marginBottom: "var(--sp-3)" }}>
+        Get ready to play
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
+        {steps.map((step, i) => (
+          <div
+            key={step.label}
+            style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)" }}
+          >
+            <span
+              aria-hidden
+              className="num"
+              style={{
+                width: 22,
+                height: 22,
+                flexShrink: 0,
+                display: "grid",
+                placeItems: "center",
+                borderRadius: "50%",
+                fontSize: 11,
+                fontWeight: 600,
+                background: step.done ? "var(--win)" : "var(--surface-2)",
+                color: step.done ? "#07230f" : "var(--text-dim)",
+                border: step.done ? "none" : "1px solid var(--line-strong)",
+              }}
+            >
+              {step.done ? "✓" : i + 1}
+            </span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: "var(--t-sm)",
+                  fontWeight: 600,
+                  color: step.done ? "var(--text-dim)" : "var(--text)",
+                }}
+              >
+                {step.label}
+              </div>
+              <div style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)", lineHeight: 1.5 }}>
+                {step.fact}
+              </div>
+            </div>
+            {step.action}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

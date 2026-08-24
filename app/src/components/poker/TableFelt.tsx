@@ -377,26 +377,40 @@ export function TableFelt({
         );
       })}
 
+      {/* Long operations narrate themselves in a small card over the middle of
+          the felt. This used to dim the entire table to near-black, which read
+          as the room breaking rather than the room working — and it hid the
+          seats and stacks, the things a player most wants to keep an eye on
+          while they wait. Status is a note on the table, not a curtain over
+          it. */}
       <AnimatePresence>
         {overlay && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
+          <div
             style={{
               position: "absolute",
               inset: geo.ellipseInset,
-              borderRadius: "50% / 50%",
-              background: "rgba(7, 12, 15, 0.76)",
-              backdropFilter: "blur(3px)",
               display: "grid",
               placeItems: "center",
               zIndex: 25,
+              pointerEvents: "none",
             }}
           >
-            <ShuffleLoop label={overlay} />
-          </motion.div>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ duration: 0.25 }}
+              style={{
+                padding: "14px 22px",
+                borderRadius: "var(--r-panel)",
+                background: "var(--surface-solid)",
+                border: "1px solid var(--line-strong)",
+                boxShadow: "var(--shadow-2)",
+              }}
+            >
+              <ShuffleLoop label={overlay} />
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
