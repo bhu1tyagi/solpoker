@@ -822,13 +822,15 @@ function LabelButton({
 }
 
 /**
- * How ready this wallet is to play, as one line.
+ * The road into the game, drawn as the road: one rail across the full width
+ * with a mark at each end and one in the middle, and everything about a step
+ * sitting under its own mark.
  *
- * Three dots on a rail — SOL, dollars, chips — filled as each is satisfied,
- * with a single sentence underneath naming the one thing to do next and the
- * button that does it. The earlier version was a three-row checklist that
- * explained all three steps at once, including the two that were not this
- * player's problem, and it read like setup paperwork rather than a way in.
+ * Earlier versions put the rail on the left and the instruction on the right,
+ * which meant the dots were decoration — you read the sentence and ignored
+ * them. Stacking each step under its mark makes the position on the rail the
+ * thing you read first, and the detail beneath it the answer to "so what do I
+ * do".
  *
  * Nothing renders once the wallet is ready. A finished checklist is furniture.
  */
@@ -845,105 +847,173 @@ function GetReady({
   if (gasOk && chipsOk) return null;
 
   const short = Math.ceil(((PLAY_FLOOR_LAMPORTS - state.lamports) / 1e9) * 1000) / 1000;
+  // The first unmet step is the only one that gets an instruction; the others
+  // state a fact and stay quiet.
+  const activeIndex = !gasOk ? 0 : !usdcOk ? 1 : 2;
+
   const steps = [
-    { done: gasOk, label: "SOL" },
-    { done: usdcOk, label: "USDC" },
-    { done: chipsOk, label: "Chips" },
+    {
+      done: gasOk,
+      label: "SOL for fees",
+      detail: gasOk
+        ? `${(state.lamports / 1e9).toFixed(3)} SOL`
+        : `Send ${short.toFixed(3)} SOL here`,
+      action: null as React.ReactNode,
+    },
+    {
+      done: usdcOk,
+      label: "USDC",
+      detail: usdcOk
+        ? state.microUsdc > 0
+          ? `$${(state.microUsdc / 1e6).toFixed(2)} ready`
+          : "already in chips"
+        : "Swap or send USDC",
+      action: (
+        <a
+          href="https://jup.ag/swap/SOL-USDC"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ textDecoration: "none" }}
+        >
+          <Button size="sm" variant="primary">
+            Swap for USDC
+          </Button>
+        </a>
+      ),
+    },
+    {
+      done: chipsOk,
+      label: "Chips",
+      detail: chipsOk ? `${state.chips.toLocaleString()} ready` : "A cent each",
+      action: (
+        <Button size="sm" variant="primary" onClick={onDeposit}>
+          Deposit
+        </Button>
+      ),
+    },
   ];
 
-  // Exactly one instruction, for the first thing that is missing.
-  const next = !gasOk
-    ? {
-        text: `Send ${short.toFixed(3)} SOL to this wallet — Solana charges fees in SOL, and most of it comes back.`,
-        action: null,
-      }
-    : !usdcOk
-      ? {
-          text: "Swap a little SOL for USDC, or send USDC from an exchange.",
-          action: (
-            <a
-              href="https://jup.ag/swap/SOL-USDC"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ textDecoration: "none" }}
-            >
-              <Button size="sm" variant="primary">
-                Swap for USDC
-              </Button>
-            </a>
-          ),
-        }
-      : {
-          text: "Turn your USDC into chips — a cent each, and the same rate back.",
-          action: (
-            <Button size="sm" variant="primary" onClick={onDeposit}>
-              Deposit
-            </Button>
-          ),
-        };
+  // How far the filled rail reaches: to the middle mark with one done, all the
+  // way with two.
+  const doneCount = steps.filter((s) => s.done).length;
+  const fill = doneCount === 0 ? "0%" : doneCount === 1 ? "50%" : "100%";
+  const DOT = 20;
 
   return (
     <section
       aria-label="Getting ready to play"
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "var(--sp-4)",
-        flexWrap: "wrap",
-        marginBottom: 28,
-        padding: "var(--sp-3) var(--sp-4)",
+        marginBottom: 30,
+        padding: "var(--sp-5) var(--sp-6) var(--sp-4)",
         borderRadius: "var(--r-panel)",
         background: "var(--surface-faint)",
         border: "1px solid var(--line)",
       }}
     >
-      {/* The rail: three dots, joined, filling left to right. */}
-      <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-        {steps.map((s, i) => (
-          <div key={s.label} style={{ display: "flex", alignItems: "center" }}>
-            {i > 0 && (
-              <div
-                aria-hidden
-                style={{
-                  width: 26,
-                  height: 2,
-                  background: steps[i - 1].done ? "var(--win)" : "var(--line-strong)",
-                }}
-              />
-            )}
-            <div
-              title={s.label}
-              style={{
-                width: 15,
-                height: 15,
-                borderRadius: "50%",
-                display: "grid",
-                placeItems: "center",
-                fontSize: 9,
-                lineHeight: 1,
-                color: "#07230f",
-                background: s.done ? "var(--win)" : "transparent",
-                border: s.done ? "none" : "2px solid var(--line-strong)",
-              }}
-            >
-              {s.done ? "✓" : ""}
-            </div>
-          </div>
-        ))}
-      </div>
+      <div style={{ position: "relative" }}>
+        {/* The rail, drawn between the outer marks' centres. */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: DOT / 2 - 1,
+            left: DOT / 2,
+            right: DOT / 2,
+            height: 2,
+            background: "var(--line-strong)",
+          }}
+        />
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: DOT / 2 - 1,
+            left: DOT / 2,
+            width: `calc((100% - ${DOT}px) * ${fill === "0%" ? 0 : fill === "50%" ? 0.5 : 1})`,
+            height: 2,
+            background: "var(--win)",
+            transition: "width var(--dur-large) var(--ease)",
+          }}
+        />
 
-      <span
-        style={{
-          flex: 1,
-          minWidth: 200,
-          fontSize: "var(--t-sm)",
-          color: "var(--text-dim)",
-          lineHeight: 1.5,
-        }}
-      >
-        {next.text}
-      </span>
-      {next.action}
+        <div style={{ display: "flex", justifyContent: "space-between", position: "relative" }}>
+          {steps.map((s, i) => {
+            const active = i === activeIndex;
+            const align = i === 0 ? "flex-start" : i === 1 ? "center" : "flex-end";
+            return (
+              <div
+                key={s.label}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: align,
+                  gap: 8,
+                  flex: 1,
+                  minWidth: 0,
+                }}
+              >
+                <div
+                  style={{
+                    width: DOT,
+                    height: DOT,
+                    borderRadius: "50%",
+                    display: "grid",
+                    placeItems: "center",
+                    fontSize: 11,
+                    lineHeight: 1,
+                    color: "#07230f",
+                    flexShrink: 0,
+                    background: s.done ? "var(--win)" : "var(--bg)",
+                    border: s.done
+                      ? "none"
+                      : `2px solid ${active ? "var(--gold)" : "var(--line-strong)"}`,
+                    boxShadow: active && !s.done ? "0 0 0 4px var(--gold-soft)" : "none",
+                  }}
+                >
+                  {s.done ? "✓" : ""}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: align,
+                    gap: 6,
+                    textAlign: i === 0 ? "left" : i === 1 ? "center" : "right",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "var(--t-xs)",
+                      fontWeight: 600,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      color: s.done
+                        ? "var(--win)"
+                        : active
+                          ? "var(--text)"
+                          : "var(--text-faint)",
+                    }}
+                  >
+                    {s.label}
+                  </span>
+                  <span
+                    className={s.done ? "num" : undefined}
+                    style={{
+                      fontSize: "var(--t-sm)",
+                      color: active ? "var(--text-dim)" : "var(--text-faint)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {s.detail}
+                  </span>
+                  {active && s.action}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </section>
   );
 }
