@@ -1090,6 +1090,53 @@ sequence is two commands: upload the PDA as the upgrade authority, then
 OtterSec rebuilt it and agreed, and the registry now answers
 `"is_verified": true` with the commit it built from.
 
+## A chip becomes a cent, 25 August
+
+Two things were quietly wrong, and one player watching his wallet shrink
+surfaced both.
+
+**The rake had never once fired.** 2.5% of a twelve-chip pot is 0.3 chips, and
+there is no 0.3 of a chip — the pot settles in integers. At ten cents a chip
+that meant every pot under four dollars raked exactly nothing, which was every
+pot anyone was actually playing. Two full heads-up games left the table's chip
+total unchanged, and the house had earned nothing, correctly, by its own rules.
+
+A chip is a cent now. A forty-cent pot rakes 1 chip, $1.20 rakes 3, $12 rakes
+30 — 2.50% to the penny in each case. No rule changed and no account layout
+moved; only the constant. Dollar stakes are identical, in ten times as many
+chips: Micro is still 10c/20c blinds and a $4–$20 buy-in. It was done the day
+it was noticed because outstanding chips were at zero, which is the only state
+a redenomination is safe in — the same window the USDC cutover needed.
+
+**The session float was sized for devnet.** 0.05 SOL is more than a Micro
+buy-in is worth. It comes back when the key rotates, but only after someone
+watches their balance drop and reasonably concludes something is taking it.
+Measured against two real games, a session spends 0.0024 SOL. The float is
+0.012 now.
+
+The refill behind it was worse and had never fired: it sent **0.08 SOL whenever
+the key fell below 0.05** — more than the float it was refilling — waiting for
+the first player whose session ran long enough to trigger it. It is 0.010,
+below 0.004.
+
+Worth recording plainly, because it was asked and the answer took a chain trace
+rather than an assurance: **nothing was taking anyone's SOL.** Fourteen
+signatures cost 0.000300 SOL in total. The rest sat in a session key that
+sweeps itself home, and the sweep was visible in the player's own history as an
+unexplained credit.
+
+**The deploy is worth its own note.** Devnet's public RPC could not complete a
+1.1MB upload at all, and mainnet's first buffer write failed too — network
+conditions, not code. What saved it was the habit picked up last deploy: write
+to a buffer keypair you keep, so a failed upload resumes instead of restarting.
+Two resumes brought the buffer hash to match, and no SOL was stranded. Shipping
+on unit tests plus the real-money smoke test rather than a browser gate was a
+deliberate, weaker choice, acceptable only because one constant changed and
+outstanding chips were zero.
+
+**Devnet is now behind mainnet** and will stay behind until its RPC cooperates.
+Anyone testing there should know the rate differs from production.
+
 ## Known problems
 
 **50 test `Player` accounts are on chain and 48 of them cannot be removed.** They
