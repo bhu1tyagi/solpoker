@@ -1218,7 +1218,7 @@ function useStatusLine(
   // take a different chair.
   const mine = mySeat >= 0 ? seats[mySeat] : null;
   if (mine?.occupant && !mine.cardsSecured) {
-    return "this seat cannot be locked down — you will sit out; take another seat";
+    return "this chair is still held by whoever sat here last — take a different one";
   }
 
   if (funded < 2) return "not enough players with chips";

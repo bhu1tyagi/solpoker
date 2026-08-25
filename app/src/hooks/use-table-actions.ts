@@ -410,9 +410,9 @@ export function useTableActions(args: {
 
         if (unsecured.length) {
           toast(
-            `Table is live, but ${unsecured.length === 1 ? "seat" : "seats"} ` +
-              `${unsecured.join(", ")} could not be locked down and will sit out ` +
-              `until they can. Everyone else can play.`,
+            `Table is live. ${unsecured.length === 1 ? "One chair is" : `${unsecured.length} chairs are`} ` +
+              `still held by whoever sat there last, so ${unsecured.length === 1 ? "it sits" : "they sit"} ` +
+              `out this hand. Everyone else can play.`,
             "bad",
           );
         } else {

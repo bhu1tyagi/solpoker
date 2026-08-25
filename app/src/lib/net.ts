@@ -79,7 +79,25 @@ export function friendlyError(e: unknown): string {
   if (/custom program error: 0x1\b/.test(s) || /insufficient lamports/i.test(s)) {
     return "Not enough SOL in this wallet to cover the network fee. Chips are bought with USDC, but Solana charges fees in SOL.";
   }
-  return s.length > 140 ? `${s.slice(0, 140)}...` : s;
+  if (/User rejected|rejected the request|declined/i.test(s)) {
+    return "Cancelled in your wallet.";
+  }
+  if (/blockhash not found|block height exceeded|expired/i.test(s)) {
+    return "That took too long to confirm. Try again.";
+  }
+  if (/ReadonlyDataModified|AccountOwnedByWrongProgram|ConstraintOwner|AccountNotInitialized/i.test(s)) {
+    return "This table is part-way between Solana and the game validator. Pause the table to bring it back, then try again.";
+  }
+
+  // Nothing recognised. A player gets a sentence; the raw text goes to the
+  // console, where it is useful.
+  //
+  // This used to fall through to the first 140 characters of whatever was
+  // thrown, which is how `{"InstructionError":[0,"ReadonlyDataModified"]}`
+  // ended up in a toast. A player cannot act on that, and it reads as the
+  // thing being broken rather than one step having failed.
+  console.error("unmapped error:", e);
+  return "Something went wrong. Nothing was charged — try again.";
 }
 
 /**
