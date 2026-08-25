@@ -60,6 +60,13 @@ export default function Lobby() {
     [tables, me],
   );
 
+  // Whether this wallet can actually sit down. Drives what the table area
+  // shows: a room list is no use to someone who cannot join one yet.
+  const notReady =
+    connected &&
+    state !== null &&
+    !(state.lamports >= PLAY_FLOOR_LAMPORTS && state.chips > 0);
+
   return (
     <>
       {/* The class carries the shape: content beside the side column on a
@@ -222,15 +229,6 @@ export default function Lobby() {
             </div>
           </header>
 
-          {/* The road from "connected a wallet" to "sitting at a table" has
-              three tolls — SOL for fees, USDC for chips, chips themselves —
-              and a newcomer meets them in the wrong order, one failure at a
-              time. This walks them in the right order and disappears the
-              moment it has nothing left to say. */}
-          {connected && state && (
-            <GetReady state={state} onDeposit={() => setExchange("buy")} />
-          )}
-
           {/* Column headings, then a row per room. On a phone the buy-in folds
               under the stakes and the seat count goes without saying. */}
           <div
@@ -265,6 +263,8 @@ export default function Lobby() {
                 Try again
               </Button>
             </EmptyRow>
+          ) : notReady && state ? (
+            <GetReady state={state} onDeposit={() => setExchange("buy")} />
           ) : visible.length === 0 ? (
             <EmptyRow>
               <TableIcon size={22} />
@@ -822,16 +822,21 @@ function LabelButton({
 }
 
 /**
- * The road into the game: three marks on a line, each with its own step
- * underneath it.
+ * What to do before you can sit down, in the place the lobby already puts
+ * prompts.
  *
- * No panel around it. Boxing it made it read as a form to be completed before
- * the real page began, when it is really just a caption on the lobby — three
- * marks, a line between them, and the one thing to do next. The line breaks
- * around each mark rather than running under it, so the marks are objects on
- * the line instead of decoration painted over it.
+ * This used to be a stepper floating above the room list, and it never sat
+ * right: a checkout wizard is a pattern for walking through pages, and it was
+ * occupying a region the lobby does not otherwise have, restating balances the
+ * header pills already show. So it stopped being a region. A room list is no
+ * use to someone who cannot join a room, so when the wallet is not ready this
+ * *is* the table area — same centred shape, same icon-sentence-button rhythm
+ * as "No rooms yet", which is the lobby's own way of saying "nothing here, do
+ * this".
  *
- * Nothing renders once the wallet is ready.
+ * The three marks survive as a footnote underneath rather than the headline.
+ * They answer "how much further" for anyone who wonders; the sentence above
+ * answers "what now", which is what almost everyone actually wants.
  */
 function GetReady({
   state,
@@ -843,148 +848,105 @@ function GetReady({
   const gasOk = state.lamports >= PLAY_FLOOR_LAMPORTS;
   const usdcOk = state.microUsdc > 0 || state.chips > 0;
   const chipsOk = state.chips > 0;
-  if (gasOk && chipsOk) return null;
-
   const short = Math.ceil(((PLAY_FLOOR_LAMPORTS - state.lamports) / 1e9) * 1000) / 1000;
-  const activeIndex = !gasOk ? 0 : !usdcOk ? 1 : 2;
 
-  const steps = [
-    {
-      done: gasOk,
-      label: "SOL for fees",
-      detail: gasOk
-        ? `${(state.lamports / 1e9).toFixed(3)} SOL`
-        : `Send ${short.toFixed(3)} SOL here`,
-      action: null as React.ReactNode,
-    },
-    {
-      done: usdcOk,
-      label: "USDC",
-      detail: usdcOk
-        ? state.microUsdc > 0
-          ? `$${(state.microUsdc / 1e6).toFixed(2)} ready`
-          : "already in chips"
-        : "Swap or send USDC",
-      action: (
-        <a
-          href="https://jup.ag/swap/SOL-USDC"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ textDecoration: "none" }}
-        >
-          <Button size="sm" variant="ghost">
-            Swap for USDC
-          </Button>
-        </a>
-      ),
-    },
-    {
-      done: chipsOk,
-      label: "Chips",
-      detail: chipsOk ? `${state.chips.toLocaleString()} ready` : "A cent each",
-      action: (
-        <Button size="sm" variant="ghost" onClick={onDeposit}>
-          Buy chips
-        </Button>
-      ),
-    },
-  ];
+  const step = !gasOk
+    ? {
+        icon: <SolanaMark size={20} />,
+        line: (
+          <>
+            Add <span className="num">{short.toFixed(3)}</span> SOL to cover network fees
+          </>
+        ),
+        action: null as React.ReactNode,
+        note: "Solana charges fees in SOL, not USDC. Most of it comes back.",
+      }
+    : !usdcOk
+      ? {
+          icon: <UsdcMark size={20} />,
+          line: <>Get some USDC to play with</>,
+          action: (
+            <a
+              href="https://jup.ag/swap/SOL-USDC"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <Button variant="primary" size="sm">
+                Swap SOL for USDC
+              </Button>
+            </a>
+          ),
+          note: "Or send USDC here from an exchange.",
+        }
+      : {
+          icon: <ChipGlyph size={20} />,
+          line: (
+            <>
+              Turn your <span className="num">${(state.microUsdc / 1e6).toFixed(2)}</span> into chips
+            </>
+          ),
+          action: (
+            <Button variant="primary" size="sm" onClick={onDeposit}>
+              Buy chips
+            </Button>
+          ),
+          note: "A cent a chip, and the same rate back out.",
+        };
 
-  const doneCount = steps.filter((s) => s.done).length;
-  const DOT = 14;
-  // Three equal columns put the marks at a sixth, a half and five sixths of the
-  // width. Each segment stops short of the marks at both ends, which is what
-  // leaves the gap around them.
-  const GAP = DOT / 2 + 10;
-  const segment = (from: string, to: string, filled: boolean) => (
-    <div
-      aria-hidden
-      style={{
-        position: "absolute",
-        top: DOT / 2,
-        left: `calc(${from} + ${GAP}px)`,
-        right: `calc(${to} + ${GAP}px)`,
-        height: 1,
-        background: filled ? "var(--win)" : "var(--line)",
-        opacity: filled ? 0.5 : 1,
-        transition: "background var(--dur-large) var(--ease)",
-      }}
-    />
-  );
+  const marks = [gasOk, usdcOk, chipsOk];
 
   return (
-    <section
-      aria-label="Getting ready to play"
-      style={{ margin: "0 0 30px", padding: "0 var(--sp-6)" }}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+        minHeight: 128,
+        padding: "26px 16px",
+        textAlign: "center",
+      }}
     >
-      <div style={{ position: "relative" }}>
-        {segment("16.666%", "50%", doneCount >= 1)}
-        {segment("50%", "16.666%", doneCount >= 2)}
-
-        <div style={{ display: "flex", position: "relative" }}>
-          {steps.map((s, i) => {
-            const active = i === activeIndex;
-            return (
-              <div
-                key={s.label}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 6,
-                  textAlign: "center",
-                }}
-              >
-                <div
-                  style={{
-                    width: DOT,
-                    height: DOT,
-                    borderRadius: "50%",
-                    display: "grid",
-                    placeItems: "center",
-                    fontSize: 8,
-                    lineHeight: 1,
-                    flexShrink: 0,
-                    background: s.done ? "var(--win)" : "var(--bg)",
-                    color: s.done ? "#07230f" : "transparent",
-                    opacity: s.done ? 0.75 : 1,
-                    border: s.done
-                      ? "1px solid var(--win)"
-                      : `1px solid ${active ? "var(--gold)" : "var(--line-strong)"}`,
-                    boxShadow: active && !s.done ? "0 0 0 3px var(--gold-soft)" : "none",
-                    transition: "background var(--dur-standard) var(--ease)",
-                  }}
-                >
-                  ✓
-                </div>
-
-                <span
-                  style={{
-                    fontSize: "var(--t-xs)",
-                    fontWeight: active ? 600 : 400,
-                    color: active ? "var(--text-dim)" : "var(--text-faint)",
-                  }}
-                >
-                  {s.label}
-                </span>
-                <span
-                  className={s.done ? "num" : undefined}
-                  style={{
-                    fontSize: "var(--t-xs)",
-                    color: "var(--text-faint)",
-                  }}
-                >
-                  {s.detail}
-                </span>
-                {active && s.action}
-              </div>
-            );
-          })}
-        </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 14,
+          flexWrap: "wrap",
+          color: "var(--text-dim)",
+          fontSize: 15,
+        }}
+      >
+        {step.icon}
+        <span>{step.line}</span>
+        {step.action}
       </div>
-    </section>
+
+      <span style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>{step.note}</span>
+
+      {/* How much further, as a footnote. */}
+      <div
+        aria-label={`Step ${marks.filter(Boolean).length + 1} of 3`}
+        style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}
+      >
+        {marks.map((done, i) => (
+          <span
+            key={i}
+            style={{
+              width: done ? 14 : 6,
+              height: 6,
+              borderRadius: 3,
+              background: done ? "var(--win)" : "var(--line-strong)",
+              opacity: done ? 0.55 : 1,
+              transition: "width var(--dur-standard) var(--ease)",
+            }}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
