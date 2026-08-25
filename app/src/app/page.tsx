@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { motion } from "motion/react";
@@ -822,14 +822,15 @@ function LabelButton({
 }
 
 /**
- * The three things a wallet needs before it can play, in the order it needs
- * them, with the current one carrying its action.
+ * How ready this wallet is to play, as one line.
  *
- * SOL comes first because nothing else can even be attempted without it; then
- * dollars, because chips are bought with them; then the deposit itself. Each
- * step is either a green check with the fact, or the thing to do next. The
- * whole panel renders nothing once the wallet is ready — a checklist that
- * hangs around after it is finished is furniture.
+ * Three dots on a rail — SOL, dollars, chips — filled as each is satisfied,
+ * with a single sentence underneath naming the one thing to do next and the
+ * button that does it. The earlier version was a three-row checklist that
+ * explained all three steps at once, including the two that were not this
+ * player's problem, and it read like setup paperwork rather than a way in.
+ *
+ * Nothing renders once the wallet is ready. A finished checklist is furniture.
  */
 function GetReady({
   state,
@@ -844,115 +845,109 @@ function GetReady({
   if (gasOk && chipsOk) return null;
 
   const short = Math.ceil(((PLAY_FLOOR_LAMPORTS - state.lamports) / 1e9) * 1000) / 1000;
-
-  const steps: {
-    done: boolean;
-    label: string;
-    fact: string;
-    action?: React.ReactNode;
-  }[] = [
-    {
-      done: gasOk,
-      label: "SOL for network fees",
-      fact: gasOk
-        ? `${(state.lamports / 1e9).toFixed(3)} SOL — covered`
-        : `Send ${short.toFixed(3)} SOL to this wallet. It pays fees and the session key, and most of it comes back.`,
-    },
-    {
-      done: usdcOk,
-      label: "USDC to play with",
-      fact: usdcOk
-        ? state.microUsdc > 0
-          ? `$${(state.microUsdc / 1e6).toFixed(2)} in the wallet`
-          : "covered — you already hold chips"
-        : "Swap some of your SOL for USDC, or send USDC from an exchange.",
-      action: !usdcOk && gasOk && (
-        <a
-          href="https://jup.ag/swap/SOL-USDC"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ textDecoration: "none" }}
-        >
-          <Button size="sm" variant="primary">
-            Swap SOL for USDC
-          </Button>
-        </a>
-      ),
-    },
-    {
-      done: chipsOk,
-      label: "Turn USDC into chips",
-      fact: chipsOk
-        ? `${state.chips.toLocaleString()} chips ready`
-        : "Ten cents a chip, and selling back is the same rate.",
-      action: !chipsOk && gasOk && usdcOk && (
-        <Button size="sm" variant="primary" onClick={onDeposit}>
-          Deposit USDC
-        </Button>
-      ),
-    },
+  const steps = [
+    { done: gasOk, label: "SOL" },
+    { done: usdcOk, label: "USDC" },
+    { done: chipsOk, label: "Chips" },
   ];
+
+  // Exactly one instruction, for the first thing that is missing.
+  const next = !gasOk
+    ? {
+        text: `Send ${short.toFixed(3)} SOL to this wallet — Solana charges fees in SOL, and most of it comes back.`,
+        action: null,
+      }
+    : !usdcOk
+      ? {
+          text: "Swap a little SOL for USDC, or send USDC from an exchange.",
+          action: (
+            <a
+              href="https://jup.ag/swap/SOL-USDC"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none" }}
+            >
+              <Button size="sm" variant="primary">
+                Swap for USDC
+              </Button>
+            </a>
+          ),
+        }
+      : {
+          text: "Turn your USDC into chips — a cent each, and the same rate back.",
+          action: (
+            <Button size="sm" variant="primary" onClick={onDeposit}>
+              Deposit
+            </Button>
+          ),
+        };
 
   return (
     <section
-      aria-label="Get ready to play"
+      aria-label="Getting ready to play"
       style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-4)",
+        flexWrap: "wrap",
         marginBottom: 28,
-        padding: "var(--sp-4) var(--sp-5)",
+        padding: "var(--sp-3) var(--sp-4)",
         borderRadius: "var(--r-panel)",
-        background: "var(--surface)",
+        background: "var(--surface-faint)",
         border: "1px solid var(--line)",
       }}
     >
-      <div className="label" style={{ marginBottom: "var(--sp-3)" }}>
-        Get ready to play
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-3)" }}>
-        {steps.map((step, i) => (
-          <div
-            key={step.label}
-            style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)" }}
-          >
-            <span
-              aria-hidden
-              className="num"
+      {/* The rail: three dots, joined, filling left to right. */}
+      <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+        {steps.map((s, i) => (
+          <div key={s.label} style={{ display: "flex", alignItems: "center" }}>
+            {i > 0 && (
+              <div
+                aria-hidden
+                style={{
+                  width: 26,
+                  height: 2,
+                  background: steps[i - 1].done ? "var(--win)" : "var(--line-strong)",
+                }}
+              />
+            )}
+            <div
+              title={s.label}
               style={{
-                width: 22,
-                height: 22,
-                flexShrink: 0,
+                width: 15,
+                height: 15,
+                borderRadius: "50%",
                 display: "grid",
                 placeItems: "center",
-                borderRadius: "50%",
-                fontSize: 11,
-                fontWeight: 600,
-                background: step.done ? "var(--win)" : "var(--surface-2)",
-                color: step.done ? "#07230f" : "var(--text-dim)",
-                border: step.done ? "none" : "1px solid var(--line-strong)",
+                fontSize: 9,
+                lineHeight: 1,
+                color: "#07230f",
+                background: s.done ? "var(--win)" : "transparent",
+                border: s.done ? "none" : "2px solid var(--line-strong)",
               }}
             >
-              {step.done ? "✓" : i + 1}
-            </span>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div
-                style={{
-                  fontSize: "var(--t-sm)",
-                  fontWeight: 600,
-                  color: step.done ? "var(--text-dim)" : "var(--text)",
-                }}
-              >
-                {step.label}
-              </div>
-              <div style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)", lineHeight: 1.5 }}>
-                {step.fact}
-              </div>
+              {s.done ? "✓" : ""}
             </div>
-            {step.action}
           </div>
         ))}
       </div>
+
+      <span
+        style={{
+          flex: 1,
+          minWidth: 200,
+          fontSize: "var(--t-sm)",
+          color: "var(--text-dim)",
+          lineHeight: 1.5,
+        }}
+      >
+        {next.text}
+      </span>
+      {next.action}
     </section>
   );
 }
+
 
 /**
  * What the wallet holds in SOL, and — when that is not enough — exactly how
@@ -1069,10 +1064,25 @@ function ExchangeModal({
   blocked: string | null;
   ready: boolean;
 }) {
-  const [amount, setAmount] = useState(100);
+  const [amount, setAmount] = useState(0);
   const buying = mode === "buy";
   const max = buying ? affordable : chips;
   const clamped = Math.min(Math.max(amount, 0), max);
+
+  // Presets scaled to what this wallet actually has, not a fixed ladder.
+  // Cashing out $4.60 used to offer $10 / $50 / $100 and disable all three,
+  // which is a row of buttons whose only message is that you cannot afford
+  // anything. Quarter, half, all — always reachable, always meaningful.
+  const presets: [string, number][] = [
+    ["25%", Math.floor(max * 0.25)],
+    ["Half", Math.floor(max * 0.5)],
+    ["Max", max],
+  ];
+
+  // Open at something sensible rather than at zero with a dead CTA.
+  useEffect(() => {
+    if (mode) setAmount(max);
+  }, [mode, max]);
   // Until the balances land, every control here would be disabled with nothing
   // to explain why. Say so instead: a dead row of buttons reads as broken.
   const waiting = !ready;
@@ -1125,20 +1135,17 @@ function ExchangeModal({
       </div>
 
       <div style={{ display: "flex", gap: "var(--sp-2)", marginBottom: "var(--sp-3)", flexWrap: "wrap" }}>
-        {[100, 500, 1_000].map((v) => (
+        {presets.map(([label, v]) => (
           <Button
-            key={v}
+            key={label}
             size="sm"
-            variant={clamped === Math.min(v, max) ? "primary" : "ghost"}
+            variant={clamped === v && v > 0 ? "primary" : "ghost"}
             disabled={max === 0}
-            onClick={() => setAmount(Math.min(v, max))}
+            onClick={() => setAmount(v)}
           >
-            {formatUsd(v)}
+            {label}
           </Button>
         ))}
-        <Button size="sm" variant="ghost" disabled={max === 0} onClick={() => setAmount(max)}>
-          Max
-        </Button>
       </div>
 
       <input
@@ -1180,8 +1187,8 @@ function ExchangeModal({
         }}
       >
         {buying
-          ? `Chips are backed one for one by the USDC you deposit, at ten cents a chip. Solana charges its fees in SOL, not USDC — keep at least ${(PLAY_FLOOR_LAMPORTS / 1e9).toFixed(3)} SOL here, or you will be able to buy chips and not sit down with them.`
-          : "Cashing out returns USDC to this wallet at the same ten cents a chip. Chips on a table have to be picked up first."}
+          ? `Chips are backed one for one by the USDC you deposit, at a cent a chip. Solana charges its fees in SOL, not USDC — keep at least ${(PLAY_FLOOR_LAMPORTS / 1e9).toFixed(3)} SOL here, or you will be able to buy chips and not sit down with them.`
+          : "Cashing out returns USDC to this wallet at the same cent a chip. Chips on a table have to be picked up first."}
       </p>
 
       {(waiting || blocked) && (

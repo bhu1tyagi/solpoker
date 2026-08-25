@@ -271,14 +271,14 @@ export function useTableActions(args: {
         setBusy("start:funding");
         // The session key pays for all of this, so it needs a balance.
         const bal = await conn.getBalance(session.publicKey);
-        if (bal < 0.05 * 1e9) {
+        if (bal < 0.004 * 1e9) {
           if (!signTransaction) throw new Error("connect a wallet first");
           const { SystemProgram } = await import("@solana/web3.js");
           const fund = new Transaction().add(
             SystemProgram.transfer({
               fromPubkey: publicKey,
               toPubkey: session.publicKey,
-              lamports: 0.08 * 1e9,
+              lamports: 0.010 * 1e9,
             }),
           );
           const bh = await conn.getLatestBlockhash();

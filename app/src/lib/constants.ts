@@ -170,14 +170,14 @@ export const NO_CARD = 0xff;
 
 /**
  * The fixed price of one chip, matching `MICRO_USDC_PER_CHIP` in the program:
- * ten cents, in USDC's six-decimal base units. Chips are backed one to one by
+ * one cent, in USDC's six-decimal base units. Chips are backed one to one by
  * USDC in the program vault — they exist only because someone paid this rate,
  * and selling pays it back.
  *
  * This number and the program's must move together or the client will quote
  * prices the chain does not honour.
  */
-export const MICRO_USDC_PER_CHIP = 100_000;
+export const MICRO_USDC_PER_CHIP = 10_000;
 
 /** USDC's decimals, on both clusters. */
 export const USDC_DECIMALS = 6;
@@ -209,8 +209,14 @@ export const GAS_FLOOR_LAMPORTS = 3_000_000;
 
 /**
  * SOL a wallet needs to actually sit down and play, as opposed to merely buy
- * chips. The session key's float dominates it: 0.05 for the key, ~0.002 for its
- * token account, and the rest is fees and a little slack.
+ * chips. The session key's float dominates it: 0.012 for the key, ~0.002 for
+ * its token account, and the rest is fees and a little slack.
+ *
+ * The float used to be 0.05, which was set when this was a devnet toy and
+ * nobody counted. On mainnet it meant parking more SOL than a Micro buy-in was
+ * worth — money that came back, but only after someone watched their wallet
+ * drop and wondered what had taken it. Measured against two real games, a
+ * session spends about 0.0024 SOL; 0.012 covers a long night.
  *
  * Kept separate from the floor above because they answer different questions,
  * and conflating them fails in both directions: a wallet with 0.01 SOL can
@@ -223,7 +229,7 @@ export const GAS_FLOOR_LAMPORTS = 3_000_000;
  * own kind of wrong: a warning that fires when nothing is wrong teaches people
  * to ignore warnings.
  */
-export const PLAY_FLOOR_LAMPORTS = 55_000_000;
+export const PLAY_FLOOR_LAMPORTS = 18_000_000;
 
 /** Salt protocol states, on Seat. */
 export const SALT_NONE = 0;

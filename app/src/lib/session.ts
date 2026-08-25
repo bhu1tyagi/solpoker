@@ -31,7 +31,7 @@ const VALIDITY_SECS = 24 * 60 * 60;
  * Enough lamports for a day of betting, the crank work a client does, and the
  * delegation rent it fronts when it starts a table (refunded on undelegation).
  */
-const TOP_UP_LAMPORTS = 0.05 * 1_000_000_000;
+const TOP_UP_LAMPORTS = 0.012 * 1_000_000_000;
 
 /**
  * What authorising a session actually takes out of the wallet: the key's float,

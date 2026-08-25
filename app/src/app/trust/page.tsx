@@ -160,7 +160,7 @@ export default function TrustPage() {
       <H2>Chips and USDC</H2>
       <P>
         Chips are bought with USDC and sold back for USDC, at a rate fixed in
-        the program: one chip is ten cents. The USDC sits in a token account
+        the program: one chip is one cent. The USDC sits in a token account
         owned by a program vault, and chips only exist because someone paid that
         rate, so every chip is backed the moment it is minted. Buying and
         selling need your wallet; session keys cannot touch either.

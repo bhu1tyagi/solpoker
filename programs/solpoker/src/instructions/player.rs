@@ -25,12 +25,19 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 use crate::errors::PokerError;
 use crate::state::*;
 
-/// The fixed price of one chip: ten cents, in USDC's six-decimal base units.
+/// The fixed price of one chip: one cent, in USDC's six-decimal base units.
+///
+/// A cent rather than a dime because rake is integer arithmetic on an integer
+/// pot. At ten cents a chip, 2.5% of a twelve-chip pot was 0.3 chips, which
+/// floors to nothing — so every pot under four dollars was raked zero and the
+/// house's cut only appeared at stakes nobody was playing. A cent moves the
+/// first raked chip down to a forty-cent pot and shrinks the rounding error to
+/// less than a cent, without changing a single rule.
 ///
 /// Changing this while any chip is outstanding changes what those chips redeem
 /// for, so it can only ever move together with a fresh ledger or a deliberate
 /// migration where every outstanding chip has been cashed out first.
-pub const MICRO_USDC_PER_CHIP: u64 = 100_000;
+pub const MICRO_USDC_PER_CHIP: u64 = 10_000;
 
 /// USDC's decimal places. `transfer_checked` takes this and refuses if the mint
 /// disagrees, which is a second lock on top of the address allowlist.

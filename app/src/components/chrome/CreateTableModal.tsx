@@ -28,13 +28,14 @@ import { sweepTransactions } from "@/lib/sweep";
 import { toast } from "@/stores/ui-store";
 import type { LobbyTable } from "@/hooks/use-tables";
 
-// Chips are ten cents each, so these read directly in money: a Micro buy-in is
+// Chips are a cent each, so these read directly in money: a Micro buy-in is
 // $4 to $20, and the High table seats $100 to $500. The shape is the classic
-// one — min 20 big blinds, max 100 — at every level.
+// one — min 20 big blinds, max 100 — at every level. Chip counts are ten times
+// what they were when a chip was a dime; the dollar stakes are unchanged.
 const STAKES = [
-  { label: "Micro", sb: 1, bb: 2, min: 40, max: 200 },
-  { label: "Low", sb: 5, bb: 10, min: 200, max: 1_000 },
-  { label: "High", sb: 25, bb: 50, min: 1_000, max: 5_000 },
+  { label: "Micro", sb: 10, bb: 20, min: 400, max: 2_000 },
+  { label: "Low", sb: 50, bb: 100, min: 2_000, max: 10_000 },
+  { label: "High", sb: 250, bb: 500, min: 10_000, max: 50_000 },
 ];
 
 /**

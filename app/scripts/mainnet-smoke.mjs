@@ -32,8 +32,8 @@ import { sha256 } from "@noble/hashes/sha256";
 const RPC = process.env.RPC ?? "https://nicholle-p42o2b-fast-mainnet.helius-rpc.com";
 const P = new PublicKey("Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker");
 const USDC = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
-const MICRO_USDC_PER_CHIP = 100_000;
-const CHIPS = 10;
+const MICRO_USDC_PER_CHIP = 10_000;
+const CHIPS = 100;
 const COST = CHIPS * MICRO_USDC_PER_CHIP;
 
 const enc = (s) => new TextEncoder().encode(s);
