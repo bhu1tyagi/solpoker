@@ -1,52 +1,39 @@
 import type { Metadata, Viewport } from "next";
-import {
-  Bricolage_Grotesque,
-  Dela_Gothic_One,
-  IBM_Plex_Mono,
-  Instrument_Sans,
-} from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { COLOR } from "@/design/tokens";
 import "./globals.css";
 import { Providers } from "./providers";
 
-// Three voices, and the third is the one that matters most here.
+// Three faces, and no fourth. The design system names them in tokens.ts as
+// FONT.display / FONT.body / FONT.mono; these are the loaded instances, bound
+// to those tokens in globals.css.
 //
-// Bricolage Grotesque carries the name and the headings: a grotesque with
-// enough width and weight to hold a wordmark, without the novelty of the
-// single-weight display face it replaces. Instrument Sans is the interface.
-//
-// And every amount is set in IBM Plex Mono. This is not a stylistic choice.
-// Amounts were previously set in the display face wearing a `tnum` class, and
-// that face has no tabular figures — so the request silently did nothing, and
-// the pot, the stacks and the bet field, the three numbers that change most
-// often, each re-measured themselves as they ticked. In a mono face even
-// columns are the default rather than a request that can be ignored.
-const display = Bricolage_Grotesque({
+// Space Grotesk carries the wordmark, the headings, and every amount. Money in
+// the display face is a deliberate reversal of the previous rule, which set
+// amounts in a mono face because the old display face — Dela Gothic One — had
+// no tabular figures, so the `tnum` request on it silently did nothing and the
+// pot, the stacks and the bet field each re-measured themselves as they ticked.
+// Space Grotesk does carry a `tnum` feature (checked in the shipped Google
+// subset, not assumed), so the amounts can be a headline and still hold their
+// column. Anything that counts must still ask for it: see `.num` in globals.
+const display = Space_Grotesk({
   subsets: ["latin"],
-  variable: "--font-bricolage",
+  variable: "--font-space-grotesk",
   display: "swap",
 });
 
-// The name keeps its own face. Dela Gothic One is the wordmark and only the
-// wordmark — a logo is a drawing of a word, and redrawing it because the rest
-// of the type system moved is how a brand quietly stops being recognisable.
-const wordmark = Dela_Gothic_One({
+// The interface. Neutral on purpose — the display face carries the personality.
+const body = Inter({
   subsets: ["latin"],
-  variable: "--font-dela",
-  weight: "400",
+  variable: "--font-inter",
   display: "swap",
 });
 
-const sans = Instrument_Sans({
+// Chain data only: addresses, seeds, hashes, signatures, program IDs. Not money.
+const mono = JetBrains_Mono({
   subsets: ["latin"],
-  variable: "--font-instrument",
-  display: "swap",
-});
-
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  variable: "--font-plex-mono",
-  weight: ["400", "500", "600"],
+  variable: "--font-jetbrains-mono",
   display: "swap",
 });
 
@@ -62,7 +49,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#131f25",
+  // The felt itself, so the browser chrome continues the table rather than
+  // framing it. Read from the token so it cannot drift from the ground colour.
+  themeColor: COLOR.felt,
 };
 
 export default function RootLayout({
@@ -71,7 +60,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${display.variable} ${wordmark.variable} ${sans.variable} ${mono.variable}`}
+      className={`${display.variable} ${body.variable} ${mono.variable}`}
     >
       <body>
         <Providers>{children}</Providers>

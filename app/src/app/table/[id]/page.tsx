@@ -11,6 +11,7 @@ import { TableFelt } from "@/components/poker/TableFelt";
 import { ActionBar, type ActionKind } from "@/components/poker/ActionBar";
 import { Button } from "@/components/primitives/Button";
 import { ChipGlyph } from "@/components/primitives/Chip";
+import { PrivacyRing } from "@/components/primitives/ChipRing";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { TableIcon } from "@/components/primitives/Icons";
 import { Modal } from "@/components/primitives/Surface";
@@ -451,7 +452,11 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           position: "fixed",
           inset: 0,
           overflow: "hidden",
-          background: "var(--panel-grad)",
+          // The room is plain felt, so the cloth in the middle of it is the
+          // lit object. A gradient here as well left the table and the room in
+          // the same narrow band of near-black and the table stopped reading
+          // as a table.
+          background: "var(--c-felt)",
           // A long press on a phone must not start selecting the table.
           userSelect: "none",
           WebkitUserSelect: "none",
@@ -477,6 +482,11 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
               handNames={handNames}
               portrait={portrait}
               compact={compact}
+              // Your seat is secured when the authenticated rollup link is up:
+              // that connection is precisely what decides whether the validator
+              // will serve your hole cards to you and to nobody else. Only
+              // shown once you are actually seated.
+              secured={mySeat >= 0 ? link === "live" : undefined}
               onSit={
                 delegated === false && mySeat < 0 && connected
                   ? (i) => {
@@ -504,6 +514,42 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             <span className="m-hide">
               <Field label="Table">{String(id).slice(-6)}</Field>
             </span>
+            {/*
+              The trust indicator: the one piece of chrome that earns its place
+              by stating the product's whole claim, so it links to the page that
+              makes that claim in full.
+
+              What it says is deliberately the least it can say. Not "provably
+              fair", not "trustless", and nothing implying the hole cards are
+              cryptographically guaranteed rather than hardware-protected. The
+              honest claim is a provably fair shuffle and TEE-protected hole
+              cards, and the interface must not outrun the docs.
+            */}
+            {mySeat >= 0 && (
+              <Link
+                href="/trust"
+                className="m-hide"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 7,
+                  textDecoration: "none",
+                  padding: "6px 2px",
+                  minHeight: "var(--touch-target)",
+                }}
+                title="How the shuffle and your hole cards are protected"
+              >
+                <PrivacyRing secured={link === "live"} size={15} />
+                <span
+                  className="label"
+                  style={{
+                    color: link === "live" ? "var(--c-green)" : "var(--c-ink-faint)",
+                  }}
+                >
+                  {link === "live" ? "Cards secured" : "Not secured"}
+                </span>
+              </Link>
+            )}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -665,7 +711,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
                   fontSize: 12,
                   letterSpacing: "0.04em",
                   textTransform: "uppercase",
-                  color: "var(--accent)",
+                  color: "var(--c-green)",
                 }}
               >
                 you have {myHandName}
@@ -711,7 +757,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           )}
 
           {outdated && (
-            <Notice tone="var(--lose)">
+            <Notice tone="var(--c-loss)">
               <span>
                 This table cannot be played. It was made by an earlier version of
                 the game and its deck no longer matches. Cash out and create a new
@@ -727,13 +773,13 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         onClose={() => setConfirmDelete(false)}
         title="Delete this table?"
       >
-        <p style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)", marginTop: 0 }}>
+        <p style={{ color: "var(--c-ink-muted)", fontSize: "var(--t-body-sm-size)", marginTop: 0 }}>
           The table and its seats are removed and the rent comes back to you.
           Anyone still sitting is sent home with their chips first, so nobody
           loses anything.
         </p>
         {seatedCount > 0 && (
-          <p style={{ color: "var(--text-dim)", fontSize: "var(--t-sm)" }}>
+          <p style={{ color: "var(--c-ink-muted)", fontSize: "var(--t-body-sm-size)" }}>
             {seatedCount} {seatedCount === 1 ? "player is" : "players are"} still
             seated and will be cashed out.
           </p>
@@ -774,9 +820,9 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             gap: "var(--sp-3)",
             padding: "var(--sp-4)",
             marginBottom: "var(--sp-4)",
-            background: "var(--surface)",
-            border: "1px solid var(--line)",
-            borderRadius: "var(--r-panel)",
+            background: "var(--c-felt-raised)",
+            border: "1px solid var(--c-rule)",
+            borderRadius: "var(--r-lg)",
           }}
         >
           <ChipGlyph size={30} />
@@ -784,15 +830,15 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             <span
               className="num"
               style={{
-                fontSize: "var(--t-xl)",
-                fontWeight: 600,
-                color: "var(--gold)",
+                fontSize: "var(--t-display-lg-size)",
+                fontWeight: 700,
+                color: "var(--c-ink)",
                 lineHeight: 1.05,
               }}
             >
               {buyIn.toLocaleString()}
             </span>
-            <span style={{ fontSize: "var(--t-sm)", color: "var(--text-dim)" }}>
+            <span style={{ fontSize: "var(--t-body-sm-size)", color: "var(--c-ink-muted)" }}>
               chips · <span className="num">{formatUsd(buyIn)}</span>
             </span>
           </div>
@@ -837,8 +883,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             gap: "var(--sp-3)",
             flexWrap: "wrap",
             marginBottom: "var(--sp-4)",
-            fontSize: "var(--t-xs)",
-            color: "var(--text-faint)",
+            fontSize: "var(--t-label-size)",
+            color: "var(--c-ink-faint)",
           }}
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -858,11 +904,11 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             style={{
               margin: "0 0 var(--sp-4)",
               padding: "var(--sp-3)",
-              borderRadius: "var(--r-control)",
-              background: "var(--surface)",
-              borderLeft: "2px solid var(--info)",
-              fontSize: "var(--t-sm)",
-              color: "var(--text-dim)",
+              borderRadius: "var(--r-md)",
+              background: "var(--c-felt-raised)",
+              borderLeft: "2px solid var(--c-info)",
+              fontSize: "var(--t-body-sm-size)",
+              color: "var(--c-ink-muted)",
               lineHeight: 1.5,
             }}
           >
@@ -916,7 +962,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
           fontSize: 9,
           letterSpacing: "0.14em",
           textTransform: "uppercase",
-          color: "var(--text-faint)",
+          color: "var(--c-ink-faint)",
         }}
       >
         {label}
@@ -925,7 +971,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
         className="num"
         style={{
           fontSize: 14,
-          color: "var(--text)",
+          color: "var(--c-ink)",
           display: "flex",
           alignItems: "center",
           height: 18,
@@ -973,9 +1019,9 @@ function BalancePill({ chips, small = false }: { chips?: number; small?: boolean
         display: "flex",
         alignItems: "center",
         gap: small ? 6 : 10,
-        background: "var(--surface)",
+        background: "var(--c-felt-raised)",
         backdropFilter: "blur(8px)",
-        borderRadius: "var(--r-panel)",
+        borderRadius: "var(--r-lg)",
         padding: small ? "0 10px" : "12px 18px",
         height: small ? 36 : undefined,
       }}
@@ -986,7 +1032,7 @@ function BalancePill({ chips, small = false }: { chips?: number; small?: boolean
         style={{
           fontWeight: 700,
           fontSize: small ? 12 : 15,
-          color: "var(--text-dim)",
+          color: "var(--c-ink-muted)",
         }}
       >
         {chips !== undefined ? chips.toLocaleString() : "..."}
@@ -1022,9 +1068,9 @@ function IconButton({
         height: 44,
         display: "grid",
         placeItems: "center",
-        borderRadius: "var(--r-panel)",
-        background: solid ? "var(--control)" : "var(--surface)",
-        color: solid ? "var(--accent)" : "var(--text-dim)",
+        borderRadius: "var(--r-lg)",
+        background: solid ? "var(--c-felt-edge)" : "var(--c-felt-raised)",
+        color: solid ? "var(--c-green)" : "var(--c-ink-muted)",
         cursor: "pointer",
       }}
     >
@@ -1109,7 +1155,7 @@ function PlusIcon() {
 /** A short message in the corner, without a box around the whole screen. */
 function Notice({
   children,
-  tone = "var(--text-dim)",
+  tone = "var(--c-ink-muted)",
 }: {
   children: React.ReactNode;
   tone?: string;
@@ -1120,11 +1166,11 @@ function Notice({
         display: "flex",
         alignItems: "center",
         gap: 12,
-        background: "var(--surface)",
+        background: "var(--c-felt-raised)",
         backdropFilter: "blur(8px)",
-        borderRadius: "var(--r-panel)",
+        borderRadius: "var(--r-lg)",
         padding: "12px 16px",
-        fontSize: "var(--t-sm)",
+        fontSize: "var(--t-body-sm-size)",
         color: tone,
         textAlign: "left",
       }}

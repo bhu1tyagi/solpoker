@@ -6,13 +6,23 @@ import { AnimatedNumber } from "./AnimatedNumber";
 /**
  * The chip mark and the physical piles.
  *
- * The mark is a poker chip seen face on, drawn in the same gold every chip
- * figure is written in. It sits beside a number the way a currency symbol
- * does.
+ * The mark is a poker chip seen face on, and it is deliberately a *filled*
+ * chip rather than the dashed open ring. The dashed ring is the product's
+ * signature and it has exactly three jobs — turn clock, waiting state, privacy
+ * indicator — so a fourth, decorative use beside every amount would stop it
+ * meaning anything. This is the unit symbol; that is the state indicator.
+ *
+ * It takes currentColor by default, so it sits inside a label the way a
+ * currency symbol does rather than importing a colour of its own.
  */
-export function ChipGlyph({ size = 16, color = "var(--gold)" }: { size?: number; color?: string }) {
-  // An actual poker chip: a rim with eight edge spots and an inner ring. Drawn
-  // rather than fetched, because the page has to work with no network.
+export function ChipGlyph({
+  size = 16,
+  color = "currentColor",
+}: {
+  size?: number;
+  color?: string;
+}) {
+  // Drawn rather than fetched, because the page has to work with no network.
   return (
     <svg
       aria-hidden
@@ -22,8 +32,10 @@ export function ChipGlyph({ size = 16, color = "var(--gold)" }: { size?: number;
       fill="none"
       style={{ flexShrink: 0, display: "block" }}
     >
+      <circle cx="12" cy="12" r="9.25" fill={color} opacity="0.18" />
       <circle cx="12" cy="12" r="9.25" stroke={color} strokeWidth="1.75" />
       <circle cx="12" cy="12" r="4.25" stroke={color} strokeWidth="1.75" />
+      {/* Eight edge spots, as paint rather than gaps: this is a solid chip. */}
       <g stroke={color} strokeWidth="1.75" strokeLinecap="round">
         <path d="M12 2.75v2.6M12 18.65v2.6M2.75 12h2.6M18.65 12h2.6" />
         <path d="M5.46 5.46l1.84 1.84M16.7 16.7l1.84 1.84M18.54 5.46L16.7 7.3M7.3 16.7l-1.84 1.84" />
@@ -33,25 +45,48 @@ export function ChipGlyph({ size = 16, color = "var(--gold)" }: { size?: number;
 }
 
 /**
- * How many coins an amount earns, split into columns.
+ * Chip denominations, in casino convention.
  *
- * The count is proportional to a reference amount, normally the largest stack
- * on the table, so the stacks read against each other the way real ones do: the
- * chip leader's pile is visibly taller, and two even stacks look even. Without a
- * reference every amount is measured against itself and every pile looks the
- * same, which is worse than showing nothing.
+ * The colours are already learned — white one, red five, green twenty-five,
+ * black hundred, purple five hundred — so a player reads the size of a bet
+ * from its colour before they read the number beside it. That is the whole
+ * reason to draw physical chips at all rather than print a figure.
  */
-const MAX_COINS = 20;
-const PER_COLUMN = 5;
+const DENOMINATIONS = [
+  { value: 500, token: "var(--c-chip500)" },
+  { value: 100, token: "var(--c-chip100)" },
+  { value: 25, token: "var(--c-chip25)" },
+  { value: 5, token: "var(--c-chip5)" },
+  { value: 1, token: "var(--c-chip1)" },
+] as const;
 
-function coinsFor(amount: number, reference: number) {
-  const ratio = reference > 0 ? amount / reference : 1;
-  const total = Math.min(MAX_COINS, Math.max(1, Math.round(ratio * MAX_COINS)));
-  const columns: number[] = [];
-  let left = total;
-  while (left > 0) {
-    columns.push(Math.min(PER_COLUMN, left));
-    left -= PER_COLUMN;
+/** No column grows past this; the figure beside the pile carries the exact amount. */
+const MAX_PER_COLUMN = 6;
+
+/**
+ * Break an amount into physical chips, largest first.
+ *
+ * A greedy split is naturally self-limiting — five fives make a twenty-five,
+ * so no middle column can exceed four — which means the pile's height tracks
+ * the amount without any need to measure it against a reference stack. The
+ * previous version scaled a single-colour pile against the table's biggest
+ * stack, which made every pile the same colour and every comparison relative.
+ */
+function chipsFor(amount: number): { count: number; token: string }[] {
+  const columns: { count: number; token: string }[] = [];
+  let left = Math.max(0, Math.floor(amount));
+
+  for (const { value, token } of DENOMINATIONS) {
+    const count = Math.floor(left / value);
+    if (count > 0) {
+      columns.push({ count: Math.min(MAX_PER_COLUMN, count), token });
+      left -= count * value;
+    }
+  }
+  // A non-zero amount always shows at least one chip, even if it rounds to
+  // nothing: an empty space where a bet should be reads as a bug.
+  if (columns.length === 0 && amount > 0) {
+    columns.push({ count: 1, token: "var(--c-chip1)" });
   }
   return columns;
 }
@@ -61,18 +96,21 @@ function coinsFor(amount: number, reference: number) {
  * than a bar. The lighter top face and the darker edge below it are what stop a
  * stack of these reading as a row of sliders.
  */
-function Coin({ size, tone }: { size: number; tone: number }) {
+function Coin({ size, token }: { size: number; token: string }) {
   const h = Math.max(4, Math.round(size * 0.42));
-  // Alternate two shades down the stack, the way real chips band.
-  const face = tone % 2 === 0 ? "var(--gold)" : "#c9a24e";
   return (
     <div
       style={{
         width: size,
         height: h,
         borderRadius: "50%",
-        background: `linear-gradient(180deg, ${face} 0%, ${face} 45%, var(--gold-deep) 46%, #7d6128 100%)`,
-        boxShadow: "0 1px 1px rgba(7,12,15,0.55)",
+        // Face on top, the chip's own edge in shadow beneath it. Both are
+        // mixed from the one denomination colour, so a chip cannot drift out
+        // of its own hue.
+        background: `linear-gradient(180deg, ${token} 0%, ${token} 45%, color-mix(in srgb, ${token} 72%, var(--c-felt)) 46%, color-mix(in srgb, ${token} 45%, var(--c-felt)) 100%)`,
+        // A hairline of rim-light along the top edge, the way every raised
+        // surface in this system catches light from above.
+        boxShadow: "var(--e-raised)",
       }}
     />
   );
@@ -83,17 +121,14 @@ export function ChipStack({
   size = 18,
   showAmount = true,
   compact = false,
-  reference,
 }: {
   amount: number;
   size?: number;
   showAmount?: boolean;
   compact?: boolean;
-  /** Amount that earns a full-height pile. Defaults to this stack itself. */
-  reference?: number;
 }) {
   if (amount <= 0) return null;
-  const columns = coinsFor(amount, reference ?? amount);
+  const columns = chipsFor(amount);
 
   return (
     <div
@@ -107,11 +142,11 @@ export function ChipStack({
       {/* Chips overlap as they stack, so only the front edge of each one shows,
           which is what makes a pile look like a pile. */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 3 }}>
-        {columns.map((count, c) => {
+        {columns.map(({ count, token }, c) => {
           const step = Math.max(3, Math.round(size * 0.3));
           return (
             <div
-              key={c}
+              key={token}
               style={{
                 position: "relative",
                 width: size,
@@ -123,10 +158,10 @@ export function ChipStack({
                   key={i}
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: (c * PER_COLUMN + i) * 0.015 }}
+                  transition={{ delay: (c * MAX_PER_COLUMN + i) * 0.015 }}
                   style={{ position: "absolute", bottom: i * step, left: 0 }}
                 >
-                  <Coin size={size} tone={i} />
+                  <Coin size={size} token={token} />
                 </motion.div>
               ))}
             </div>
@@ -137,10 +172,9 @@ export function ChipStack({
         <span
           className="num"
           style={{
-            fontFamily: "var(--font-display)",
-            fontSize: compact ? "var(--t-xs)" : "var(--t-sm)",
-            color: "var(--gold)",
-            textShadow: "0 1px 3px rgba(7,12,15,0.7)",
+            fontSize: compact ? "var(--t-label-size)" : "var(--t-body-sm-size)",
+            fontWeight: 700,
+            color: "var(--c-ink)",
           }}
         >
           <AnimatedNumber value={amount} />

@@ -98,10 +98,11 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
                   style={{
                     marginLeft: "auto",
                     fontFamily: "var(--font-display)",
-                    fontSize: "var(--t-sm)",
-                    color: "var(--gold)",
-                    background: "var(--surface)",
-                    borderRadius: "var(--r-panel)",
+                    fontSize: "var(--t-body-sm-size)",
+                    color: "var(--c-ink)",
+                    fontWeight: 700,
+                    background: "var(--c-felt-raised)",
+                    borderRadius: "var(--r-lg)",
                     padding: "7px 14px",
                     minWidth: 76,
                     textAlign: "right",
@@ -189,10 +190,10 @@ function PresetButton({
       whileTap={{ scale: 0.95 }}
       transition={spring.snappy}
       style={{
-        background: active ? "var(--gold)" : "var(--surface)",
-        color: active ? "var(--on-gold)" : "var(--text-dim)",
+        background: active ? "var(--c-green)" : "var(--c-felt-raised)",
+        color: active ? "var(--c-felt)" : "var(--c-ink-muted)",
         border: "none",
-        borderRadius: "var(--r-panel)",
+        borderRadius: "var(--r-lg)",
         fontFamily: "var(--font-display)",
         fontSize: 11,
         textTransform: "uppercase",
@@ -209,16 +210,16 @@ function PresetButton({
 
 const TONES = {
   danger: {
-    background: "var(--lose)",
-    color: "var(--on-danger)",
+    background: "var(--c-loss)",
+    color: "var(--c-felt)",
   },
   accent: {
-    background: "var(--gold)",
-    color: "var(--on-gold)",
+    background: "var(--c-green)",
+    color: "var(--c-felt)",
   },
   dark: {
-    background: "var(--control)",
-    color: "var(--text)",
+    background: "var(--c-felt-edge)",
+    color: "var(--c-ink)",
   },
 } as const;
 
@@ -249,8 +250,8 @@ function BigButton({
         flex,
         height: 52,
         border: "none",
-        borderRadius: "var(--r-panel)",
-        fontSize: "var(--t-sm)",
+        borderRadius: "var(--r-lg)",
+        fontSize: "var(--t-body-sm-size)",
         textTransform: "uppercase",
         letterSpacing: "0.04em",
         cursor: disabled ? "not-allowed" : "pointer",

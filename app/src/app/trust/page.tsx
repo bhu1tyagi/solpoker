@@ -24,16 +24,16 @@ export default function TrustPage() {
       <Link
         href="/"
         style={{
-          fontSize: "var(--t-sm)",
-          color: "var(--text-dim)",
+          fontSize: "var(--t-body-sm-size)",
+          color: "var(--c-ink-muted)",
           textDecoration: "none",
         }}
       >
         Back to the lobby
       </Link>
 
-      <h1 style={{ fontSize: "var(--t-xl)", margin: "22px 0 10px" }}>Trust model</h1>
-      <p style={{ color: "var(--text-dim)", marginTop: 0 }}>
+      <h1 style={{ fontSize: "var(--t-display-lg-size)", margin: "22px 0 10px" }}>Trust model</h1>
+      <p style={{ color: "var(--c-ink-muted)", marginTop: 0 }}>
         Written for someone who does not want to be cheated and does not take
         marketing copy at face value.
       </p>
@@ -57,7 +57,7 @@ export default function TrustPage() {
         fails.
       </P>
       <P>Why the deck cannot be steered:</P>
-      <ol style={{ color: "var(--text-dim)", paddingLeft: 20 }}>
+      <ol style={{ color: "var(--c-ink-muted)", paddingLeft: 20 }}>
         <li>Every player commits to a hash of their salt before anyone reveals anything.</li>
         <li>Everyone reveals. The commitments bind them, so nobody can pick a salt after seeing another.</li>
         <li>Only then is VRF drawn, with a seed derived from the salts, so nobody can re-request until they like the answer.</li>
@@ -113,7 +113,7 @@ export default function TrustPage() {
       </P>
 
       <H2>What an attacker cannot do</H2>
-      <ul style={{ color: "var(--text-dim)", paddingLeft: 20 }}>
+      <ul style={{ color: "var(--c-ink-muted)", paddingLeft: 20 }}>
         <li>
           Another player cannot read your hole cards. Each hole-card account is
           permissioned to that seat&apos;s occupant alone. Measured, not assumed:
@@ -200,7 +200,7 @@ export default function TrustPage() {
         style={{
           width: "100%",
           borderCollapse: "collapse",
-          fontSize: "var(--t-sm)",
+          fontSize: "var(--t-body-sm-size)",
           marginTop: 12,
         }}
       >
@@ -219,9 +219,9 @@ export default function TrustPage() {
                 : "A devnet test mint, which is valueless",
             ],
           ].map(([k, v]) => (
-            <tr key={k} style={{ borderTop: "1px solid var(--line)" }}>
-              <td style={{ padding: "9px 12px 9px 0", color: "var(--text)" }}>{k}</td>
-              <td style={{ padding: "9px 0", color: "var(--text-dim)" }}>{v}</td>
+            <tr key={k} style={{ borderTop: "1px solid var(--c-rule)" }}>
+              <td style={{ padding: "9px 12px 9px 0", color: "var(--c-ink)" }}>{k}</td>
+              <td style={{ padding: "9px 0", color: "var(--c-ink-muted)" }}>{v}</td>
             </tr>
           ))}
         </tbody>
@@ -231,32 +231,32 @@ export default function TrustPage() {
 }
 
 function H2({ children }: { children: React.ReactNode }) {
-  return <h2 style={{ fontSize: "var(--t-lg)", margin: "36px 0 8px" }}>{children}</h2>;
+  return <h2 style={{ fontSize: "var(--t-display-md-size)", margin: "36px 0 8px" }}>{children}</h2>;
 }
 
 function H3({ children }: { children: React.ReactNode }) {
   return (
-    <h3 style={{ fontSize: "var(--t-md)", margin: "22px 0 4px", color: "var(--accent)" }}>
+    <h3 style={{ fontSize: "var(--t-body-lg-size)", margin: "22px 0 4px", color: "var(--c-green)" }}>
       {children}
     </h3>
   );
 }
 
 function P({ children }: { children: React.ReactNode }) {
-  return <p style={{ color: "var(--text-dim)", margin: "8px 0" }}>{children}</p>;
+  return <p style={{ color: "var(--c-ink-muted)", margin: "8px 0" }}>{children}</p>;
 }
 
 function Callout({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        background: "var(--surface)",
-        border: "1px solid var(--line)",
-        borderLeft: "2px solid var(--accent)",
+        background: "var(--c-felt-raised)",
+        border: "1px solid var(--c-rule)",
+        borderLeft: "2px solid var(--c-green)",
         borderRadius: "var(--r-card)",
         padding: "14px 18px",
         margin: "24px 0",
-        color: "var(--text-dim)",
+        color: "var(--c-ink-muted)",
       }}
     >
       {children}

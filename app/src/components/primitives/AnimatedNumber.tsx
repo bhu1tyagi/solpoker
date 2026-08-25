@@ -2,17 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
+import { MOTION } from "@/design/tokens";
 
 /**
  * A number that counts to its new value instead of snapping.
  *
  * Stacks and pots change by amounts that matter, and a jump reads as a glitch
- * where a tick reads as chips moving. Tabular figures keep the width steady so
- * nothing shifts around it while it runs.
+ * where a tick reads as chips moving. At showdown the count-up is the part
+ * players actually feel.
+ *
+ * The default duration is MOTION.chipCommit, so a stack finishes counting as
+ * the chips that changed it finish travelling. Tabular figures — carried by
+ * `.num` — keep the width steady so nothing shifts around it while it runs.
  */
 export function AnimatedNumber({
   value,
-  duration = 420,
+  duration = MOTION.chipCommit,
   className,
   style,
 }: {

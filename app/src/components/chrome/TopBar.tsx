@@ -25,8 +25,8 @@ export function TopBar({ chips }: { chips?: number }) {
         flexWrap: "wrap",
         borderBottom: "none",
         backgroundImage:
-          "linear-gradient(180deg, rgba(11, 15, 22, 0.92), rgba(11, 15, 22, 0.55))",
-        boxShadow: "0 1px 0 var(--line)",
+          "linear-gradient(180deg, color-mix(in srgb, var(--c-felt) 92%, transparent), color-mix(in srgb, var(--c-felt) 55%, transparent))",
+        boxShadow: "0 1px 0 var(--c-rule)",
         position: "sticky",
         top: 0,
         backdropFilter: "blur(10px)",
@@ -45,10 +45,10 @@ export function TopBar({ chips }: { chips?: number }) {
             // to a comfortable tap without moving the text off the bar's line.
             padding: "6px 8px",
             margin: "-6px -8px",
-            borderRadius: "var(--r-panel)",
+            borderRadius: "var(--r-lg)",
             fontFamily: "var(--font-display)",
-            fontSize: "var(--t-md)",
-            color: "var(--text)",
+            fontSize: "var(--t-body-lg-size)",
+            color: "var(--c-ink)",
             textDecoration: "none",
             letterSpacing: "-0.01em",
           }}
@@ -60,8 +60,8 @@ export function TopBar({ chips }: { chips?: number }) {
         <Link
           href="/trust"
           style={{
-            fontSize: "var(--t-sm)",
-            color: "var(--text-dim)",
+            fontSize: "var(--t-body-sm-size)",
+            color: "var(--c-ink-muted)",
             textDecoration: "none",
           }}
         >
@@ -76,8 +76,8 @@ export function TopBar({ chips }: { chips?: number }) {
               display: "flex",
               alignItems: "center",
               gap: 8,
-              background: "var(--surface)",
-              border: "1px solid var(--line)",
+              background: "var(--c-felt-raised)",
+              border: "1px solid var(--c-rule)",
               borderRadius: 999,
               padding: "6px 14px 6px 8px",
             }}
@@ -86,14 +86,14 @@ export function TopBar({ chips }: { chips?: number }) {
             <span
               className="num"
               style={{
-                fontSize: "var(--t-base)",
+                fontSize: "var(--t-body-size)",
                 fontWeight: 700,
-                color: "var(--text)",
+                color: "var(--c-ink)",
               }}
             >
               <AnimatedNumber value={chips} />
             </span>
-            <span style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>
+            <span style={{ fontSize: "var(--t-label-size)", color: "var(--c-ink-faint)" }}>
               chips
             </span>
           </div>

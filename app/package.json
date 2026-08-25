@@ -9,7 +9,9 @@
     "test": "vitest run",
     "test:ui": "node scripts/ui-check.mjs",
     "test:devnet": "vitest run --config vitest.devnet.config.ts",
-    "gate": "node scripts/two-browser-gate.mjs"
+    "gate": "node scripts/two-browser-gate.mjs",
+    "tokens": "tsx scripts/build-tokens.ts",
+    "design": "node scripts/design-check.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",
@@ -39,6 +41,7 @@
     "@types/react-dom": "^19.1.7",
     "playwright": "^1.62.1",
     "tailwindcss": "^4.1.11",
+    "tsx": "^4.23.12",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   },

@@ -1,5 +1,7 @@
 "use client";
 
+import { AVATAR } from "@/design/tokens";
+
 /**
  * A generated character for each public key.
  *
@@ -11,19 +13,8 @@
  * 8 grounds x 4 heads x 5 eyes x 5 mouths = 800 distinct characters.
  */
 
-const GROUNDS: [string, string][] = [
-  ["#7b3ff2", "#12b981"],
-  ["#5b4dff", "#2e9be6"],
-  ["#c2410c", "#e8b44a"],
-  ["#be3455", "#7c2d5e"],
-  ["#0f766e", "#2dd4a8"],
-  ["#4338ca", "#8b5cf6"],
-  ["#9d174d", "#e85d75"],
-  ["#3f6212", "#84cc16"],
-];
-
-/** Head tones, warm to deep, all carrying dark features well. */
-const SKINS = ["#f5d7b8", "#e8b98a", "#c9895c", "#9c6644"];
+const GROUNDS = AVATAR.grounds;
+const SKINS = AVATAR.skins;
 
 /**
  * Pick from a list by hash, without any way to land outside it.
@@ -36,7 +27,7 @@ const SKINS = ["#f5d7b8", "#e8b98a", "#c9895c", "#9c6644"];
 const pick = <T,>(list: readonly T[], h: number, shift: number): T =>
   list[(h >>> shift) % list.length];
 
-const INK = "#2b2118";
+const INK = AVATAR.ink;
 
 function hashOf(seed: string): number {
   let h = 2166136261;
@@ -74,8 +65,8 @@ function eyes(kind: number): React.ReactNode {
       return (<>
         <circle cx="35" cy="42" r="5.6" fill={INK} />
         <circle cx="65" cy="42" r="5.6" fill={INK} />
-        <circle cx="36.8" cy="40.2" r="1.7" fill="#fff" />
-        <circle cx="66.8" cy="40.2" r="1.7" fill="#fff" />
+        <circle cx="36.8" cy="40.2" r="1.7" fill={AVATAR.shine} />
+        <circle cx="66.8" cy="40.2" r="1.7" fill={AVATAR.shine} />
       </>);
   }
 }
@@ -127,13 +118,11 @@ export function Avatar({
       style={{
         width: size,
         height: size,
-        borderRadius: square ? "var(--r-panel)" : "30%",
+        borderRadius: square ? "var(--r-md)" : "30%",
         overflow: "hidden",
         position: "relative",
         background: `linear-gradient(${angle}deg, ${c1}, ${c2})`,
-        boxShadow: ring
-          ? `0 0 0 2px ${ring}`
-          : "inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -6px 12px rgba(7,12,15,0.25)",
+        boxShadow: ring ? `0 0 0 2px ${ring}` : "var(--e-raised)",
         flexShrink: 0,
       }}
     >
@@ -143,8 +132,8 @@ export function Avatar({
         {eyes(eyeKind)}
         {mouth(mouthKind)}
         {blush && (<>
-          <circle cx="27" cy="54" r="5" fill="rgba(235,110,110,0.45)" />
-          <circle cx="73" cy="54" r="5" fill="rgba(235,110,110,0.45)" />
+          <circle cx="27" cy="54" r="5" fill={AVATAR.blush} />
+          <circle cx="73" cy="54" r="5" fill={AVATAR.blush} />
         </>)}
       </svg>
     </div>

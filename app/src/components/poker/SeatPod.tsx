@@ -6,6 +6,7 @@ import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { PlayingCard } from "@/components/primitives/PlayingCard";
 import { ChipGlyph, ChipStack } from "@/components/primitives/Chip";
 import { ClockRing } from "@/components/primitives/ClockRing";
+import { PrivacyRing } from "@/components/primitives/ChipRing";
 import { spring } from "@/styles/theme";
 import type { SeatView } from "@/stores/table-store";
 import { NO_CARD } from "@/lib/engine/cards";
@@ -20,7 +21,8 @@ import { NO_CARD } from "@/lib/engine/cards";
  * of the table mirrors one on the right.
  *
  * An empty seat is the same plate with its bands dimmed and the avatar tile
- * replaced by a cyan square with a plus in it, which is the invitation to sit.
+ * replaced by an outlined bubble with a green plus in it, which is the
+ * invitation to sit.
  */
 
 /**
@@ -78,8 +80,12 @@ interface Props {
   timeoutSecs: number;
   /** A hand is actually running, so per-hand labels mean something. */
   handLive?: boolean;
-  /** Largest stack on the table, so piles are drawn to the same scale. */
-  stackReference?: number;
+  /**
+   * Whether this seat's TEE permission is confirmed. Only ever passed for your
+   * own seat: it is a statement about the cards you can read, not about
+   * anybody else's.
+   */
+  secured?: boolean;
   /** Which end the avatar tile sits at. It faces the middle of the table. */
   avatarOn?: "left" | "right";
   /**
@@ -107,7 +113,7 @@ export function SeatPod({
   deadline,
   timeoutSecs,
   handLive = false,
-  stackReference,
+  secured,
   avatarOn = "left",
   cardsOn = "above",
   winner = false,
@@ -139,19 +145,32 @@ export function SeatPod({
           top: -d.proud,
           width: d.avatar,
           height: d.avatar,
-          background: empty ? "var(--accent)" : "var(--avatar)",
-          color: empty ? "var(--on-accent)" : "var(--accent)",
+          /*
+           * An open seat is an outline, not a green slab.
+           *
+           * Filling all six with --c-green floods the table with the one
+           * colour that is supposed to mean something: to act, secured,
+           * confirmed, won. Six solid green tiles on an empty table spend the
+           * whole affirmative vocabulary on "nobody is sitting here". The
+           * invitation reads perfectly well as a green plus on a raised
+           * surface with a green edge.
+           */
+          background: "var(--c-felt-raised)",
+          color: "var(--c-green)",
+          border: empty
+            ? "1.5px solid color-mix(in srgb, var(--c-green) 55%, transparent)"
+            : "1px solid var(--c-rule)",
           // An open seat is a bubble inviting you in, with its tail pointing
           // down at the plate. A taken one is a plain tile.
           borderRadius: empty
             ? avatarOn === "left"
               ? "18px 18px 18px 4px"
               : "18px 18px 4px 18px"
-            : "var(--r-panel)",
+            : "var(--r-lg)",
           display: "grid",
           placeItems: "center",
           overflow: "hidden",
-          boxShadow: "0 4px 10px rgba(7,12,15,0.45)",
+          boxShadow: "var(--e-overlay)",
           zIndex: 2,
         }}
       >
@@ -174,7 +193,7 @@ export function SeatPod({
       <div
         style={{ height: "100%" }}
       >
-        {/* Upper band: the stack, in cyan, with the chip mark beside it. The
+        {/* Upper band: the stack, with the chip mark beside it. The
             bands run the full width; only their contents keep clear of the
             avatar, so the plate stays one unbroken bar behind it. */}
         <div
@@ -194,7 +213,10 @@ export function SeatPod({
             className="num"
             style={{
               fontSize: d.stackFont,
-              color: "var(--gold)",
+              // Money is display-weight ink. There is no gold in this system,
+              // and green already means won.
+              color: "var(--c-ink)",
+              fontWeight: 700,
               lineHeight: 1.32,
             }}
           >
@@ -222,7 +244,7 @@ export function SeatPod({
             style={{
               fontWeight: 700,
               fontSize: d.seatFont,
-              color: "var(--text-dim)",
+              color: "var(--c-ink-muted)",
               opacity: 0.88,
             }}
           >
@@ -234,13 +256,23 @@ export function SeatPod({
               fontSize: d.nameFont,
               letterSpacing: "0.04em",
               textTransform: "uppercase",
-              color: isMe ? "var(--accent)" : "var(--text-dim)",
+              color: isMe ? "var(--c-green)" : "var(--c-ink-muted)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
             }}
           >
-            {empty ? "open" : isMe ? "you" : shortKey(seat!.occupant!)}
+            {empty ? (
+              "open"
+            ) : isMe ? (
+              "you"
+            ) : (
+              // A truncated public key is chain data, so it takes the mono
+              // face. "you" and "open" are words and stay in the body face.
+              <span style={{ fontFamily: "var(--font-mono)" }}>
+                {shortKey(seat!.occupant!)}
+              </span>
+            )}
           </span>
 
           {/* The action tag sweeps in over the lower band. */}
@@ -361,8 +393,49 @@ export function SeatPod({
         </AnimatePresence>
       </div>
 
+      {/*
+        The privacy indicator, and the third and last job of the chip ring.
+        It sits beside your own hand because that is exactly what it makes a
+        claim about — solid and green when this seat's permission is confirmed,
+        hollow when it is not.
+
+        The wording is held to the line the trust page takes. "Cards secured"
+        is the whole claim: the hole cards are hardware-protected, not
+        cryptographically guaranteed, and the interface must not say more than
+        the docs do.
+      */}
+      {isMe && dealtIn && secured !== undefined && !compact && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            marginBottom: cardsOn === "above" ? 4 : 0,
+            marginTop: cardsOn === "below" ? 4 : 0,
+            zIndex: 1,
+          }}
+        >
+          <PrivacyRing secured={!!secured} size={13} />
+          <span
+            className="label"
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.08em",
+              color: secured ? "var(--c-green)" : "var(--c-ink-faint)",
+            }}
+          >
+            {secured ? "Cards secured" : "Not secured"}
+          </span>
+        </div>
+      )}
+
       <motion.div
-        animate={{ scale: winner ? [1, 1.05, 1] : 1 }}
+        animate={{
+          scale: winner ? [1, 1.05, 1] : 1,
+          // The seat lifts off the cloth while it is to act. Second cue: the
+          // depleting ring is the first, and neither is a colour.
+          y: isTurn ? -4 : 0,
+        }}
         transition={winner ? { duration: 0.6, times: [0, 0.4, 1] } : spring.snappy}
         style={{
           display: "flex",
@@ -370,9 +443,9 @@ export function SeatPod({
           gap: 6,
           zIndex: 1,
           filter: winner
-            ? "drop-shadow(0 0 12px var(--win-glow))"
+            ? "drop-shadow(0 0 12px color-mix(in srgb, var(--c-win) 24%, transparent))"
             : lit
-              ? "drop-shadow(0 0 12px var(--accent-glow))"
+              ? "drop-shadow(0 0 12px color-mix(in srgb, var(--c-green) 24%, transparent))"
               : undefined,
         }}
       >
@@ -381,12 +454,7 @@ export function SeatPod({
             figure carries the same fact in a tenth of the width. */}
         {!compact && seat!.stack > 0 && (
           <div style={{ paddingBottom: 2, opacity: 0.92 }}>
-            <ChipStack
-              amount={seat!.stack}
-              size={11}
-              showAmount={false}
-              reference={stackReference}
-            />
+            <ChipStack amount={seat!.stack} size={11} showAmount={false} />
           </div>
         )}
       </motion.div>
@@ -394,33 +462,48 @@ export function SeatPod({
   );
 }
 
-/** Band fills: dim for an open seat, full strength for the one to act. */
+/**
+ * Band fills: dim for an open seat, full strength for the one to act.
+ *
+ * All six are mixed from the three felt surfaces rather than being their own
+ * colours, so a seat plate is unmistakably part of the table. The plates stay
+ * solid: a translucent plate smears whatever is behind it and stops reading as
+ * an object sitting on the cloth.
+ *
+ * Lightness alone does not carry "to act" — that seat also lifts and takes the
+ * depleting chip ring. This is only the third cue.
+ */
+const mix = (pct: number) => `color-mix(in srgb, var(--c-felt-raised) ${pct}%, var(--c-felt))`;
+
 function bandColor(empty: boolean, lit: boolean, band: "hi" | "lo") {
   if (empty) {
-    return band === "hi" ? "var(--plate-hi-idle)" : "var(--plate-lo-idle)";
+    // Quieter than a taken seat, but still a seat. Too faint and the avatar
+    // tile floats with nothing under it, which reads as a bug rather than an
+    // invitation.
+    return band === "hi" ? mix(72) : mix(45);
   }
-  if (lit) return band === "hi" ? "var(--plate-hi)" : "var(--plate-lo)";
+  if (lit) return band === "hi" ? "var(--c-felt-edge)" : "var(--c-felt-raised)";
   // Seated but not to act: between the two, so the active seat still stands out.
-  return band === "hi" ? "var(--plate-hi-taken)" : "var(--plate-lo-taken)";
+  return band === "hi" ? mix(100) : mix(70);
 }
 
 function statusOf(seat: SeatView, dealtIn: boolean, handLive: boolean) {
   const sweep = (color: string) => (on: "left" | "right") =>
-    `linear-gradient(${on === "left" ? "270deg" : "90deg"}, ${color} 12.75%, rgba(55, 71, 82, 0) 92.45%)`;
+    `linear-gradient(${on === "left" ? "270deg" : "90deg"}, ${color} 12.75%, transparent 92.45%)`;
 
   if (seat.folded) {
-    return { label: "fold", bg: sweep("var(--lose)"), fg: "var(--on-danger)" };
+    return { label: "fold", bg: sweep("var(--c-loss)"), fg: "var(--c-felt)" };
   }
   if (seat.allIn) {
-    return { label: "all in", bg: sweep("var(--accent)"), fg: "var(--on-accent)" };
+    return { label: "all in", bg: sweep("var(--c-warn)"), fg: "var(--c-felt)" };
   }
   // Out of chips is worth saying at any time; sitting out only means something
   // once there is a hand to be sitting out of.
   if (seat.stack === 0) {
-    return { label: "no chips", bg: sweep("rgba(237,116,131,0.7)"), fg: "var(--text)" };
+    return { label: "no chips", bg: sweep("color-mix(in srgb, var(--c-loss) 70%, transparent)"), fg: "var(--c-ink)" };
   }
   if (handLive && !dealtIn) {
-    return { label: "sitting out", bg: sweep("rgba(85,99,107,0.9)"), fg: "var(--text)" };
+    return { label: "sitting out", bg: sweep("color-mix(in srgb, var(--c-ink-faint) 55%, transparent)"), fg: "var(--c-ink)" };
   }
   return null;
 }
@@ -469,13 +552,16 @@ function DealerButton({ on, small = false }: { on: "left" | "right"; small?: boo
         width: size,
         height: size,
         borderRadius: "50%",
-        background: "var(--gold)",
-        color: "var(--on-gold)",
+        // A real dealer button is white plastic. The deck's paper white keeps
+        // it in the same material family as the cards without spending an
+        // accent colour on it.
+        background: "var(--c-card-face)",
+        color: "var(--c-suit-spade)",
         fontSize: small ? 9 : 10,
         fontWeight: 700,
         display: "grid",
         placeItems: "center",
-        boxShadow: "var(--shadow-1)",
+        boxShadow: "var(--e-raised)",
         zIndex: 3,
       }}
     >

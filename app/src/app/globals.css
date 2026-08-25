@@ -1,43 +1,99 @@
 @import "tailwindcss";
-@import "../styles/tokens.css";
+@import "./tokens.css";
+
+/*
+ * tokens.css is GENERATED from src/design/tokens.ts by `npm run tokens`.
+ * Never hand-edit it. Everything below is the layer the generated tokens do
+ * not cover: the ground, the type classes, third-party chrome we have to
+ * re-dress, and the responsive layout — because an inline style cannot hear a
+ * media query, and components carry their look inline.
+ */
 
 /* Map the tokens into Tailwind so utilities and raw CSS stay in sync. */
 @theme inline {
-  --color-bg: var(--bg);
-  --color-table: var(--table);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-line: var(--line);
-  --color-text: var(--text);
-  --color-dim: var(--text-dim);
-  --color-faint: var(--text-faint);
-  --color-accent: var(--accent);
-  --color-accent-deep: var(--accent-deep);
-  --color-win: var(--win);
-  --color-lose: var(--lose);
-  --color-info: var(--info);
-  --color-card: var(--card-hi);
-  --color-gold: var(--gold);
-  --color-solid: var(--surface-solid);
-  --color-control: var(--control);
+  --color-felt: var(--c-felt);
+  --color-felt-raised: var(--c-felt-raised);
+  --color-felt-edge: var(--c-felt-edge);
+  --color-rule: var(--c-rule);
+  --color-rule-strong: var(--c-rule-strong);
+  --color-ink: var(--c-ink);
+  --color-ink-muted: var(--c-ink-muted);
+  --color-ink-faint: var(--c-ink-faint);
+  --color-purple: var(--c-purple);
+  --color-purple-text: var(--c-purple-text);
+  --color-green: var(--c-green);
+  --color-win: var(--c-win);
+  --color-loss: var(--c-loss);
+  --color-warn: var(--c-warn);
+  --color-info: var(--c-info);
+  --color-card-face: var(--c-card-face);
 
-  /* Display for the name and headings, Instrument for the interface, Plex Mono
-     for anything that counts. */
-  --font-display: var(--font-bricolage), system-ui, sans-serif;
-  --font-wordmark: var(--font-dela), system-ui, sans-serif;
-  --font-sans: var(--font-instrument), system-ui, sans-serif;
-  --font-num: var(--font-plex-mono), ui-monospace, monospace;
+  /* Point these at the loaded families, not at --font-display, which would be
+     a self-reference. The :root block below explains why the token's literal
+     family name cannot be used directly. */
+  --font-display: var(--font-space-grotesk), system-ui, sans-serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", monospace;
+}
+
+/*
+ * Rebind the three faces to what next/font actually loaded.
+ *
+ * The generated token says "'Space Grotesk', system-ui, sans-serif", and that
+ * would render — but next/font also builds a metric-matched fallback face
+ * ("Space Grotesk Fallback") sized to the real one, and exposes the pair as a
+ * CSS variable. Using the variable is what stops the page reflowing when the
+ * webfont arrives. The literal token name would drop straight to system-ui and
+ * shift every number on the table as it swapped.
+ *
+ * This is the only place a generated token is overridden, and it is an
+ * integration seam, not taste.
+ */
+:root {
+  --font-display: var(--font-space-grotesk), system-ui, sans-serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", monospace;
+
+  color-scheme: dark;
 }
 
 * {
   box-sizing: border-box;
 }
 
+/*
+ * The ground is felt: near-black with a blue cast, faintly textured. The
+ * texture is two crossed weaves at 2% ink — visible as a surface, never as a
+ * pattern. It goes on the root element rather than the body, because on body
+ * it covers only the body's own box and a page shorter than the window ends in
+ * a visible seam.
+ */
+html {
+  min-height: 100%;
+  color: var(--c-ink);
+  background-color: var(--c-felt);
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--c-ink) 2%, transparent) 0 1px,
+      transparent 1px 4px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--c-ink) 2%, transparent) 0 1px,
+      transparent 1px 4px
+    );
+  background-attachment: fixed;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
-  font-family: var(--font-sans);
-  font-size: var(--t-base);
-  line-height: 1.5;
+  color: var(--c-ink);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: var(--t-body-size);
+  line-height: var(--t-body-line);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
 }
@@ -46,8 +102,8 @@ h1,
 h2,
 h3 {
   font-family: var(--font-display);
-  font-weight: 400;
-  letter-spacing: -0.02em;
+  font-weight: var(--t-display-md-weight);
+  letter-spacing: var(--t-display-md-tracking);
   margin: 0;
 }
 
@@ -56,57 +112,108 @@ button {
   color: inherit;
 }
 
-/* The name keeps the face it was drawn in. Everything about the wordmark —
-   this weight, the ChipO's ring thickness, its 0.62em — was tuned to Dela
-   Gothic One, so it stays on Dela Gothic One even though the rest of the type
-   system moved. Letter-spacing is deliberately not set here: it inherits the
-   heading's, exactly as it did before. */
+/* ------------------------------------------------------------------ */
+/* Type classes.                                                       */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Money, and anything else that changes while the player is watching.
+ *
+ * Display face, tabular figures, always. Without tnum the digits change width
+ * mid-animation and the whole table appears to twitch — a correctness
+ * requirement, not a preference. Space Grotesk carries a real tnum feature, so
+ * unlike the face this replaced, the request is actually honoured.
+ */
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
+
+/* For a number that must stay in the body face but still hold its column. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.display {
+  font-family: var(--font-display);
+}
+
+/* Chain data only: addresses, seeds, hashes, signatures, program IDs. */
+.chain {
+  font-family: var(--font-mono);
+  font-size: var(--t-chain-data-size);
+  line-height: var(--t-chain-data-line);
+}
+
+/* Labels are small, wide, and shouted. */
+.label {
+  font-family: var(--font-body);
+  font-size: var(--t-label-size);
+  font-weight: var(--t-label-weight);
+  letter-spacing: var(--t-label-tracking);
+  line-height: var(--t-label-line);
+  text-transform: uppercase;
+  color: var(--c-ink-muted);
+}
+
+/*
+ * The wordmark, and the only gradient text in the product. The mark's
+ * purple-to-green is an identity, not a paint bucket: it appears here and in
+ * the chip ring, and nowhere else.
+ */
 .wordmark-solana {
-  font-family: var(--font-wordmark);
-  font-weight: 400;
+  font-family: var(--font-display);
+  font-weight: 700;
 }
 
 .wordmark-solana,
 .sol-text {
-  background-image: var(--sol-grad);
+  background-image: linear-gradient(94deg, var(--c-purple) 0%, var(--c-green) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  color: var(--sol-b);
+  color: var(--c-green);
 }
 @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
   .wordmark-solana,
   .sol-text {
     background-image: none;
     -webkit-text-fill-color: currentColor;
-    color: var(--accent);
+    color: var(--c-green);
   }
 }
 
 /* The stack credit answers the pointer without shouting. */
 .stack-chip:hover {
-  color: var(--text) !important;
+  color: var(--c-ink) !important;
 }
 .mb-lockup svg {
   display: block;
   height: 15px;
   width: auto;
   opacity: 0.62;
-  transition: opacity var(--dur-micro) ease;
+  transition: opacity var(--m-fast) var(--m-ease);
 }
 .mb-lockup:hover svg {
   opacity: 1;
 }
 
-/* Focus should be obvious without shouting. */
+/* ------------------------------------------------------------------ */
+/* Quality floor.                                                      */
+/* ------------------------------------------------------------------ */
+
+/* Visible keyboard focus on every interactive element. Green, 2px. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--c-green);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: var(--accent-soft);
-  color: var(--text);
+  background: color-mix(in srgb, var(--c-green) 24%, transparent);
+  color: var(--c-ink);
 }
 
 /* No scrollbars anywhere. Content still scrolls by wheel, trackpad, keyboard
@@ -122,24 +229,41 @@ button {
   display: none;
 }
 
-/* The wallet adapter ships its own look. Rebuild it as one of our controls:
-   the same height, radius, weight and casing as every other action, so the
-   connect button stops announcing that it came from somewhere else. */
+/* A tap on a control is a press, never a double-tap zoom. Pinch zoom on the
+   page as a whole still works, so nothing is taken away from anyone. */
+button,
+a,
+[role="button"],
+input[type="range"] {
+  touch-action: manipulation;
+}
+
+/* ------------------------------------------------------------------ */
+/* The wallet adapter ships its own look. Rebuild it as one of our      */
+/* controls: the same height, radius, weight and casing as every other  */
+/* action, so the connect button stops announcing it came from          */
+/* somewhere else.                                                      */
+/*                                                                      */
+/* Green, not the brand gradient. The gradient as a button fill is an    */
+/* explicit anti-pattern — it is the mark's geometry, and a paint bucket */
+/* is how an identity stops being one.                                   */
+/* ------------------------------------------------------------------ */
 .wallet-adapter-button {
-  font-family: var(--font-sans) !important;
-  font-size: var(--t-xs) !important;
+  font-family: var(--font-body) !important;
+  font-size: var(--t-label-size) !important;
   font-weight: 700 !important;
   letter-spacing: 0.04em !important;
   text-transform: uppercase !important;
-  height: 44px !important;
-  padding: 0 16px !important;
-  border-radius: var(--r-panel) !important;
-  background: var(--sol-grad-flat) !important;
-  color: var(--on-sol) !important;
-  transition: transform var(--dur-micro) ease, filter var(--dur-micro) ease;
+  height: var(--touch-target) !important;
+  padding: 0 var(--sp-4) !important;
+  border-radius: var(--r-md) !important;
+  background: var(--c-green) !important;
+  color: var(--c-felt) !important;
+  box-shadow: var(--e-raised);
+  transition: transform var(--m-fast) var(--m-ease), filter var(--m-fast) var(--m-ease);
 }
 .wallet-adapter-button:not([disabled]):hover {
-  background: var(--sol-grad-flat) !important;
+  background: var(--c-green) !important;
   filter: brightness(1.06);
   transform: translateY(-1px);
 }
@@ -151,10 +275,10 @@ button {
   height: 17px !important;
   margin-right: 9px !important;
 }
-/* The connect screen: no box, just a dark room with a centred column, a big
-   cyan title, and one quiet row per wallet. */
+/* The connect screen: no box, just a dark room with a centred column, a title,
+   and one quiet row per wallet. */
 .wallet-adapter-modal {
-  background: rgba(9, 13, 18, 0.9) !important;
+  background: color-mix(in srgb, var(--c-felt) 90%, transparent) !important;
   backdrop-filter: blur(6px);
 }
 .wallet-adapter-modal-wrapper {
@@ -162,16 +286,16 @@ button {
   border: none !important;
   box-shadow: none !important;
   max-width: 540px !important;
-  padding: 0 24px !important;
+  padding: 0 var(--sp-6) !important;
 }
 .wallet-adapter-modal-title {
   font-family: var(--font-display) !important;
-  font-weight: 400 !important;
-  font-size: var(--t-xl) !important;
-  letter-spacing: -0.02em !important;
-  color: var(--accent) !important;
+  font-weight: var(--t-display-md-weight) !important;
+  font-size: var(--t-display-md-size) !important;
+  letter-spacing: var(--t-display-md-tracking) !important;
+  color: var(--c-ink) !important;
   text-align: center !important;
-  padding: 24px 0 26px !important;
+  padding: var(--sp-6) 0 26px !important;
 }
 .wallet-adapter-modal-list {
   display: flex !important;
@@ -183,23 +307,30 @@ button {
   margin: 0 !important;
 }
 .wallet-adapter-modal-list li button {
-  background: var(--grad-surface) !important;
-  border: 1px solid var(--line) !important;
-  color: var(--text) !important;
-  border-radius: var(--r-control) !important;
+  background: var(--c-felt-raised) !important;
+  border: 1px solid var(--c-rule) !important;
+  color: var(--c-ink) !important;
+  border-radius: var(--r-md) !important;
   height: 56px !important;
-  font-size: var(--t-base) !important;
-  transition: border-color var(--dur-micro) ease, background var(--dur-micro) ease;
+  font-size: var(--t-body-size) !important;
+  box-shadow: var(--e-raised);
+  transition: border-color var(--m-fast) var(--m-ease), background var(--m-fast) var(--m-ease);
 }
 .wallet-adapter-modal-list li button:hover {
-  background: var(--surface-2) !important;
-  border-color: var(--accent-deep) !important;
+  background: var(--c-felt-edge) !important;
+  border-color: var(--c-rule-strong) !important;
 }
 .wallet-adapter-modal-button-close {
-  background: var(--surface-2) !important;
+  background: var(--c-felt-edge) !important;
 }
 
-/* Sliders: a thin dark track with a round mint thumb. */
+/* ------------------------------------------------------------------ */
+/* Sliders: a thin dark track with a round green thumb.                 */
+/*                                                                      */
+/* Bet sizing is presets plus this slider, never a bare text input: on a */
+/* phone a keyboard covering the table mid-hand while a clock runs is a  */
+/* lost hand.                                                            */
+/* ------------------------------------------------------------------ */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -209,8 +340,8 @@ input[type="range"] {
 }
 input[type="range"]::-webkit-slider-runnable-track {
   height: 4px;
-  border-radius: 999px;
-  background: var(--surface-2);
+  border-radius: var(--r-pill);
+  background: var(--c-felt-edge);
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -219,52 +350,53 @@ input[type="range"]::-webkit-slider-thumb {
   height: 16px;
   margin-top: -6px;
   border-radius: 50%;
-  background: var(--sol-grad-flat);
-  border: 3px solid var(--bg);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sol-a) 55%, transparent);
+  background: var(--c-green);
+  border: 3px solid var(--c-felt);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c-green) 55%, transparent);
 }
 input[type="range"]::-moz-range-track {
   height: 4px;
-  border-radius: 999px;
-  background: var(--surface-2);
+  border-radius: var(--r-pill);
+  background: var(--c-felt-edge);
 }
 input[type="range"]::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--sol-grad-flat);
-  border: 3px solid var(--bg);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sol-a) 55%, transparent);
+  background: var(--c-green);
+  border: 3px solid var(--c-felt);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c-green) 55%, transparent);
 }
 
 /* ------------------------------------------------------------------ */
 /* Responsive layout.                                                  */
 /*                                                                     */
-/* Components carry their look inline; anything that must change with  */
-/* the screen lives here, because inline styles cannot hear a media    */
-/* query. Two widths matter: 720px, under which phones get their own   */
-/* arrangements, and 1080px, under which the lobby drops its side      */
-/* column. The table page also watches orientation, because a phone    */
-/* held upright needs a tall table, not a shrunken wide one.           */
+/* Every width below comes from BREAKPOINTS in src/design/tokens.ts —  */
+/* `tablet` (768) for compact chrome, `laptop` (1024) for the lobby's  */
+/* side column, `phone` (480) for the table stood on end. Nothing here */
+/* may invent a number: `npm run tokens` scans this file and fails the */
+/* build on any width that is not a breakpoint. That check exists      */
+/* because these queries and use-viewport once drifted apart and put a */
+/* portrait table inside a desktop room.                               */
+/*                                                                     */
+/* Heights and orientation are not breakpoints and are not checked.    */
 /* ------------------------------------------------------------------ */
 
-html {
-  -webkit-text-size-adjust: 100%;
-}
-
-/* A tap on a control is a press, never a double-tap zoom. Pinch zoom on the
-   page as a whole still works, so nothing is taken away from anyone. */
-button,
-a,
-[role="button"],
-input[type="range"] {
-  touch-action: manipulation;
-}
-
-/* Fingers are wider than pointers. */
+/*
+ * Fingers are wider than pointers.
+ *
+ * --touch-target (44px) is the floor for anything tappable, and this is where
+ * it is enforced: a `height` set inline on a component loses to a `min-height`
+ * here, so no control can shrink below it on a touch screen no matter what the
+ * component asked for. It costs the felt some room on a phone. That trade is
+ * the right way round — a misplaced fold costs real money and undo does not
+ * exist.
+ */
 @media (pointer: coarse) {
-  button {
-    min-height: 36px;
+  button,
+  [role="button"],
+  .wallet-adapter-button {
+    min-height: var(--touch-target);
   }
   /* The wallet modal's little round close button sizes itself. */
   button.wallet-adapter-modal-button-close {
@@ -286,12 +418,12 @@ input[type="range"] {
 
 /* Shown or hidden by width. The !important is the point: these override the
    inline styles components carry. */
-@media (max-width: 719px) {
+@media (max-width: 767px) {
   .m-hide {
     display: none !important;
   }
 }
-@media (min-width: 720px) {
+@media (min-width: 768px) {
   .m-only {
     display: none !important;
   }
@@ -299,7 +431,7 @@ input[type="range"] {
 
 /* The raise readout drops out wherever the bar is short of room: the raise
    button repeats the figure anyway. */
-@media (max-width: 719px), (max-height: 520px) {
+@media (max-width: 767px), (max-height: 520px) {
   .bar-readout {
     display: none !important;
   }
@@ -307,34 +439,39 @@ input[type="range"] {
 
 /* Phone-size chrome: the same controls drawn smaller, so the room keeps its
    space. The !important is what lets a width rule outvote an inline style;
-   the felt's own controls (verbs, seats) are not touched. */
-@media (max-width: 719px) {
+   the felt's own controls (verbs, seats) are not touched.
+
+   What shrinks here is type and padding, never the tap area. Every one of
+   these keeps --touch-target as its height: the previous rules took them down
+   to 28–38px, which is smaller than a fingertip and was the single largest
+   accessibility debt in the room. */
+@media (max-width: 767px) {
   .m-btn {
-    height: 34px !important;
-    min-height: 34px !important;
+    height: var(--touch-target) !important;
+    min-height: var(--touch-target) !important;
     padding: 0 10px !important;
     font-size: 11px !important;
     gap: 6px !important;
   }
   .m-icon {
-    width: 36px !important;
-    height: 36px !important;
-    min-height: 36px !important;
+    width: var(--touch-target) !important;
+    height: var(--touch-target) !important;
+    min-height: var(--touch-target) !important;
   }
   .m-pill {
-    height: 36px !important;
+    height: var(--touch-target) !important;
   }
   .m-plus {
-    width: 28px !important;
-    height: 28px !important;
-    min-height: 28px !important;
+    width: var(--touch-target) !important;
+    height: var(--touch-target) !important;
+    min-height: var(--touch-target) !important;
   }
   .row-cta {
-    height: 38px !important;
+    height: var(--touch-target) !important;
     font-size: 12px !important;
   }
   .wallet-adapter-button {
-    height: 36px !important;
+    height: var(--touch-target) !important;
     font-size: 11px !important;
     padding: 0 12px !important;
   }
@@ -353,36 +490,36 @@ input[type="range"] {
    and the action. */
 :root {
   --lobby-cols: 1.1fr 1.2fr 0.9fr 0.7fr 118px;
-  --lobby-gap: 24px;
+  --lobby-gap: var(--sp-6);
 }
 .lobby-shell {
   min-height: 100dvh;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 48px;
+  gap: var(--sp-12);
   max-width: 1720px;
   margin: 0 auto;
-  padding: 48px 40px 64px;
+  padding: var(--sp-12) var(--sp-10) var(--sp-16);
   align-items: start;
 }
-@media (max-width: 1079px) {
+@media (max-width: 1023px) {
   .lobby-shell {
     grid-template-columns: minmax(0, 1fr);
-    gap: 40px;
-    padding: 28px 20px 64px;
+    gap: var(--sp-10);
+    padding: 28px var(--sp-5) var(--sp-16);
   }
 }
 .lobby-row {
-  height: 64px;
+  height: var(--sp-16);
 }
-@media (max-width: 719px) {
+@media (max-width: 767px) {
   :root {
     --lobby-cols: minmax(0, 1.5fr) minmax(0, 0.8fr) 84px;
-    --lobby-gap: 12px;
+    --lobby-gap: var(--sp-3);
   }
   .lobby-shell {
-    gap: 32px;
-    padding: 16px 14px calc(56px + env(safe-area-inset-bottom, 0px));
+    gap: var(--sp-8);
+    padding: var(--sp-4) 14px calc(56px + env(safe-area-inset-bottom, 0px));
   }
   .lobby-row {
     height: 54px;
@@ -398,12 +535,15 @@ input[type="range"] {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 76px 24px 96px;
+  padding: 76px var(--sp-6) 96px;
   container-type: size;
 }
+/* 16:10 landscape, capped at --table-max-w. The cqh coefficient is the aspect
+   ratio itself (1.6), so the table is limited by whichever of the stage's two
+   axes runs out first. Keep it in step with LAYOUT.tableRatio. */
 .felt-sizer {
-  width: min(1108px, 94vw, 168vh);
-  width: min(1108px, 100cqw, 173.125cqh);
+  width: min(1120px, 94vw, 160vh);
+  width: min(var(--table-max-w), 100cqw, 160cqh);
 }
 
 /* The four corners of the room. On a desktop they are corners; on a phone
@@ -414,7 +554,7 @@ input[type="range"] {
 .hud-bl,
 .hud-br {
   position: absolute;
-  z-index: 40;
+  z-index: var(--z-hud);
 }
 .hud-tl {
   top: 22px;
@@ -430,7 +570,7 @@ input[type="range"] {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 .hud-bl {
   bottom: 22px;
@@ -447,7 +587,7 @@ input[type="range"] {
   align-items: flex-end;
   gap: 10px;
   max-width: min(560px, 52vw);
-  z-index: 41;
+  z-index: var(--z-action-bar);
 }
 .hud-fields {
   display: flex;
@@ -460,7 +600,7 @@ input[type="range"] {
 .action-bar {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-3);
   width: 100%;
   max-width: 560px;
 }
@@ -470,7 +610,7 @@ input[type="range"] {
    in front of half the table. */
 @media (max-height: 520px) {
   .felt-stage {
-    padding: 68px 12px 118px;
+    padding: 68px var(--sp-3) 118px;
   }
   .hud-tl {
     top: 10px;
@@ -516,9 +656,10 @@ input[type="range"] {
   }
 }
 
-/* A phone held upright: the table turns on end. Seats run down both sides,
-   you sit at the bottom above your controls, and every strip keeps clear of
-   the notch and the home bar.
+/* A phone held upright: the table turns on end at 10:16. Seats run down both
+   long edges, you sit at the bottom above your controls, and every strip keeps
+   clear of the notch and the home bar. A shrunken landscape table on a phone is
+   unusable, which is why this variant exists rather than a scale transform.
 
    Here the room stops being four corners over a felt and becomes four stacked
    rows, because the button row grows and shrinks with the table's state: cash
@@ -526,13 +667,13 @@ input[type="range"] {
    one of them is wrong for the next. As grid rows the felt simply takes what
    is left, so nothing can ever land on top of it. Rows are assigned
    explicitly, so the felt keeps its place in the markup. */
-@media (max-width: 719px) and (orientation: portrait) {
+@media (max-width: 479px) and (orientation: portrait) {
   .table-room {
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
-    row-gap: 8px;
-    padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px
-      calc(env(safe-area-inset-bottom, 0px) + 12px);
+    row-gap: var(--sp-2);
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) var(--sp-3)
+      calc(env(safe-area-inset-bottom, 0px) + var(--sp-3));
   }
   .table-room > .hud-tl,
   .table-room > .hud-tr,
@@ -559,9 +700,10 @@ input[type="range"] {
     grid-row: 3;
     padding: 14px 0;
   }
+  /* 10:16, so the coefficient is 0.625. Same rule as the landscape sizer. */
   .felt-sizer {
-    width: min(430px, 92vw, 55vh);
-    width: min(430px, 100cqw, 73.68cqh);
+    width: min(430px, 92vw, 62.5vh);
+    width: min(430px, 100cqw, 62.5cqh);
   }
   .hud-bl {
     display: none;
@@ -580,39 +722,37 @@ input[type="range"] {
    bottom belongs to the action bar. */
 .toast-viewport {
   position: fixed;
-  bottom: 20px;
+  bottom: var(--sp-5);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  z-index: 50;
+  gap: var(--sp-2);
+  z-index: var(--z-toast);
   pointer-events: none;
 }
-@media (max-width: 719px) {
+@media (max-width: 767px) {
   .toast-viewport {
     bottom: auto;
     top: calc(env(safe-area-inset-top, 0px) + 10px);
-    width: calc(100vw - 24px);
+    width: calc(100vw - var(--sp-6));
     align-items: center;
   }
 }
 
 /* The header on the reading pages. */
 .topbar {
-  padding: 16px 24px;
+  padding: var(--sp-4) var(--sp-6);
 }
-@media (max-width: 719px) {
+@media (max-width: 767px) {
   .topbar {
-    padding: 10px 12px;
+    padding: 10px var(--sp-3);
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
-}
+/*
+ * Reduced motion is handled by the generated block in tokens.css, which
+ * collapses every --m-* duration to 1ms and clamps animations globally.
+ * Opacity crossfades are deliberately kept: removing them takes away the only
+ * remaining cue that anything happened.
+ */

@@ -19,15 +19,18 @@ export const SPADE_PATH =
   "C 75 74, 83 66, 83 55 C 83 39, 62 28, 50 12 Z";
 
 /**
- * The chip as a letterform: the 'o' of the wordmark. Same geometry as the
- * mark, redrawn with the ring fattened to Dela Gothic's stroke weight so it
- * reads as a letter among letters rather than an icon that wandered in. Both
- * numbers are tuned to that face specifically, which is why the wordmark keeps
- * it even though the rest of the type system moved on. The hidden 'o' beside
- * it keeps the word whole for screen readers, searches and the page checks:
- * the visible text alone would spell "Pkerable".
+ * The chip as a letterform: the 'o' of the wordmark. Same geometry as the mark,
+ * with the ring weight matched to the face the wordmark is actually set in.
+ *
+ * Both numbers here are tuned to that face and have to move with it. They were
+ * drawn for Dela Gothic One, whose stroke is far heavier; on Space Grotesk at
+ * 700 a 15-unit ring read as an icon that had wandered into the word, so the
+ * ring is thinner and the glyph slightly larger to sit on the same x-height.
+ *
+ * The hidden 'o' beside it keeps the word whole for screen readers, searches
+ * and the page checks: the visible text alone would spell "Pkerable".
  */
-export function ChipO({ size = "0.62em" }: { size?: string }) {
+export function ChipO({ size = "0.66em" }: { size?: string }) {
   const id = "pokerable-chip-o";
   return (
     <>
@@ -56,8 +59,8 @@ export function ChipO({ size = "0.62em" }: { size?: string }) {
       >
         <defs>
           <linearGradient id={`${id}-suit`} x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0" stopColor="#9945FF" />
-            <stop offset="1" stopColor="#14F195" />
+            <stop offset="0" stopColor="var(--c-purple)" />
+            <stop offset="1" stopColor="var(--c-green)" />
           </linearGradient>
         </defs>
         <circle
@@ -66,7 +69,7 @@ export function ChipO({ size = "0.62em" }: { size?: string }) {
           r="41"
           fill="none"
           stroke={`url(#${id}-suit)`}
-          strokeWidth="15"
+          strokeWidth="11"
           strokeDasharray="19.7 12.5"
           strokeDashoffset="9.85"
         />
@@ -110,8 +113,8 @@ export function Logo({
         {/* The chain's colours: Solana's purple-to-green, run bottom-left to
             top-right at the same angle as its bars. */}
         <linearGradient id={`${gradientId}-suit`} x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0" stopColor="#9945FF" />
-          <stop offset="1" stopColor="#14F195" />
+          <stop offset="0" stopColor="var(--c-purple)" />
+          <stop offset="1" stopColor="var(--c-green)" />
         </linearGradient>
       </defs>
       {/* The chip: eight fat segments with real gaps between them, plus a

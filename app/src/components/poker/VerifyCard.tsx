@@ -48,8 +48,8 @@ export function VerifyCard({ hand }: { hand: StoredHand }) {
   return (
     <div
       style={{
-        background: "var(--surface)",
-        border: "1px solid var(--line)",
+        background: "var(--c-felt-raised)",
+        border: "1px solid var(--c-rule)",
         borderRadius: "var(--r-card)",
         padding: "14px 16px",
       }}
@@ -65,12 +65,12 @@ export function VerifyCard({ hand }: { hand: StoredHand }) {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>
+            <div style={{ fontSize: "var(--t-label-size)", color: "var(--c-ink-faint)" }}>
               hand
             </div>
             <div
               className="num"
-              style={{ fontFamily: "var(--font-display)", fontSize: "var(--t-md)" }}
+              style={{ fontFamily: "var(--font-display)", fontSize: "var(--t-body-lg-size)" }}
             >
               {hand.handNumber}
             </div>
@@ -84,7 +84,7 @@ export function VerifyCard({ hand }: { hand: StoredHand }) {
 
           {shown.length > 0 && (
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <span style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>
+              <span style={{ fontSize: "var(--t-label-size)", color: "var(--c-ink-faint)" }}>
                 shown
               </span>
               {shown.map((s) => (
@@ -106,8 +106,8 @@ export function VerifyCard({ hand }: { hand: StoredHand }) {
                 animate={{ opacity: 1, x: 0 }}
                 transition={spring.snappy}
                 style={{
-                  fontSize: "var(--t-sm)",
-                  color: result.ok ? "var(--win)" : "var(--lose)",
+                  fontSize: "var(--t-body-sm-size)",
+                  color: result.ok ? "var(--c-win)" : "var(--c-loss)",
                   fontWeight: 600,
                 }}
               >
@@ -134,9 +134,9 @@ export function VerifyCard({ hand }: { hand: StoredHand }) {
               style={{
                 marginTop: 14,
                 paddingTop: 14,
-                borderTop: "1px solid var(--line)",
-                fontSize: "var(--t-sm)",
-                color: "var(--text-dim)",
+                borderTop: "1px solid var(--c-rule)",
+                fontSize: "var(--t-body-sm-size)",
+                color: "var(--c-ink-muted)",
               }}
             >
               {result.ok ? (
@@ -158,7 +158,7 @@ export function VerifyCard({ hand }: { hand: StoredHand }) {
                 </>
               ) : (
                 <>
-                  <p style={{ margin: "0 0 8px", color: "var(--lose)" }}>
+                  <p style={{ margin: "0 0 8px", color: "var(--c-loss)" }}>
                     This hand does not match what was published:
                   </p>
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
@@ -186,15 +186,18 @@ const nameOf = (b: number) =>
 function Mono({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-      <span style={{ color: "var(--text-faint)", minWidth: 62, fontSize: "var(--t-xs)" }}>
+      <span style={{ color: "var(--c-ink-faint)", minWidth: 62, fontSize: "var(--t-label-size)" }}>
         {label}
       </span>
       <span
+        className="chain"
         style={{
-          fontFamily: "ui-monospace, monospace",
-          fontSize: "var(--t-xs)",
+          // Seeds, salts and signatures are chain data, which is the only
+          // thing set in the mono face. It was on a hardcoded stack here,
+          // which is how the one face with a single job quietly stops
+          // matching itself.
           wordBreak: "break-all",
-          color: "var(--text-dim)",
+          color: "var(--c-ink-muted)",
         }}
       >
         {value}

@@ -169,6 +169,9 @@ export function MutedIcon({ size = 20 }: Props) {
 export function UsdcMark({ size = 20 }: Props) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {/* USDC's own mark. A trademark is drawn in its own colours or it
+          is not that trademark, so this one is deliberately outside the
+          palette — the same exemption the MagicBlock lockup gets. */}
       <circle cx="12" cy="12" r="10.5" fill="#2775ca" />
       <path d="M12 6.1v11.8" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
       <path

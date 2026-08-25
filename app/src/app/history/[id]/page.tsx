@@ -48,20 +48,20 @@ export default function HistoryPage({ params }: { params: Promise<{ id: string }
       <main style={{ maxWidth: 860, margin: "0 auto", padding: "32px 24px 80px" }}>
         <Link
           href={`/table/${id}`}
-          style={{ fontSize: "var(--t-sm)", color: "var(--text-dim)", textDecoration: "none" }}
+          style={{ fontSize: "var(--t-body-sm-size)", color: "var(--c-ink-muted)", textDecoration: "none" }}
         >
           Back to the table
         </Link>
 
-        <h1 style={{ fontSize: "var(--t-xl)", margin: "18px 0 8px" }}>Hand history</h1>
-        <p style={{ color: "var(--text-dim)", marginTop: 0, maxWidth: 620 }}>
+        <h1 style={{ fontSize: "var(--t-display-lg-size)", margin: "18px 0 8px" }}>Hand history</h1>
+        <p style={{ color: "var(--c-ink-muted)", marginTop: 0, maxWidth: 620 }}>
           Every finished hand, with the randomness and salts it was dealt from.
           Press verify and your browser recomputes the deck to check the cards
           match. Nothing is sent anywhere to do it.
         </p>
 
         <Panel style={{ margin: "22px 0" }}>
-          <p style={{ margin: 0, fontSize: "var(--t-sm)", color: "var(--text-dim)" }}>
+          <p style={{ margin: 0, fontSize: "var(--t-body-sm-size)", color: "var(--c-ink-muted)" }}>
             Hands are recorded here as you play them, because the chain does not
             keep them: the accounts holding a hand&apos;s salts and seed are
             reused by the next hand. Solana keeps a digest of each settled hand,
@@ -72,8 +72,8 @@ export default function HistoryPage({ params }: { params: Promise<{ id: string }
             <p
               style={{
                 margin: "10px 0 0",
-                fontSize: "var(--t-xs)",
-                color: "var(--text-faint)",
+                fontSize: "var(--t-label-size)",
+                color: "var(--c-ink-faint)",
               }}
             >
               Solana has recorded {onChain.handsRecorded} commit
@@ -90,7 +90,7 @@ export default function HistoryPage({ params }: { params: Promise<{ id: string }
           </div>
         ) : hands.length === 0 ? (
           <Panel style={{ textAlign: "center", padding: 40 }}>
-            <p style={{ color: "var(--text-dim)", margin: "0 0 12px" }}>
+            <p style={{ color: "var(--c-ink-muted)", margin: "0 0 12px" }}>
               No hands recorded in this browser yet.
             </p>
             <Link href={`/table/${id}`} style={{ textDecoration: "none" }}>

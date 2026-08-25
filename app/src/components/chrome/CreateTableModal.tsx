@@ -170,21 +170,21 @@ export function CreateTableModal({
                 style={{
                   textAlign: "center",
                   padding: "14px 10px 12px",
-                  borderRadius: "var(--r-panel)",
+                  borderRadius: "var(--r-lg)",
                   cursor: "pointer",
                   // The inner layer must be opaque: a translucent surface lets
                   // the border-box gradient wash across the whole card face
                   // and drown the small type.
                   border: "1.5px solid transparent",
                   background: active
-                    ? "linear-gradient(var(--surface-solid), var(--surface-solid)) padding-box, var(--sol-grad-flat) border-box"
-                    : "linear-gradient(var(--surface-solid), var(--surface-solid)) padding-box, var(--line) border-box",
-                  color: "var(--text)",
+                    ? "linear-gradient(var(--c-felt-raised), var(--c-felt-raised)) padding-box, var(--c-green) border-box"
+                    : "linear-gradient(var(--c-felt-raised), var(--c-felt-raised)) padding-box, var(--c-rule) border-box",
+                  color: "var(--c-ink)",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
                   gap: 5,
-                  boxShadow: active ? "0 10px 26px -14px rgba(20,241,149,0.35)" : "none",
+                  boxShadow: active ? "var(--e-raised)" : "none",
                 }}
               >
                 <span
@@ -193,14 +193,14 @@ export function CreateTableModal({
                     fontWeight: 700,
                     letterSpacing: "0.09em",
                     textTransform: "uppercase",
-                    color: active ? "var(--text)" : "var(--text-faint)",
+                    color: active ? "var(--c-ink)" : "var(--c-ink-faint)",
                   }}
                 >
                   {s.label}
                 </span>
                 <span
                   className="num"
-                  style={{ fontSize: "var(--t-lg)", fontWeight: 600, lineHeight: 1.1 }}
+                  style={{ fontSize: "var(--t-display-md-size)", fontWeight: 600, lineHeight: 1.1 }}
                 >
                   {s.sb}/{s.bb}
                 </span>
@@ -210,14 +210,15 @@ export function CreateTableModal({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 5,
-                    fontSize: "var(--t-xs)",
-                    color: "var(--gold)",
+                    fontSize: "var(--t-label-size)",
+                    fontWeight: 700,
+                    color: "var(--c-ink)",
                   }}
                 >
                   <ChipGlyph size={12} />
                   {s.min}–{s.max}
                 </span>
-                <span className="num" style={{ fontSize: "var(--t-xs)", color: "var(--text-dim)" }}>
+                <span className="num" style={{ fontSize: "var(--t-label-size)", color: "var(--c-ink-muted)" }}>
                   {formatUsdRange(s.min, s.max)}
                 </span>
               </motion.button>
@@ -228,7 +229,7 @@ export function CreateTableModal({
 
       <Field label="Time to act">
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ color: "var(--text-faint)", display: "inline-flex" }}>
+          <span style={{ color: "var(--c-ink-faint)", display: "inline-flex" }}>
             <ClockIcon size={17} />
           </span>
           {[15, 30, 60].map((t) => (
@@ -261,8 +262,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div style={{ marginTop: 18 }}>
       <div
         style={{
-          fontSize: "var(--t-xs)",
-          color: "var(--text-faint)",
+          fontSize: "var(--t-label-size)",
+          color: "var(--c-ink-faint)",
           textTransform: "uppercase",
           letterSpacing: "0.07em",
           marginBottom: 7,

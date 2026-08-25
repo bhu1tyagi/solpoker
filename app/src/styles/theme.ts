@@ -2,29 +2,68 @@
  * The JS half of the design system: motion, geometry, and anything a component
  * needs as a number rather than a CSS variable.
  *
+ * Motion is not defined here. It is derived from MOTION in src/design/tokens.ts,
+ * which is the single source of truth shared with the generated CSS custom
+ * properties — so a duration cannot mean one thing in a transition and another
+ * in a stylesheet. What this file adds is the seat geometry below, which is
+ * table knowledge rather than a design token.
+ *
  * One spring vocabulary for the whole app. Reaching for a bespoke transition is
  * usually a sign the component wants a different one of these, not a new one.
  */
 
-export const spring = {
-  /** Controls, chips, seat rings. Quick and decisive. */
-  snappy: { type: "spring", stiffness: 420, damping: 30 } as const,
-  /** Panels, modals, route changes. Settles without bouncing. */
-  gentle: { type: "spring", stiffness: 260, damping: 26 } as const,
-  /** Cards leaving the dealer. A little overshoot reads as a flick of the wrist. */
-  deal: { type: "spring", stiffness: 300, damping: 24 } as const,
-};
+import { LAYOUT, MOTION, Z } from "@/design/tokens";
 
+/** ms → s, because motion/react counts in seconds and the tokens are in ms. */
+const secs = (ms: number) => ms / 1000;
+
+const ease = MOTION.ease as unknown as [number, number, number, number];
+
+export const spring = {
+  /** Controls, seat rings, anything that answers a press. Quick and decisive. */
+  snappy: MOTION.spring,
+  /** Panels, modals, route changes. Settles without bouncing. */
+  gentle: MOTION.chipSpring,
+  /**
+   * Chips travelling from a stack to the pot.
+   *
+   * This is the one animation that is sized against measured latency rather
+   * than feel: the client renders optimistically the instant a verb is pressed,
+   * and chain confirmation is meant to land *inside* this movement. See the
+   * note on MOTION.chipCommit — shortening it exposes the wait it exists to
+   * cover, which makes the table feel broken rather than snappy.
+   */
+  chip: MOTION.chipSpring,
+  /**
+   * Cards leaving the dealer. A tween rather than a spring: the deal reads as
+   * dealing because of the 70ms stagger between cards, not because any one card
+   * overshoots.
+   */
+  deal: { duration: secs(MOTION.cardDeal), ease },
+} as const;
+
+/** Durations, in seconds. Names and values both come from MOTION. */
 export const duration = {
-  micro: 0.12,
-  standard: 0.2,
-  large: 0.32,
+  instant: secs(MOTION.instant),
+  fast: secs(MOTION.fast),
+  /** The default crossfade. Most things that are not listed below use this. */
+  standard: secs(MOTION.base),
+  slow: secs(MOTION.slow),
+  chipCommit: secs(MOTION.chipCommit),
+  cardDeal: secs(MOTION.cardDeal),
+  /** Showdown: the pot sliding to the winner while their stack counts up. */
+  potPush: secs(MOTION.potPush),
+  /** A street fading and dropping in. */
+  boardReveal: secs(MOTION.boardReveal),
+  /** The to-act breathing loop. */
+  seatPulse: secs(MOTION.seatPulse),
 };
 
 /** Stagger gaps, in seconds. */
 export const stagger = {
-  deal: 0.06,
-  board: 0.09,
+  /** The deal, and the flop's three cards, which use the same beat. */
+  deal: secs(MOTION.cardStagger),
+  board: secs(MOTION.cardStagger),
   list: 0.04,
 };
 
@@ -112,11 +151,19 @@ export const POT_POSITION_PORTRAIT = { x: 50, y: 55 };
 /**
  * Everything about the table's shape that depends on which way it stands.
  * TableFelt picks one of these; nothing else needs to know there are two.
+ *
+ * Both ratios come from LAYOUT: 16:10 landscape up to --table-max-w, and the
+ * same table stood on end at 10:16 below the phone breakpoint. The portrait
+ * variant exists rather than a scale transform because a shrunken landscape
+ * table on a phone is unusable.
  */
+const WIDE_W = parseInt(LAYOUT.tableMaxW, 10);
+const PORTRAIT_W = 430;
+
 export const TABLE_GEOMETRY = {
   wide: {
-    aspect: "1108 / 640",
-    maxWidth: 1108,
+    aspect: `${LAYOUT.tableRatio}`,
+    maxWidth: WIDE_W,
     ellipseInset: "13% 11%",
     boardTop: "44%",
     seats: SEAT_POSITIONS,
@@ -124,8 +171,8 @@ export const TABLE_GEOMETRY = {
     pot: POT_POSITION,
   },
   portrait: {
-    aspect: "560 / 760",
-    maxWidth: 430,
+    aspect: `${LAYOUT.tableRatioPortrait}`,
+    maxWidth: PORTRAIT_W,
     ellipseInset: "9% 6%",
     boardTop: "44%",
     seats: SEAT_POSITIONS_PORTRAIT,
@@ -134,12 +181,5 @@ export const TABLE_GEOMETRY = {
   },
 } as const;
 
-export const z = {
-  felt: 0,
-  seat: 10,
-  chips: 20,
-  cards: 30,
-  actionBar: 40,
-  toast: 50,
-  modal: 60,
-};
+/** Stacking order, from the same source as the --z-* custom properties. */
+export const z = Z;

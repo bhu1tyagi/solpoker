@@ -13,9 +13,9 @@ import { spring } from "@/styles/theme";
  * good and bad are distinguishable at a glance without either shouting.
  */
 const TONES = {
-  info: { color: "var(--info)", glyph: "i" },
-  good: { color: "var(--win)", glyph: "✓" },
-  bad: { color: "var(--lose)", glyph: "!" },
+  info: { color: "var(--c-info)", glyph: "i" },
+  good: { color: "var(--c-win)", glyph: "✓" },
+  bad: { color: "var(--c-loss)", glyph: "!" },
 };
 
 export function ToastViewport() {
@@ -46,16 +46,17 @@ export function ToastViewport() {
                 alignItems: "flex-start",
                 gap: 10,
                 // Opaque, like the modals: a message about money should not
-                // have a poker table showing through it.
-                background:
-                  "linear-gradient(180deg, #2a3640 0%, var(--surface-solid) 100%)",
-                border: "1px solid var(--line-strong)",
-                borderRadius: 14,
-                boxShadow: "var(--shadow-2), var(--highlight-soft)",
+                // have a poker table showing through it. --e-overlay carries a
+                // real drop shadow because a toast is genuinely floating over
+                // the table rather than sitting on it.
+                background: "var(--c-felt-raised)",
+                border: "1px solid var(--c-rule-strong)",
+                borderRadius: "var(--r-lg)",
+                boxShadow: "var(--e-overlay)",
                 padding: "11px 15px 11px 12px",
-                fontSize: "var(--t-sm)",
-                lineHeight: 1.45,
-                color: "var(--text)",
+                fontSize: "var(--t-body-sm-size)",
+                lineHeight: "var(--t-body-sm-line)",
+                color: "var(--c-ink)",
                 maxWidth: "min(420px, calc(100vw - 24px))",
               }}
             >

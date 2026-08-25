@@ -95,7 +95,7 @@ export default function Lobby() {
                     // desktop.
                     gap: "clamp(10px, 1.2vw, 16px)",
                     fontSize: "clamp(34px, 4vw, 52px)",
-                    color: "var(--accent)",
+                    color: "var(--c-green)",
                     // Dela Gothic sets very tight at display size and the name
                     // was reading as one dense block. A little air lets the
                     // letters — and the chip standing in for the 'o' — be read
@@ -112,10 +112,10 @@ export default function Lobby() {
                 <p
                   style={{
                     margin: "4px 0 0",
-                    fontSize: "var(--t-sm)",
+                    fontSize: "var(--t-body-sm-size)",
                     letterSpacing: "0.06em",
                     textTransform: "uppercase",
-                    color: "var(--text-dim)",
+                    color: "var(--c-ink-muted)",
                   }}
                 >
                   Play poker with stablecoins
@@ -133,8 +133,8 @@ export default function Lobby() {
                       display: "flex",
                       alignItems: "center",
                       gap: 12,
-                      background: "var(--surface)",
-                      borderRadius: "var(--r-panel)",
+                      background: "var(--c-felt-raised)",
+                      borderRadius: "var(--r-lg)",
                       padding: "0 5px 0 12px",
                       height: 44,
                     }}
@@ -142,7 +142,7 @@ export default function Lobby() {
                     <ChipGlyph size={22} />
                     <span
                       className="num"
-                      style={{ fontWeight: 700, fontSize: 16, color: "var(--text-dim)" }}
+                      style={{ fontWeight: 700, fontSize: 16, color: "var(--c-ink-muted)" }}
                     >
                       {state ? state.chips.toLocaleString() : "..."}
                     </span>
@@ -159,9 +159,9 @@ export default function Lobby() {
                         display: "grid",
                         placeItems: "center",
                         border: "none",
-                        borderRadius: "var(--r-panel)",
-                        background: "var(--accent)",
-                        color: "var(--on-accent)",
+                        borderRadius: "var(--r-lg)",
+                        background: "var(--c-green)",
+                        color: "var(--c-felt)",
                         cursor: "pointer",
                       }}
                     >
@@ -237,7 +237,7 @@ export default function Lobby() {
               gridTemplateColumns: "var(--lobby-cols)",
               gap: "var(--lobby-gap)",
               padding: "0 8px 14px",
-              color: "var(--text-dim)",
+              color: "var(--c-ink-muted)",
               opacity: 0.64,
               fontSize: 14,
               letterSpacing: "0.02em",
@@ -257,7 +257,7 @@ export default function Lobby() {
               <Skeleton height={64} />
             </div>
           ) : error ? (
-            <EmptyRow tone="var(--lose)">
+            <EmptyRow tone="var(--c-loss)">
               <span>Could not reach the network.</span>
               <Button variant="ghost" size="sm" onClick={() => void refreshTables()}>
                 Try again
@@ -306,7 +306,7 @@ export default function Lobby() {
               Your tables
             </Tab>
           </div>
-          <div style={{ height: 1, background: "var(--control)", opacity: 0.48 }} />
+          <div style={{ height: 1, background: "var(--c-felt-edge)", opacity: 0.48 }} />
 
           {tab === "players" ? (
             <Leaderboard me={me} />
@@ -346,7 +346,7 @@ function TableRow({ t }: { t: LobbyTable }) {
     <Link href={`/table/${t.table.tableId}`} style={{ textDecoration: "none" }}>
       <motion.div
         className="lobby-row"
-        whileHover={{ backgroundColor: "rgba(64, 82, 94, 0.16)" }}
+        whileHover={{ backgroundColor: "var(--c-felt-raised)" }}
         transition={spring.snappy}
         style={{
           display: "grid",
@@ -354,19 +354,19 @@ function TableRow({ t }: { t: LobbyTable }) {
           gap: "var(--lobby-gap)",
           alignItems: "center",
           padding: "0 8px",
-          borderRadius: "var(--r-panel)",
+          borderRadius: "var(--r-lg)",
         }}
       >
         <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <span
             className="num"
-            style={{ fontWeight: 500, fontSize: 18, color: "var(--text-dim)" }}
+            style={{ fontWeight: 500, fontSize: 18, color: "var(--c-ink-muted)" }}
           >
             {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "-"}
           </span>
           <span
             className="tnum m-hide"
-            style={{ fontSize: 11, color: "var(--text-faint)" }}
+            style={{ fontSize: 11, color: "var(--c-ink-faint)" }}
           >
             {t.table.tableId}
           </span>
@@ -378,7 +378,7 @@ function TableRow({ t }: { t: LobbyTable }) {
               alignItems: "center",
               gap: 5,
               fontSize: 12,
-              color: "var(--accent)",
+              color: "var(--c-green)",
               whiteSpace: "nowrap",
             }}
           >
@@ -401,7 +401,7 @@ function TableRow({ t }: { t: LobbyTable }) {
               gap: 8,
               fontWeight: 500,
               fontSize: 18,
-              color: "var(--accent)",
+              color: "var(--c-green)",
             }}
           >
             <ChipGlyph size={17} />
@@ -412,7 +412,7 @@ function TableRow({ t }: { t: LobbyTable }) {
           {t.config && (
             <span
               className="num"
-              style={{ fontSize: "var(--t-xs)", color: "var(--text-dim)", paddingLeft: 25 }}
+              style={{ fontSize: "var(--t-label-size)", color: "var(--c-ink-muted)", paddingLeft: 25 }}
             >
               {formatUsdRange(t.config.minBuyIn, t.config.maxBuyIn)}
             </span>
@@ -425,12 +425,12 @@ function TableRow({ t }: { t: LobbyTable }) {
             display: "inline-flex",
             alignItems: "center",
             gap: 10,
-            color: "var(--accent)",
+            color: "var(--c-green)",
             fontWeight: 500,
             fontSize: 18,
           }}
         >
-          <span style={{ color: "var(--text-dim)", opacity: 0.8 }}>
+          <span style={{ color: "var(--c-ink-muted)", opacity: 0.8 }}>
             <TableIcon size={22} />
           </span>
           {MAX_SEATS}
@@ -441,12 +441,12 @@ function TableRow({ t }: { t: LobbyTable }) {
             display: "inline-flex",
             alignItems: "center",
             gap: 10,
-            color: "var(--accent)",
+            color: "var(--c-green)",
             fontWeight: 500,
             fontSize: 18,
           }}
         >
-          <span style={{ color: "var(--text-dim)", opacity: 0.8 }}>
+          <span style={{ color: "var(--c-ink-muted)", opacity: 0.8 }}>
             <PlayersIcon size={22} />
           </span>
           {t.seated}
@@ -459,9 +459,12 @@ function TableRow({ t }: { t: LobbyTable }) {
             height: 48,
             display: "grid",
             placeItems: "center",
-            borderRadius: "var(--r-panel)",
-            background: joinable && !live ? "var(--accent)" : "rgba(152, 222, 227, 0.06)",
-            color: joinable && !live ? "var(--on-accent)" : "var(--accent)",
+            borderRadius: "var(--r-lg)",
+            background:
+              joinable && !live
+                ? "var(--c-green)"
+                : "color-mix(in srgb, var(--c-green) 8%, transparent)",
+            color: joinable && !live ? "var(--c-felt)" : "var(--c-green)",
             fontWeight: 700,
             fontSize: 14,
             letterSpacing: "0.04em",
@@ -513,7 +516,7 @@ function Leaderboard({ me }: { me?: string }) {
           gap: 12,
           height: 52,
           alignItems: "center",
-          color: "var(--text-dim)",
+          color: "var(--c-ink-muted)",
           opacity: 0.64,
           fontSize: 14,
           letterSpacing: "0.02em",
@@ -533,7 +536,7 @@ function Leaderboard({ me }: { me?: string }) {
           <div
             style={{
               height: 1,
-              background: "var(--control)",
+              background: "var(--c-felt-edge)",
               opacity: 0.48,
               margin: "4px 0 6px",
             }}
@@ -590,7 +593,7 @@ function LeaderRowView({
         style={{
           fontWeight: 700,
           fontSize: 14,
-          color: isMe || rank < 3 ? "var(--accent)" : "var(--text-faint)",
+          color: isMe || rank < 3 ? "var(--c-green)" : "var(--c-ink-faint)",
         }}
       >
         {String(rank + 1).padStart(2, "0")}
@@ -599,13 +602,17 @@ function LeaderRowView({
         style={{
           fontWeight: isMe ? 700 : 500,
           fontSize: 15,
-          color: isMe ? "var(--accent)" : "var(--text-dim)",
+          color: isMe ? "var(--c-green)" : "var(--c-ink-muted)",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
         }}
       >
-        {isMe ? "you" : shortKey(row.authority)}
+        {isMe ? (
+          "you"
+        ) : (
+          <span style={{ fontFamily: "var(--font-mono)" }}>{shortKey(row.authority)}</span>
+        )}
       </span>
       <Avatar pubkey={row.authority} size={30} square />
       <span
@@ -614,9 +621,9 @@ function LeaderRowView({
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
-          fontWeight: 500,
+          fontWeight: 700,
           fontSize: 15,
-          color: "var(--gold)",
+          color: "var(--c-ink)",
           justifyContent: "flex-end",
         }}
       >
@@ -648,15 +655,15 @@ function MyTables({ tables }: { tables: LobbyTable[] }) {
               height: 52,
             }}
           >
-            <span className="num" style={{ fontSize: 17, color: "var(--text-dim)" }}>
+            <span className="num" style={{ fontSize: 17, color: "var(--c-ink-muted)" }}>
               {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "-"}
             </span>
-            <span style={{ color: "var(--accent)" }}>
+            <span style={{ color: "var(--c-green)" }}>
               <TableIcon size={22} />
             </span>
             <span
               className="num"
-              style={{ fontSize: 17, color: "var(--accent)", textAlign: "right" }}
+              style={{ fontSize: 17, color: "var(--c-green)", textAlign: "right" }}
             >
               {t.seated}
             </span>
@@ -676,7 +683,7 @@ function SideHead({ cols }: { cols: string[] }) {
         gap: 14,
         height: 52,
         alignItems: "center",
-        color: "var(--text-dim)",
+        color: "var(--c-ink-muted)",
         opacity: 0.64,
         fontSize: 14,
         letterSpacing: "0.02em",
@@ -696,7 +703,7 @@ function SideEmpty({ icon }: { icon: React.ReactNode }) {
         height: 160,
         display: "grid",
         placeItems: "center",
-        color: "var(--text-faint)",
+        color: "var(--c-ink-faint)",
         opacity: 0.5,
       }}
     >
@@ -707,7 +714,7 @@ function SideEmpty({ icon }: { icon: React.ReactNode }) {
 
 function EmptyRow({
   children,
-  tone = "var(--text-dim)",
+  tone = "var(--c-ink-muted)",
 }: {
   children: React.ReactNode;
   tone?: string;
@@ -755,8 +762,8 @@ function Tab({
         background: "none",
         border: "none",
         borderBottom: "2px solid transparent",
-        borderImage: active ? "var(--sol-grad-flat) 1" : undefined,
-        color: active ? "var(--text)" : "var(--text-dim)",
+        borderBottomColor: active ? "var(--c-green)" : "transparent",
+        color: active ? "var(--c-ink)" : "var(--c-ink-muted)",
         fontWeight: 700,
         fontSize: 12,
         letterSpacing: "0.04em",
@@ -804,9 +811,9 @@ function LabelButton({
         height: 40,
         padding: "0 14px",
         border: "none",
-        borderRadius: "var(--r-panel)",
-        background: solid ? "var(--accent)" : "var(--surface)",
-        color: solid ? "var(--on-accent)" : "var(--accent)",
+        borderRadius: "var(--r-lg)",
+        background: solid ? "var(--c-green)" : "var(--c-felt-raised)",
+        color: solid ? "var(--c-felt)" : "var(--c-green)",
         fontWeight: 700,
         fontSize: 12,
         letterSpacing: "0.04em",
@@ -916,7 +923,7 @@ function GetReady({
           justifyContent: "center",
           gap: 14,
           flexWrap: "wrap",
-          color: "var(--text-dim)",
+          color: "var(--c-ink-muted)",
           fontSize: 15,
         }}
       >
@@ -925,7 +932,7 @@ function GetReady({
         {step.action}
       </div>
 
-      <span style={{ fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>{step.note}</span>
+      <span style={{ fontSize: "var(--t-label-size)", color: "var(--c-ink-faint)" }}>{step.note}</span>
 
       {/* How much further, as a footnote. */}
       <div
@@ -939,9 +946,9 @@ function GetReady({
               width: done ? 14 : 6,
               height: 6,
               borderRadius: 3,
-              background: done ? "var(--win)" : "var(--line-strong)",
+              background: done ? "var(--c-win)" : "var(--c-rule-strong)",
               opacity: done ? 0.55 : 1,
-              transition: "width var(--dur-standard) var(--ease)",
+              transition: "width var(--m-base) var(--m-ease)",
             }}
           />
         ))}
@@ -975,12 +982,12 @@ function SolGauge({ lamports }: { lamports: number }) {
         gap: 7,
         height: 44,
         padding: ok ? "0 12px" : "0 14px",
-        borderRadius: "var(--r-panel)",
-        background: ok ? "transparent" : "var(--surface)",
-        border: ok ? "1px solid transparent" : "1px solid var(--info)",
-        fontSize: "var(--t-sm)",
+        borderRadius: "var(--r-lg)",
+        background: ok ? "transparent" : "var(--c-felt-raised)",
+        border: ok ? "1px solid transparent" : "1px solid var(--c-info)",
+        fontSize: "var(--t-body-sm-size)",
         whiteSpace: "nowrap",
-        color: ok ? "var(--text-faint)" : "var(--info)",
+        color: ok ? "var(--c-ink-faint)" : "var(--c-info)",
       }}
     >
       <SolanaMark size={12} />
@@ -1024,9 +1031,9 @@ function IconButton({
         display: "grid",
         placeItems: "center",
         border: "none",
-        borderRadius: "var(--r-panel)",
-        background: solid ? "var(--accent)" : "var(--surface)",
-        color: solid ? "var(--on-accent)" : "var(--accent)",
+        borderRadius: "var(--r-lg)",
+        background: solid ? "var(--c-green)" : "var(--c-felt-raised)",
+        color: solid ? "var(--c-felt)" : "var(--c-green)",
         opacity: disabled ? 0.35 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
       }}
@@ -1103,9 +1110,9 @@ function ExchangeModal({
           gap: "var(--sp-3)",
           padding: "var(--sp-4)",
           marginBottom: "var(--sp-4)",
-          background: "var(--surface)",
-          borderRadius: "var(--r-panel)",
-          border: "1px solid var(--line)",
+          background: "var(--c-felt-raised)",
+          borderRadius: "var(--r-lg)",
+          border: "1px solid var(--c-rule)",
         }}
       >
         <UsdcMark size={34} />
@@ -1113,9 +1120,9 @@ function ExchangeModal({
           <span
             className="num"
             style={{
-              fontSize: "var(--t-xl)",
+              fontSize: "var(--t-display-lg-size)",
               fontWeight: 600,
-              color: "var(--text)",
+              color: "var(--c-ink)",
               lineHeight: 1.05,
             }}
           >
@@ -1126,8 +1133,8 @@ function ExchangeModal({
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
-              fontSize: "var(--t-sm)",
-              color: "var(--text-dim)",
+              fontSize: "var(--t-body-sm-size)",
+              color: "var(--c-ink-muted)",
             }}
           >
             <ChipGlyph size={13} />
@@ -1168,12 +1175,12 @@ function ExchangeModal({
           alignItems: "center",
           justifyContent: "space-between",
           marginBottom: "var(--sp-2)",
-          color: "var(--text-dim)",
-          fontSize: "var(--t-ui)",
+          color: "var(--c-ink-muted)",
+          fontSize: "var(--t-body-sm-size)",
         }}
       >
         <span>{buying ? "You pay" : "You receive"}</span>
-        <span className="num" style={{ color: "var(--text)", fontWeight: 600 }}>
+        <span className="num" style={{ color: "var(--c-ink)", fontWeight: 600 }}>
           {formatUsd(clamped)} USDC
         </span>
       </div>
@@ -1183,8 +1190,8 @@ function ExchangeModal({
       <p
         style={{
           margin: "0 0 var(--sp-4)",
-          fontSize: "var(--t-xs)",
-          color: "var(--text-faint)",
+          fontSize: "var(--t-label-size)",
+          color: "var(--c-ink-faint)",
           lineHeight: 1.5,
         }}
       >
@@ -1199,11 +1206,11 @@ function ExchangeModal({
           style={{
             margin: "0 0 var(--sp-4)",
             padding: "var(--sp-3)",
-            borderRadius: "var(--r-control)",
-            background: "var(--surface)",
-            borderLeft: "2px solid var(--info)",
-            fontSize: "var(--t-sm)",
-            color: "var(--text-dim)",
+            borderRadius: "var(--r-md)",
+            background: "var(--c-felt-raised)",
+            borderLeft: "2px solid var(--c-info)",
+            fontSize: "var(--t-body-sm-size)",
+            color: "var(--c-ink-muted)",
             lineHeight: 1.5,
           }}
         >

@@ -1,13 +1,16 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { BREAKPOINTS } from "@/design/tokens";
 
 /**
  * A media query as React state.
  *
- * The queries here must match the ones in globals.css word for word, because
- * the CSS moves the HUD and the hook moves the seats; if they ever disagreed,
- * a phone would get a portrait table inside a desktop room.
+ * The widths here come from BREAKPOINTS, the same constant the media queries in
+ * globals.css are checked against by `npm run tokens`. That is the entire point
+ * of the constant: the CSS moves the HUD and this hook moves the seats, and
+ * when the two disagreed a phone got a portrait table inside a desktop room.
+ * Do not retype a number in either place.
  */
 function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
@@ -28,13 +31,17 @@ export type TableLayout = "desktop" | "portrait" | "landscape";
 /**
  * Which room the table page should build.
  *
- * A phone held upright gets the tall table with seats down its sides. A phone
- * on its side keeps the wide table, shrunk, with compact seats. Everything
- * else is the desktop room.
+ * A phone held upright gets the tall table with seats down its long edges. A
+ * phone on its side keeps the wide table, shrunk, with compact seats — the
+ * constraint there is height, not width, which is why that one query is a
+ * height and is not a breakpoint. Everything else is the desktop room.
  */
+const PORTRAIT = `(max-width: ${BREAKPOINTS.phone - 1}px) and (orientation: portrait)`;
+const SHORT = "(max-height: 520px)";
+
 export function useTableLayout(): TableLayout {
-  const portrait = useMediaQuery("(max-width: 719px) and (orientation: portrait)");
-  const short = useMediaQuery("(max-height: 520px)");
+  const portrait = useMediaQuery(PORTRAIT);
+  const short = useMediaQuery(SHORT);
   if (portrait) return "portrait";
   if (short) return "landscape";
   return "desktop";

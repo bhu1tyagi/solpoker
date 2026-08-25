@@ -46,6 +46,8 @@ interface Props {
   portrait?: boolean;
   /** Phone-sized seats and cards, whichever way the table stands. */
   compact?: boolean;
+  /** Your seat's TEE permission is confirmed, so your hole cards are secured. */
+  secured?: boolean;
 }
 
 export function TableFelt({
@@ -67,6 +69,7 @@ export function TableFelt({
   handNames,
   portrait = false,
   compact = false,
+  secured,
 }: Props) {
   // Rotate the table so the local player sits at the bottom. Spectators get the
   // natural order.
@@ -137,7 +140,6 @@ export function TableFelt({
   const dimLosers = stage === null || comparing;
 
   // Every pile is drawn against the biggest stack at the table.
-  const stackReference = Math.max(1, ...seats.map((s) => s?.stack ?? 0));
   const displayPot = stage !== null ? (showdown?.pot ?? 0) : pot;
   const awardBySeat = new Map((showdown?.awards ?? []).map((a) => [a.seat, a.amount]));
 
@@ -159,8 +161,26 @@ export function TableFelt({
           position: "absolute",
           inset: geo.ellipseInset,
           borderRadius: "50% / 50%",
-          background: "var(--felt-grad)",
-          boxShadow: "var(--felt-glow)",
+          /*
+           * The felt. Dark and slightly blue, lit from above centre so the
+           * board is the brightest part of the cloth and the rim falls away
+           * into the room.
+           *
+           * It is not a green oval. The surface of this product is felt in the
+           * sense the design system means — the near-black ground the whole
+           * interface is built on — and an emerald table sitting on it would
+           * be the one object in the room that belongs to a different palette.
+           * Depth comes from the rim-light below, not from a drop shadow,
+           * which is very nearly invisible against #0B0E14.
+           */
+          background:
+            "radial-gradient(ellipse at 50% 34%, var(--c-felt-edge) 0%, var(--c-felt-raised) 62%, color-mix(in srgb, var(--c-felt-raised) 70%, var(--c-felt)) 100%)",
+          // The rail: a hairline where the cloth stops. On near-black, a border
+          // does the work a shadow does on light UI, and without one the table
+          // and the room it stands in are the same object.
+          border: "1px solid var(--c-rule)",
+          boxShadow:
+            "var(--e-raised), inset 0 -28px 64px color-mix(in srgb, var(--c-felt) 62%, transparent)",
         }}
       >
         <div
@@ -168,7 +188,7 @@ export function TableFelt({
             position: "absolute",
             inset: "5% 3.5%",
             borderRadius: "50% / 50%",
-            border: "1px solid var(--felt-line)",
+            border: "1px solid var(--c-rule)",
             pointerEvents: "none",
           }}
         />
@@ -189,7 +209,7 @@ export function TableFelt({
             pointerEvents: "none",
           }}
         >
-          <path d={SPADE_PATH} fill="#eafff4" />
+          <path d={SPADE_PATH} fill="var(--c-ink)" />
         </svg>
         <div
           aria-hidden
@@ -202,7 +222,7 @@ export function TableFelt({
             fontSize: "clamp(8px, 1.6cqw, 13px)",
             letterSpacing: "0.42em",
             textTransform: "uppercase",
-            color: "rgba(234, 255, 244, 0.06)",
+            color: "color-mix(in srgb, var(--c-ink) 7%, transparent)",
             whiteSpace: "nowrap",
             pointerEvents: "none",
           }}
@@ -248,7 +268,7 @@ export function TableFelt({
                 style={{
                   fontFamily: "var(--font-display)",
                   fontSize: compact ? 12 : 15,
-                  color: "var(--text-dim)",
+                  color: "var(--c-ink-muted)",
                   textTransform: "uppercase",
                   letterSpacing: "-0.01em",
                 }}
@@ -259,7 +279,8 @@ export function TableFelt({
                 className="num"
                 style={{
                   fontSize: compact ? 14 : 17,
-                  color: "var(--gold)",
+                  fontWeight: 700,
+                  color: "var(--c-ink)",
                 }}
               >
                 <AnimatedNumber value={displayPot} />
@@ -337,7 +358,9 @@ export function TableFelt({
               deadline={hand?.deadline ?? 0}
               timeoutSecs={timeoutSecs}
               handLive={handLive}
-              stackReference={stackReference}
+              // Only your own seat carries the indicator: it is a claim about
+              // the cards you can read, not about anybody else's.
+              secured={isMe ? secured : undefined}
               avatarOn={pos.x > 50 ? "left" : "right"}
               cardsOn={pos.y < 50 ? "below" : "above"}
               winner={awardBySeat.has(i)}
@@ -357,9 +380,9 @@ export function TableFelt({
                     left: "50%",
                     transform: "translateX(-50%)",
                     bottom: compact ? -24 : -30,
-                    background: winners?.has(i) ? "var(--win)" : "var(--surface-2)",
-                    color: winners?.has(i) ? "#07230f" : "var(--text)",
-                    borderRadius: "var(--r-panel)",
+                    background: winners?.has(i) ? "var(--c-win)" : "var(--c-felt-edge)",
+                    color: winners?.has(i) ? "var(--c-felt)" : "var(--c-ink)",
+                    borderRadius: "var(--r-lg)",
                     fontFamily: "var(--font-display)",
                     fontSize: compact ? 9 : 10,
                     letterSpacing: "0.04em",
@@ -402,10 +425,10 @@ export function TableFelt({
               transition={{ duration: 0.25 }}
               style={{
                 padding: "14px 22px",
-                borderRadius: "var(--r-panel)",
-                background: "var(--surface-solid)",
-                border: "1px solid var(--line-strong)",
-                boxShadow: "var(--shadow-2)",
+                borderRadius: "var(--r-lg)",
+                background: "var(--c-felt-raised)",
+                border: "1px solid var(--c-rule-strong)",
+                boxShadow: "var(--e-overlay)",
               }}
             >
               <ShuffleLoop label={overlay} />
@@ -478,13 +501,13 @@ export function TableFelt({
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
-                    background: "var(--accent)",
-                    color: "var(--on-accent)",
-                    borderRadius: "var(--r-panel)",
+                    background: "var(--c-green)",
+                    color: "var(--c-felt)",
+                    borderRadius: "var(--r-lg)",
                     padding: "6px 13px",
                     fontFamily: "var(--font-display)",
-                    fontSize: "var(--t-sm)",
-                    boxShadow: "0 0 26px var(--accent-glow)",
+                    fontSize: "var(--t-body-sm-size)",
+                    boxShadow: "0 0 26px color-mix(in srgb, var(--c-green) 24%, transparent)",
                   }}
                 >
                   <span className="num">+{award.amount.toLocaleString()}</span>
@@ -520,7 +543,7 @@ function StatusLine({ stage, fallback }: { stage: ShowdownStage; fallback: strin
           style={{
             fontFamily: "var(--font-display)",
             fontSize: 12,
-            color: stage ? "var(--accent)" : "var(--text-dim)",
+            color: stage ? "var(--c-green)" : "var(--c-ink-muted)",
             textTransform: "uppercase",
             letterSpacing: "0.04em",
           }}
@@ -551,7 +574,7 @@ function WaitingDots() {
             height: 3,
             borderRadius: "50%",
             background: "currentColor",
-            color: "var(--text-faint)",
+            color: "var(--c-ink-faint)",
             display: "inline-block",
           }}
         />

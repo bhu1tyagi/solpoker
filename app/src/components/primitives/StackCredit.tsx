@@ -26,8 +26,8 @@ export function SolanaMark({ size = 13 }: { size?: number }) {
     >
       <defs>
         <linearGradient id={SOLANA_GRADIENT} x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0" stopColor="#9945FF" />
-          <stop offset="1" stopColor="#14F195" />
+          <stop offset="0" stopColor="var(--c-purple)" />
+          <stop offset="1" stopColor="var(--c-green)" />
         </linearGradient>
       </defs>
       <path
@@ -49,12 +49,12 @@ export function StackCredit() {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    color: "var(--text-dim)",
+    color: "var(--c-ink-muted)",
     textDecoration: "none",
-    fontSize: "var(--t-xs)",
+    fontSize: "var(--t-label-size)",
     fontWeight: 600,
     letterSpacing: "0.02em",
-    transition: "color 0.12s ease",
+    transition: "color var(--m-fast) var(--m-ease)",
   };
   return (
     <div
@@ -68,7 +68,7 @@ export function StackCredit() {
     >
       <span
         className="label"
-        style={{ fontSize: 10, letterSpacing: "0.09em", color: "var(--text-faint)" }}
+        style={{ fontSize: 10, letterSpacing: "0.09em", color: "var(--c-ink-faint)" }}
       >
         built on
       </span>
@@ -82,7 +82,7 @@ export function StackCredit() {
         <SolanaMark />
         Solana
       </a>
-      <span aria-hidden style={{ color: "var(--text-faint)" }}>
+      <span aria-hidden style={{ color: "var(--c-ink-faint)" }}>
         ·
       </span>
       <a
@@ -96,7 +96,7 @@ export function StackCredit() {
         // no user input is anywhere near this sink.
         dangerouslySetInnerHTML={{ __html: MAGICBLOCK_LOCKUP }}
       />
-      <span style={{ fontWeight: 400, fontSize: "var(--t-xs)", color: "var(--text-faint)" }}>
+      <span style={{ fontWeight: 400, fontSize: "var(--t-label-size)", color: "var(--c-ink-faint)" }}>
         ephemeral rollups
       </span>
     </div>
