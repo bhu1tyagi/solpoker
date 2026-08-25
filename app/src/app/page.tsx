@@ -872,7 +872,7 @@ function GetReady({
           rel="noopener noreferrer"
           style={{ textDecoration: "none" }}
         >
-          <Button size="sm" variant="primary">
+          <Button size="sm" variant="ghost">
             Swap for USDC
           </Button>
         </a>
@@ -883,7 +883,7 @@ function GetReady({
       label: "Chips",
       detail: chipsOk ? `${state.chips.toLocaleString()} ready` : "A cent each",
       action: (
-        <Button size="sm" variant="primary" onClick={onDeposit}>
+        <Button size="sm" variant="ghost" onClick={onDeposit}>
           Buy chips
         </Button>
       ),
@@ -891,22 +891,22 @@ function GetReady({
   ];
 
   const doneCount = steps.filter((s) => s.done).length;
-  const DOT = 26;
+  const DOT = 14;
   // Three equal columns put the marks at a sixth, a half and five sixths of the
   // width. Each segment stops short of the marks at both ends, which is what
   // leaves the gap around them.
-  const GAP = DOT / 2 + 8;
+  const GAP = DOT / 2 + 10;
   const segment = (from: string, to: string, filled: boolean) => (
     <div
       aria-hidden
       style={{
         position: "absolute",
-        top: DOT / 2 - 1,
+        top: DOT / 2,
         left: `calc(${from} + ${GAP}px)`,
         right: `calc(${to} + ${GAP}px)`,
-        height: 2,
-        borderRadius: 2,
-        background: filled ? "var(--win)" : "var(--line-strong)",
+        height: 1,
+        background: filled ? "var(--win)" : "var(--line)",
+        opacity: filled ? 0.5 : 1,
         transition: "background var(--dur-large) var(--ease)",
       }}
     />
@@ -915,7 +915,7 @@ function GetReady({
   return (
     <section
       aria-label="Getting ready to play"
-      style={{ margin: "0 auto 34px", maxWidth: 760, padding: "0 var(--sp-2)" }}
+      style={{ margin: "0 0 30px", padding: "0 var(--sp-6)" }}
     >
       <div style={{ position: "relative" }}>
         {segment("16.666%", "50%", doneCount >= 1)}
@@ -933,7 +933,7 @@ function GetReady({
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  gap: 10,
+                  gap: 6,
                   textAlign: "center",
                 }}
               >
@@ -944,15 +944,16 @@ function GetReady({
                     borderRadius: "50%",
                     display: "grid",
                     placeItems: "center",
-                    fontSize: 13,
+                    fontSize: 8,
                     lineHeight: 1,
                     flexShrink: 0,
                     background: s.done ? "var(--win)" : "var(--bg)",
                     color: s.done ? "#07230f" : "transparent",
+                    opacity: s.done ? 0.75 : 1,
                     border: s.done
-                      ? "2px solid var(--win)"
-                      : `2px solid ${active ? "var(--gold)" : "var(--line-strong)"}`,
-                    boxShadow: active && !s.done ? "0 0 0 4px var(--gold-soft)" : "none",
+                      ? "1px solid var(--win)"
+                      : `1px solid ${active ? "var(--gold)" : "var(--line-strong)"}`,
+                    boxShadow: active && !s.done ? "0 0 0 3px var(--gold-soft)" : "none",
                     transition: "background var(--dur-standard) var(--ease)",
                   }}
                 >
@@ -962,10 +963,8 @@ function GetReady({
                 <span
                   style={{
                     fontSize: "var(--t-xs)",
-                    fontWeight: 600,
-                    letterSpacing: "0.04em",
-                    textTransform: "uppercase",
-                    color: s.done ? "var(--win)" : active ? "var(--text)" : "var(--text-faint)",
+                    fontWeight: active ? 600 : 400,
+                    color: active ? "var(--text-dim)" : "var(--text-faint)",
                   }}
                 >
                   {s.label}
@@ -973,8 +972,8 @@ function GetReady({
                 <span
                   className={s.done ? "num" : undefined}
                   style={{
-                    fontSize: "var(--t-sm)",
-                    color: active ? "var(--text-dim)" : "var(--text-faint)",
+                    fontSize: "var(--t-xs)",
+                    color: "var(--text-faint)",
                   }}
                 >
                   {s.detail}
