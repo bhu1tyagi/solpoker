@@ -204,6 +204,30 @@ class Sfx {
     this.tone(0.1, 880, { duration: 0.16, gain: 0.07 });
   }
 
+  /** Somebody pulling out a chair: a soft wooden knock, then they settle. */
+  seat(at = 0) {
+    this.burst(at, { duration: 0.09, type: "lowpass", freq: 260, gain: 0.42, attack: 0.004 });
+    this.tone(at + 0.05, 340, { duration: 0.14, gain: 0.05, to: 300 });
+  }
+
+  /** A chair pushed back. The knock without the settle. */
+  standUp(at = 0) {
+    this.burst(at, { duration: 0.12, type: "lowpass", freq: 220, gain: 0.3, attack: 0.01 });
+  }
+
+  /**
+   * Your own two cards arriving, and only yours.
+   *
+   * Deliberately different from `deal`, which is the pass around the table and
+   * belongs to everybody. This is the moment the cards become yours to look
+   * at, so it lifts rather than clicks.
+   */
+  peek(at = 0) {
+    this.burst(at, { duration: 0.06, freq: 1900, gain: 0.3 });
+    this.burst(at + 0.085, { duration: 0.06, freq: 2200, gain: 0.3 });
+    this.tone(at + 0.09, 760, { duration: 0.2, gain: 0.05, to: 1040 });
+  }
+
   /** Chips bought or sold. */
   cash() {
     this.chip(0);

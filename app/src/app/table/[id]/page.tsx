@@ -412,6 +412,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     mySeat,
     stage: showdown.stage,
     working,
+    myHole,
   });
 
   // Which room to build: the desktop corners, the portrait phone's stacked

@@ -26,6 +26,7 @@ export function useTableSounds({
   mySeat,
   stage,
   working,
+  myHole,
 }: {
   hand: HandView | null;
   table: TableView | null;
@@ -33,6 +34,8 @@ export function useTableSounds({
   mySeat: number;
   stage: ShowdownStage;
   working: boolean;
+  /** Your own two cards, once the enclave has served them. */
+  myHole: number[] | null;
 }) {
   const prevBoard = useRef(0);
   const prevDealt = useRef(0);
@@ -42,6 +45,38 @@ export function useTableSounds({
   const prevStage = useRef<ShowdownStage>(null);
   const prevRevealed = useRef(0);
   const shuffledFor = useRef(-1);
+  const prevOccupied = useRef<(string | null)[]>([]);
+  const peekedFor = useRef(-1);
+
+  // Somebody taking a chair, or leaving one.
+  //
+  // Compared by occupant rather than by count, so one player standing up as
+  // another sits down is heard as both things rather than as silence.
+  useEffect(() => {
+    const now = seats.map((s) => s?.occupant ?? null);
+    const before = prevOccupied.current;
+    if (before.length) {
+      for (let i = 0; i < now.length; i++) {
+        if (now[i] && now[i] !== before[i]) sfx.seat();
+        else if (!now[i] && before[i]) sfx.standUp();
+      }
+    }
+    prevOccupied.current = now;
+  }, [seats]);
+
+  // Your own cards, once the enclave has served them to you.
+  //
+  // Keyed on the hand number, not on the cards: the same two cards can arrive
+  // twice from a re-read, and a sound that fires on every refetch is worse
+  // than no sound at all.
+  useEffect(() => {
+    const n = hand?.handNumber ?? 0;
+    const got = myHole !== null && myHole.length === 2 && myHole[0] !== NO_CARD;
+    if (got && n !== 0 && peekedFor.current !== n) {
+      peekedFor.current = n;
+      sfx.peek(0.12);
+    }
+  }, [myHole, hand?.handNumber]);
 
   // Cards arriving on the board, one sound per new card.
   useEffect(() => {
@@ -109,8 +144,12 @@ export function useTableSounds({
   // Hands turning face up at showdown, and the pot being pushed across.
   useEffect(() => {
     const revealed = hand?.revealedMask ?? 0;
-    if (stage === "reveal" && countBits(revealed) > countBits(prevRevealed.current)) {
-      sfx.flip();
+    const fresh = countBits(revealed) - countBits(prevRevealed.current);
+    if (stage === "reveal" && fresh > 0) {
+      // One turn per hand, not one per showdown. Two players tabling their
+      // cards should sound like two players tabling their cards, and the
+      // stagger is what makes a three-way showdown feel like a showdown.
+      for (let i = 0; i < fresh; i++) sfx.flip(i * 0.13);
     }
     prevRevealed.current = revealed;
   }, [hand?.revealedMask, stage]);

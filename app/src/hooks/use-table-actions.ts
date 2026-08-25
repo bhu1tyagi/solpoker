@@ -34,7 +34,7 @@ import {
   SHUFFLE_IDLE,
 } from "@/lib/constants";
 import { useTableStore } from "@/stores/table-store";
-import { handPda, seatPda } from "@/lib/pdas";
+import { handPda, holePda, seatPda } from "@/lib/pdas";
 import { friendlyError, sendEr, sleep } from "@/lib/net";
 import { tombstoneTable } from "@/hooks/use-tables";
 import {
@@ -591,11 +591,49 @@ export function useTableActions(args: {
       // table so the program can refuse to pull a seat off the rollup while a
       // hand is live — which means the table has to still be there to check.
       // Undelegating the core first would leave every seat unable to follow.
+      //
+      // Only the seats that actually went to the rollup. A table can end up
+      // half-delegated — the core delegated, some seats left behind — because
+      // `startTable` is deliberately tolerant of per-account failures so it can
+      // resume. On the rollup a seat that was never delegated is a read-only
+      // clone of the base-layer account, so asking to commit it fails with
+      // `ReadonlyDataModified`.
+      //
+      // That mattered far more than it looks. This loop threw on the first such
+      // seat, which aborted the whole pause *before* the core undelegation on
+      // the line below — so the table could never come back, and every chip on
+      // it stayed unreachable. The account's owner is the honest test for
+      // whether there is anything to undelegate, and it is read from the base
+      // layer where ownership is authoritative.
+      const base = getBaseConnection();
+      const seatKeys = Array.from({ length: MAX_SEATS }, (_, i) => seatPda(table, i));
+      const holeKeys = Array.from({ length: MAX_SEATS }, (_, i) => holePda(table, i));
+      const [seatInfos, holeInfos] = await Promise.all([
+        base.getMultipleAccountsInfo(seatKeys),
+        base.getMultipleAccountsInfo(holeKeys),
+      ]);
+      let skipped = 0;
       for (let i = 0; i < MAX_SEATS; i++) {
-        await send(
-          await undelegateSeatIx(erProgram, table, i, session.publicKey),
-          `undelegate seat ${i}`,
-        );
+        const onRollup = (info: (typeof seatInfos)[number]) =>
+          info !== null && !info.owner.equals(PROGRAM_ID);
+        // Both halves have to be on the rollup: the instruction commits the
+        // pair, so one of each is as unworkable as neither.
+        if (!onRollup(seatInfos[i]) || !onRollup(holeInfos[i])) {
+          skipped += 1;
+          continue;
+        }
+        try {
+          await send(
+            await undelegateSeatIx(erProgram, table, i, session.publicKey),
+            `undelegate seat ${i}`,
+          );
+        } catch (e) {
+          // One stubborn seat must not strand the other five, nor the table.
+          console.error(`undelegate seat ${i} failed, continuing:`, e);
+        }
+      }
+      if (skipped > 0) {
+        console.log(`pause: ${skipped} seat(s) were never delegated; nothing to bring back`);
       }
       await send(await undelegateCoreIx(erProgram, table, session.publicKey), "undelegate table");
 
