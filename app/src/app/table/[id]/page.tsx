@@ -866,7 +866,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             }}
           >
             You need at least {minBuyIn.toLocaleString()} chips ({formatUsd(minBuyIn)}) to sit
-            here. Deposit USDC in the lobby first.
+            here. Buy some chips in the lobby first.
           </p>
         )}
         <Button

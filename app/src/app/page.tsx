@@ -822,17 +822,16 @@ function LabelButton({
 }
 
 /**
- * The road into the game, drawn as the road: one rail across the full width
- * with a mark at each end and one in the middle, and everything about a step
- * sitting under its own mark.
+ * The road into the game: three marks on a line, each with its own step
+ * underneath it.
  *
- * Earlier versions put the rail on the left and the instruction on the right,
- * which meant the dots were decoration — you read the sentence and ignored
- * them. Stacking each step under its mark makes the position on the rail the
- * thing you read first, and the detail beneath it the answer to "so what do I
- * do".
+ * No panel around it. Boxing it made it read as a form to be completed before
+ * the real page began, when it is really just a caption on the lobby — three
+ * marks, a line between them, and the one thing to do next. The line breaks
+ * around each mark rather than running under it, so the marks are objects on
+ * the line instead of decoration painted over it.
  *
- * Nothing renders once the wallet is ready. A finished checklist is furniture.
+ * Nothing renders once the wallet is ready.
  */
 function GetReady({
   state,
@@ -847,8 +846,6 @@ function GetReady({
   if (gasOk && chipsOk) return null;
 
   const short = Math.ceil(((PLAY_FLOOR_LAMPORTS - state.lamports) / 1e9) * 1000) / 1000;
-  // The first unmet step is the only one that gets an instruction; the others
-  // state a fact and stay quiet.
   const activeIndex = !gasOk ? 0 : !usdcOk ? 1 : 2;
 
   const steps = [
@@ -887,69 +884,57 @@ function GetReady({
       detail: chipsOk ? `${state.chips.toLocaleString()} ready` : "A cent each",
       action: (
         <Button size="sm" variant="primary" onClick={onDeposit}>
-          Deposit
+          Buy chips
         </Button>
       ),
     },
   ];
 
-  // How far the filled rail reaches: to the middle mark with one done, all the
-  // way with two.
   const doneCount = steps.filter((s) => s.done).length;
-  const fill = doneCount === 0 ? "0%" : doneCount === 1 ? "50%" : "100%";
-  const DOT = 20;
+  const DOT = 26;
+  // Three equal columns put the marks at a sixth, a half and five sixths of the
+  // width. Each segment stops short of the marks at both ends, which is what
+  // leaves the gap around them.
+  const GAP = DOT / 2 + 8;
+  const segment = (from: string, to: string, filled: boolean) => (
+    <div
+      aria-hidden
+      style={{
+        position: "absolute",
+        top: DOT / 2 - 1,
+        left: `calc(${from} + ${GAP}px)`,
+        right: `calc(${to} + ${GAP}px)`,
+        height: 2,
+        borderRadius: 2,
+        background: filled ? "var(--win)" : "var(--line-strong)",
+        transition: "background var(--dur-large) var(--ease)",
+      }}
+    />
+  );
 
   return (
     <section
       aria-label="Getting ready to play"
-      style={{
-        marginBottom: 30,
-        padding: "var(--sp-5) var(--sp-6) var(--sp-4)",
-        borderRadius: "var(--r-panel)",
-        background: "var(--surface-faint)",
-        border: "1px solid var(--line)",
-      }}
+      style={{ margin: "0 auto 34px", maxWidth: 760, padding: "0 var(--sp-2)" }}
     >
       <div style={{ position: "relative" }}>
-        {/* The rail, drawn between the outer marks' centres. */}
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            top: DOT / 2 - 1,
-            left: DOT / 2,
-            right: DOT / 2,
-            height: 2,
-            background: "var(--line-strong)",
-          }}
-        />
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            top: DOT / 2 - 1,
-            left: DOT / 2,
-            width: `calc((100% - ${DOT}px) * ${fill === "0%" ? 0 : fill === "50%" ? 0.5 : 1})`,
-            height: 2,
-            background: "var(--win)",
-            transition: "width var(--dur-large) var(--ease)",
-          }}
-        />
+        {segment("16.666%", "50%", doneCount >= 1)}
+        {segment("50%", "16.666%", doneCount >= 2)}
 
-        <div style={{ display: "flex", justifyContent: "space-between", position: "relative" }}>
+        <div style={{ display: "flex", position: "relative" }}>
           {steps.map((s, i) => {
             const active = i === activeIndex;
-            const align = i === 0 ? "flex-start" : i === 1 ? "center" : "flex-end";
             return (
               <div
                 key={s.label}
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: align,
-                  gap: 8,
                   flex: 1,
                   minWidth: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 10,
+                  textAlign: "center",
                 }}
               >
                 <div
@@ -959,56 +944,42 @@ function GetReady({
                     borderRadius: "50%",
                     display: "grid",
                     placeItems: "center",
-                    fontSize: 11,
+                    fontSize: 13,
                     lineHeight: 1,
-                    color: "#07230f",
                     flexShrink: 0,
                     background: s.done ? "var(--win)" : "var(--bg)",
+                    color: s.done ? "#07230f" : "transparent",
                     border: s.done
-                      ? "none"
+                      ? "2px solid var(--win)"
                       : `2px solid ${active ? "var(--gold)" : "var(--line-strong)"}`,
                     boxShadow: active && !s.done ? "0 0 0 4px var(--gold-soft)" : "none",
+                    transition: "background var(--dur-standard) var(--ease)",
                   }}
                 >
-                  {s.done ? "✓" : ""}
+                  ✓
                 </div>
 
-                <div
+                <span
                   style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: align,
-                    gap: 6,
-                    textAlign: i === 0 ? "left" : i === 1 ? "center" : "right",
+                    fontSize: "var(--t-xs)",
+                    fontWeight: 600,
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    color: s.done ? "var(--win)" : active ? "var(--text)" : "var(--text-faint)",
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: "var(--t-xs)",
-                      fontWeight: 600,
-                      letterSpacing: "0.04em",
-                      textTransform: "uppercase",
-                      color: s.done
-                        ? "var(--win)"
-                        : active
-                          ? "var(--text)"
-                          : "var(--text-faint)",
-                    }}
-                  >
-                    {s.label}
-                  </span>
-                  <span
-                    className={s.done ? "num" : undefined}
-                    style={{
-                      fontSize: "var(--t-sm)",
-                      color: active ? "var(--text-dim)" : "var(--text-faint)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {s.detail}
-                  </span>
-                  {active && s.action}
-                </div>
+                  {s.label}
+                </span>
+                <span
+                  className={s.done ? "num" : undefined}
+                  style={{
+                    fontSize: "var(--t-sm)",
+                    color: active ? "var(--text-dim)" : "var(--text-faint)",
+                  }}
+                >
+                  {s.detail}
+                </span>
+                {active && s.action}
               </div>
             );
           })}
@@ -1105,7 +1076,7 @@ function IconButton({
 }
 
 /**
- * Deposit and cash out.
+ * Buying chips and cashing out.
  *
  * The one screen where the currency has to be unambiguous, so it says USDC in
  * as many ways as it can without nagging: in the title, on the badge beside the
@@ -1161,7 +1132,7 @@ function ExchangeModal({
     <Modal
       open={mode !== null}
       onClose={onClose}
-      title={buying ? "Deposit USDC" : "Cash out to USDC"}
+      title={buying ? "Buy chips with USDC" : "Cash out to USDC"}
     >
       {/* The headline figure: dollars first, chips underneath. */}
       <div
@@ -1290,7 +1261,7 @@ function ExchangeModal({
             onClose();
           }}
         >
-          {buying ? `Deposit ${formatUsd(clamped)}` : `Cash out ${formatUsd(clamped)}`}
+          {buying ? `Buy chips for ${formatUsd(clamped)}` : `Cash out ${formatUsd(clamped)}`}
         </Button>
         <Button variant="quiet" onClick={onClose}>
           Cancel
