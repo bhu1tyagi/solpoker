@@ -320,41 +320,122 @@ export function useTableActions(args: {
           return !!info && !info.owner.equals(PROGRAM_ID);
         };
 
-        if (!(await delegatedAlready(table))) {
-          try {
-            await sendAsSession(
-              await delegateCoreIx(program, tableId, session.publicKey),
-              "delegate table",
+        //
+        // All of it goes, or none of it does.
+        //
+        // These cannot share a transaction, so the sequence is not atomic on
+        // its own — and it used to abort on the first failed seat with the
+        // table already delegated and nothing to undo it. That is a
+        // half-delegated table: core on the rollup, seats on Solana, no
+        // instruction able to work across the gap, and every chip on those
+        // seats unreachable until somebody noticed.
+        //
+        // Atomicity is not available, so the next best thing is: undo what
+        // landed. On any failure every account that made it to the rollup is
+        // sent straight back, leaving the table exactly as it was before the
+        // button was pressed. A start that fails is then a no-op the player can
+        // simply retry, rather than damage somebody has to diagnose.
+        const delegatedNow: number[] = [];
+        let coreDelegated = await delegatedAlready(table);
+
+        const rollBack = async () => {
+          if (!erProgram || !erConnection) return;
+          const undo = async (ix: Awaited<ReturnType<typeof undelegateCoreIx>>, label: string) => {
+            try {
+              const tx = new Transaction().add(ix);
+              await sendEr(erConnection, tx, {
+                signers: [session],
+                feePayer: session.publicKey,
+                label,
+              });
+            } catch (e) {
+              console.error(`rollback: ${label} failed:`, e);
+            }
+          };
+          // Seats before the core, because `undelegate_seat` reads the table to
+          // refuse a mid-hand pull and needs it still there to read.
+          for (const i of delegatedNow) {
+            await undo(
+              await undelegateSeatIx(erProgram, table, i, session.publicKey),
+              `roll back seat ${i}`,
             );
-          } catch (e) {
-            if (!(await delegatedAlready(table))) throw e;
           }
-        }
-        for (let i = 0; i < MAX_SEATS; i++) {
-          const seat = seatPda(table, i);
-          if (await delegatedAlready(seat)) continue;
-          try {
-            await sendAsSession(
-              await delegateSeatIx(program, table, i, session.publicKey),
-              `delegate seat ${i}`,
+          if (coreDelegated) {
+            await undo(
+              await undelegateCoreIx(erProgram, table, session.publicKey),
+              "roll back table",
             );
-          } catch (e) {
-            if (!(await delegatedAlready(seat))) throw e;
           }
+        };
+
+        try {
+          if (!coreDelegated) {
+            try {
+              await sendAsSession(
+                await delegateCoreIx(program, tableId, session.publicKey),
+                "delegate table",
+              );
+              coreDelegated = true;
+            } catch (e) {
+              if (!(await delegatedAlready(table))) throw e;
+              coreDelegated = true;
+            }
+          }
+          for (let i = 0; i < MAX_SEATS; i++) {
+            const seat = seatPda(table, i);
+            if (await delegatedAlready(seat)) continue;
+            try {
+              await sendAsSession(
+                await delegateSeatIx(program, table, i, session.publicKey),
+                `delegate seat ${i}`,
+              );
+              delegatedNow.push(i);
+            } catch (e) {
+              if (!(await delegatedAlready(seat))) throw e;
+              delegatedNow.push(i);
+            }
+          }
+        } catch (e) {
+          setBusy("start:rollback");
+          console.error("delegation failed, returning the table to Solana:", e);
+          await rollBack();
+          throw new Error(
+            "The table could not be moved to the game validator, so it has been left on Solana. Nothing was lost — try starting again.",
+          );
         }
 
         // Delegation takes a moment to reach the rollup, and the base layer
         // cannot say when: it flips owners the moment the transaction lands.
         // Ask the rollup itself whether it serves the last seat yet.
         setBusy("start:waiting");
+        const mustBeThere = [
+          table,
+          ...Array.from({ length: MAX_SEATS }, (_, i) => seatPda(table, i)),
+          ...Array.from({ length: MAX_SEATS }, (_, i) => holePda(table, i)),
+        ];
+        let allArrived = false;
         for (let t = 0; t < 40; t++) {
           try {
-            const info = await erConnection.getAccountInfo(seatPda(table, MAX_SEATS - 1));
-            if (info) break;
+            // Every account, not just the last seat. Waiting on one and
+            // assuming the rest is how a table with a missing hole account got
+            // as far as being declared live, and then dealt nobody in.
+            const infos = await erConnection.getMultipleAccountsInfo(mustBeThere);
+            if (infos.every((i) => i !== null)) {
+              allArrived = true;
+              break;
+            }
           } catch {
             // Not there yet.
           }
           await sleep(750);
+        }
+        if (!allArrived) {
+          setBusy("start:rollback");
+          console.error("the rollup never served every account; returning the table to Solana");
+          await rollBack();
+          throw new Error(
+            "The game validator did not pick the table up in time, so it has been left on Solana. Nothing was lost — try starting again.",
+          );
         }
 
         // Lock the deck to nobody and each hand to its owner. Retried because
