@@ -645,6 +645,37 @@ export function useTableActions(args: {
         if (infos.every((i) => i?.owner.equals(PROGRAM_ID))) break;
         await sleep(1000);
       }
+
+      // Send the house its rake, now that the table can be written on Solana.
+      //
+      // Rake is taken at settlement, which runs on the rollup, where a
+      // base-layer `Player` balance cannot be written — so it waits in
+      // `table.rake_accrued` until the table comes home. Sweeping only
+      // happened when a creator *deleted* a table, which meant a table that
+      // was merely paused held its rake indefinitely and the house had to know
+      // to go and get it. This is the moment it becomes possible, so this is
+      // where it happens.
+      //
+      // Signed by the session key, not the wallet: `sweep_rake` is
+      // permissionless and the destination is fixed in the program, so there
+      // is nothing to gain by running it and no reason to spend a player's
+      // prompt on the house's bookkeeping. Best effort — a table that never
+      // raked a pot refuses, and that must never block a cash-out.
+      try {
+        const program = makeProgram(conn);
+        const ix = await sweepRakeIx(program, table, session.publicKey);
+        const tx = new Transaction().add(ix);
+        const bh = await conn.getLatestBlockhash();
+        tx.feePayer = session.publicKey;
+        tx.recentBlockhash = bh.blockhash;
+        tx.sign(session);
+        const sig = await conn.sendRawTransaction(tx.serialize());
+        await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
+        console.log(`swept this table's rake to the treasury: ${sig}`);
+      } catch {
+        // Nothing accrued, or another client swept it first. Either is fine.
+      }
+
       toast("Table paused. You can cash out now.", "good");
     } catch (e) {
       toast(friendlyError(e), "bad");
@@ -736,6 +767,30 @@ export function useTableActions(args: {
         // 4. Chips back into the balance.
         setBusy("cashout:leaving");
         await leave(seatIndex);
+
+        // 4b. And the house's share, while the table is still on Solana.
+        //
+        // This path puts the table straight back on the rollup below, so a
+        // rake left unswept here is locked away again until the next time
+        // somebody pauses. Session-signed and best effort: it is bookkeeping,
+        // not the player's errand, and it must never block a cash-out.
+        if (session) {
+          try {
+            const program = makeProgram(conn);
+            const tx = new Transaction().add(
+              await sweepRakeIx(program, table, session.publicKey),
+            );
+            const bh = await conn.getLatestBlockhash();
+            tx.feePayer = session.publicKey;
+            tx.recentBlockhash = bh.blockhash;
+            tx.sign(session);
+            const sig = await conn.sendRawTransaction(tx.serialize());
+            await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
+            console.log(`swept this table's rake to the treasury: ${sig}`);
+          } catch {
+            // Nothing accrued, or somebody swept it first.
+          }
+        }
 
         // 5. Hand the table back to whoever is still sitting, so cashing out
         //    does not end their game. Best effort and deliberately last: if it
