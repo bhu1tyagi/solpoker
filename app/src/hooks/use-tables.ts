@@ -11,7 +11,7 @@ import {
   DELEGATION_PROGRAM,
   PROGRAM_ID,
 } from "@/lib/constants";
-import { deckPda } from "@/lib/pdas";
+import { deckPda, holePda } from "@/lib/pdas";
 import type { ConfigView, TableView } from "@/stores/table-store";
 
 /** Anchor account discriminator for Table, from the IDL. */
@@ -178,6 +178,9 @@ export function useTables() {
       // A deck from an older layout cannot be dealt from, so say so here
       // rather than letting someone sit down and hit a deserialization error
       // the moment they press start.
+      const holes = decoded.length
+        ? await batched(decoded.map((d) => holePda(new PublicKey(d.table.address), 0)))
+        : [];
       const decks = decoded.length
         ? await batched(decoded.map((d) => deckPda(new PublicKey(d.table.address))))
         : [];
@@ -193,6 +196,11 @@ export function useTables() {
               // Show the table without its stakes rather than not at all.
             }
             const deck = decks[i];
+            // A table whose card slots were never created cannot deal a hand,
+            // and looks completely normal until somebody sits at it and waits.
+            // Seat 0's slot is the cheap probe: creation makes all six in one
+            // transaction, so either they all exist or none do.
+            const hasCardSlots = holes[i] !== null;
             const seated = d.table.seats.filter(Boolean).length;
             const emptyFor = d.table.emptySince
               ? Math.floor(Date.now() / 1000) - d.table.emptySince
@@ -202,7 +210,8 @@ export function useTables() {
               delegated: d.delegated,
               config,
               seated,
-              outdated: !deck || deck.data.length < DECK_ACCOUNT_SIZE,
+              outdated:
+                !deck || deck.data.length < DECK_ACCOUNT_SIZE || !hasCardSlots,
               abandoned:
                 !d.delegated && seated === 0 && emptyFor >= ABANDONED_AFTER_SECS,
               stale:

@@ -3,40 +3,55 @@
 :root {
 
   /* color */
-  --c-felt: #0B0E14;
-  --c-felt-raised: #141924;
-  --c-felt-edge: #1A2030;
-  --c-rule: #232B3D;
-  --c-rule-strong: #2F3A52;
-  --c-ink: #E8ECF4;
-  --c-ink-muted: #A8B2C6;
-  --c-ink-faint: #8A93A6;
+  --c-felt: #080B10;
+  --c-felt-mid: #101720;
+  --c-felt-edge: #1B2836;
+  --c-felt-raised: #151C26;
+  --c-felt-sunk: #121821;
+  --c-rule: rgba(237,232,220,0.11);
+  --c-rule-strong: rgba(237,232,220,0.22);
+  --c-rule-faint: rgba(237,232,220,0.055);
+  --c-ink: #EDE8DC;
+  --c-ink-warm: #DAD5C9;
+  --c-ink-muted: #A7AEBB;
+  --c-ink-faint: #99A1AE;
+  --c-ink-dim: #8D95A3;
   --c-purple: #9945FF;
-  --c-purple-text: #B07CFF;
+  --c-purple-text: #B9A2E8;
   --c-green: #14F195;
+  --c-green-soft: #6EE3B0;
+  --c-green-muted: #4FD9A0;
   --c-green-deep: #0FBF77;
   --c-win: #14F195;
   --c-loss: #FF5C5C;
   --c-warn: #FFB020;
-  --c-info: #4DA3FF;
-  --c-card-face: #F5F3EE;
-  --c-card-face-edge: #DCD8CE;
-  --c-card-back: #161C2A;
-  --c-suit-spade: #15202B;
-  --c-suit-heart: #C2143C;
-  --c-suit-diamond: #1667C2;
-  --c-suit-club: #137A4A;
-  --c-suit-two-color-red: #C2143C;
-  --c-suit-two-color-black: #15202B;
-  --c-chip1: #F5F3EE;
-  --c-chip5: #D6455B;
-  --c-chip25: #2E9E5B;
-  --c-chip100: #1F2733;
-  --c-chip500: #7B4BC9;
+  --c-info: #B9A2E8;
+  --c-card-face: #EFE9DB;
+  --c-card-face-lit: #FFFBF1;
+  --c-card-face-edge: #DCD6C8;
+  --c-card-ink: #14171E;
+  --c-card-ink-red: #9E2434;
+  --c-card-back: #1B2136;
+  --c-card-back-frame: #46506B;
+  --c-card-back-weave: rgba(178,148,255,0.36);
+  --c-suit-spade: #14171E;
+  --c-suit-heart: #9E2434;
+  --c-suit-diamond: #2C3A6B;
+  --c-suit-club: #12543A;
+  --c-suit-two-color-red: #9E2434;
+  --c-suit-two-color-black: #14171E;
+  --c-chip-cream: #E7E1D2;
+  --c-chip1: #14171E;
+  --c-chip5: #7E2130;
+  --c-chip10: #2C3A6B;
+  --c-chip25: #12543A;
+  --c-chip50: #6B3A86;
+  --c-chip100: #E7E1D2;
+  --c-chip500: #6B3A86;
 
   /* font */
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-body: 'Inter', system-ui, sans-serif;
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-body: 'Archivo', Helvetica, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 
   /* space */
@@ -54,19 +69,25 @@
   --sp-20: 80px;
 
   /* radius */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 14px;
-  --r-card: 8px;
+  --r-sm: 5px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-card: 6px;
+  --r-card-lg: 9px;
   --r-chip: 999px;
   --r-pill: 999px;
 
   /* elevation */
   --e-flat: none;
-  --e-raised: inset 0 1px 0 rgba(255,255,255,0.06);
-  --e-overlay: inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 32px rgba(0,0,0,0.55);
-  --e-lifted: inset 0 1px 0 rgba(255,255,255,0.10), 0 20px 48px rgba(0,0,0,0.65);
+  --e-raised: 0 0 0 1px rgba(237,232,220,0.07), inset 0 1px 0 rgba(237,232,220,0.13);
+  --e-panel: 0 0 0 1px rgba(237,232,220,0.07), inset 0 1px 0 rgba(237,232,220,0.13), 0 46px 90px rgba(0,0,0,0.66);
+  --e-overlay: 0 0 0 1px rgba(237,232,220,0.09), inset 0 1px 0 rgba(237,232,220,0.13), 0 12px 32px rgba(0,0,0,0.55);
+  --e-lifted: 0 0 0 1px rgba(237,232,220,0.11), inset 0 1px 0 rgba(237,232,220,0.16), 0 20px 48px rgba(0,0,0,0.7);
+  --e-card: 0 26px 46px rgba(0,0,0,0.58);
+  --e-card-sm: 0 8px 16px rgba(0,0,0,0.42);
+  --e-chip: 0 12px 22px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(0,0,0,0.42);
   --e-to-act: 0 0 0 2px rgba(20,241,149,0.55), 0 0 24px rgba(20,241,149,0.25);
+  --e-lit: 0 0 0 1px #14F195, 0 14px 26px rgba(0,0,0,0.5);
 
   /* z-index */
   --z-felt: 0;
@@ -80,39 +101,47 @@
   --z-tooltip: 80;
 
   /* type scale */
-  --t-display-xl-size: 3.5rem;
-  --t-display-xl-line: 1.02;
-  --t-display-xl-weight: 700;
-  --t-display-xl-tracking: -0.03em;
-  --t-display-lg-size: 2.5rem;
-  --t-display-lg-line: 1.06;
-  --t-display-lg-weight: 700;
-  --t-display-lg-tracking: -0.025em;
-  --t-display-md-size: 1.75rem;
+  --t-display-xl-size: 2.75rem;
+  --t-display-xl-line: 1.1;
+  --t-display-xl-weight: 400;
+  --t-display-xl-tracking: -0.015em;
+  --t-display-lg-size: 1.9375rem;
+  --t-display-lg-line: 1.12;
+  --t-display-lg-weight: 400;
+  --t-display-lg-tracking: -0.015em;
+  --t-display-md-size: 1.625rem;
   --t-display-md-line: 1.15;
-  --t-display-md-weight: 700;
-  --t-display-md-tracking: -0.02em;
-  --t-money-size: 1.25rem;
-  --t-money-line: 1.1;
-  --t-money-weight: 700;
+  --t-display-md-weight: 400;
+  --t-display-md-tracking: -0.012em;
+  --t-guidance-size: 1rem;
+  --t-guidance-line: 1.5;
+  --t-guidance-weight: 300;
+  --t-guidance-tracking: 0;
+  --t-money-size: 2.75rem;
+  --t-money-line: 1;
+  --t-money-weight: 400;
   --t-money-tracking: -0.01em;
-  --t-body-lg-size: 1.0625rem;
-  --t-body-lg-line: 1.55;
+  --t-money-md-size: 0.875rem;
+  --t-money-md-line: 1.3;
+  --t-money-md-weight: 500;
+  --t-money-md-tracking: 0;
+  --t-body-lg-size: 0.90625rem;
+  --t-body-lg-line: 1.6;
   --t-body-lg-weight: 400;
   --t-body-lg-tracking: 0;
-  --t-body-size: 0.9375rem;
-  --t-body-line: 1.55;
+  --t-body-size: 0.84375rem;
+  --t-body-line: 1.6;
   --t-body-weight: 400;
   --t-body-tracking: 0;
-  --t-body-sm-size: 0.8125rem;
-  --t-body-sm-line: 1.5;
+  --t-body-sm-size: 0.78125rem;
+  --t-body-sm-line: 1.55;
   --t-body-sm-weight: 400;
   --t-body-sm-tracking: 0;
-  --t-label-size: 0.75rem;
+  --t-label-size: 0.625rem;
   --t-label-line: 1.3;
-  --t-label-weight: 600;
-  --t-label-tracking: 0.06em;
-  --t-chain-data-size: 0.8125rem;
+  --t-label-weight: 500;
+  --t-label-tracking: 0.11em;
+  --t-chain-data-size: 0.71875rem;
   --t-chain-data-line: 1.45;
   --t-chain-data-weight: 400;
   --t-chain-data-tracking: 0;
@@ -128,8 +157,14 @@
   --m-pot-push: 520ms;
   --m-board-reveal: 380ms;
   --m-seat-pulse: 1600ms;
-  --m-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --m-ease-in: cubic-bezier(0.55, 0.06, 0.68, 0.19);
+  --m-press: 130ms;
+  --m-ui-fast: 180ms;
+  --m-ui-base: 240ms;
+  --m-ui-slow: 420ms;
+  --m-stagger: 60ms;
+  --m-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --m-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --m-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
   /* breakpoints — mirrored in use-viewport from the same source */
   --bp-phone: 480px;
@@ -154,6 +189,11 @@
     --m-pot-push: 1ms;
     --m-board-reveal: 1ms;
     --m-seat-pulse: 1ms;
+    --m-press: 1ms;
+    --m-ui-fast: 1ms;
+    --m-ui-base: 1ms;
+    --m-ui-slow: 1ms;
+    --m-stagger: 1ms;
   }
   *, *::before, *::after {
     animation-duration: 1ms !important;

@@ -79,6 +79,16 @@ jobs:
       - name: Install
         run: npm ci
 
+      # The design tokens are generated from src/design/tokens.ts. Regenerate
+      # and diff, so a hand-edit of the generated CSS fails here rather than
+      # silently drifting from its source. The same command also asserts that
+      # every breakpoint in globals.css is one of the BREAKPOINTS constants —
+      # those two once disagreed and put a portrait table in a desktop room.
+      - name: Design tokens are in step with their source
+        run: |
+          npm run tokens
+          git diff --exit-code -- src/app/tokens.css
+
       - name: Typecheck
         run: npx tsc --noEmit
 
@@ -88,11 +98,14 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Loads every page in a real browser and fails on any console error. This
-      # is the one that catches what a clean build and a clean typecheck miss:
-      # an infinite render loop, a Content Security Policy that blocks the app's
-      # own bundle. Runs against a production build, because that is the policy
-      # that actually ships.
+      # Two browser checks against a production build, because that is what
+      # actually ships. ui-check loads every page and fails on any console
+      # error — it is the one that catches what a clean build and a clean
+      # typecheck miss, such as an infinite render loop or a CSP that blocks
+      # the app's own bundle. design-check asserts the design system's quality
+      # floor at runtime: tabular figures on money, a visible focus ring,
+      # reduced motion honoured, no horizontal overflow at 390px, and no tap
+      # target under 44px on a touch screen.
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
 
@@ -104,6 +117,7 @@ jobs:
             sleep 1
           done
           node scripts/ui-check.mjs 3111
+          node scripts/design-check.mjs 3111
 
   # The account layouts and the error list live in the IDL, and a stale copy
   # makes the client send the wrong accounts and decode the wrong bytes. This

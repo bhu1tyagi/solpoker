@@ -20,7 +20,7 @@ import {
   createTableIx,
   initPlayerIx,
 } from "@/lib/instructions";
-import { MAX_SEATS } from "@/lib/constants";
+import { CREATE_TABLE_LAMPORTS, MAX_SEATS } from "@/lib/constants";
 import { playerPda, tablePda } from "@/lib/pdas";
 import { friendlyError } from "@/lib/net";
 import { formatUsdRange } from "@/lib/money";
@@ -101,6 +101,21 @@ export function CreateTableModal({
       for (let i = 0; i < MAX_SEATS; i++) {
         seatIxs.push(await createSeatIx(program, table, i, publicKey));
         holeIxs.push(await createHoleIx(program, table, i, publicKey));
+      }
+
+      // Ask before spending. Creation is three transactions and the last one —
+      // the card slots — is the expensive one, so a wallet that is merely
+      // short does not fail cleanly: it builds a table with seats and no cards
+      // that the lobby then advertises to other players. Checking first turns
+      // that into a sentence.
+      setProgress("Checking your balance");
+      const balance = await conn.getBalance(publicKey);
+      if (balance < CREATE_TABLE_LAMPORTS) {
+        throw new Error(
+          `Opening a table needs about ${(CREATE_TABLE_LAMPORTS / 1e9).toFixed(3)} SOL for the ` +
+            `accounts it creates, and this wallet holds ${(balance / 1e9).toFixed(4)}. ` +
+            `Most of it comes back when the table is deleted.`,
+        );
       }
 
       const bh = await conn.getLatestBlockhash();

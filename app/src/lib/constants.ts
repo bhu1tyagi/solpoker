@@ -231,6 +231,23 @@ export const GAS_FLOOR_LAMPORTS = 3_000_000;
  */
 export const PLAY_FLOOR_LAMPORTS = 18_000_000;
 
+/**
+ * SOL the creator of a table needs before starting.
+ *
+ * Building a table is thirteen accounts — the table, its config and history,
+ * six seats, six hole slots — plus the pre-funding each hole and the deck need
+ * for their rollup permission. Far more than joining one costs, and paid once
+ * by whoever opens the room.
+ *
+ * Checked before the wallet is ever asked to sign, because creation is three
+ * transactions and the third one is the expensive one. A wallet that runs out
+ * between them leaves a table with seats and no card slots: it appears in the
+ * lobby, accepts players, and can never deal. That happened on mainnet, and
+ * two people sat at that table for three hours waiting for a hand that could
+ * not come.
+ */
+export const CREATE_TABLE_LAMPORTS = 45_000_000;
+
 /** Salt protocol states, on Seat. */
 export const SALT_NONE = 0;
 export const SALT_COMMITTED = 1;
