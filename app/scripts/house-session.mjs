@@ -110,6 +110,37 @@ async function usdcBalance(owner) {
   return Number(v.getBigUint64(64, true));
 }
 
+/**
+ * Chips this wallet already has in play, sitting on a seat at the table.
+ *
+ * Sitting down MOVES chips out of the Player balance and onto the seat, so a
+ * wallet mid-session reads as holding no USDC and no chips while actually
+ * being fully stocked. Funding on those two numbers alone tried to re-buy the
+ * whole stack every run, and drained the treasury to pay for chips that were
+ * already on the felt.
+ */
+async function stackAtTable(owner) {
+  const enc = (x) => new TextEncoder().encode(x);
+  const idBuf = Buffer.alloc(8);
+  idBuf.writeBigUInt64LE(BigInt(TABLE_ID));
+  const program = new PublicKey(
+    JSON.parse(readFileSync(new URL("../src/lib/idl/solpoker.json", import.meta.url), "utf8"))
+      .address,
+  );
+  const table = PublicKey.findProgramAddressSync([enc("table"), idBuf], program)[0];
+  for (let i = 0; i < 6; i++) {
+    const seat = PublicKey.findProgramAddressSync(
+      [enc("seat"), table.toBytes(), Uint8Array.from([i])],
+      program,
+    )[0];
+    const info = await conn.getAccountInfo(seat);
+    if (!info) continue;
+    const occupant = new PublicKey(info.data.subarray(41, 73)).toBase58();
+    if (occupant === owner.toBase58()) return Number(info.data.readBigUInt64LE(73));
+  }
+  return 0;
+}
+
 /** Top both wallets up to the floor, and no further. */
 async function fund(players) {
   const ixs = [];
@@ -129,6 +160,12 @@ async function fund(players) {
   }
   const funderAta = getAssociatedTokenAddressSync(USDC_MINT, funder.publicKey);
   for (const p of players) {
+    // Already sitting with a stack: nothing to buy.
+    const inPlay = await stackAtTable(p.publicKey);
+    if (inPlay >= BUYIN) {
+      notes.push(`${p.publicKey.toBase58().slice(0, 6)} already in play (${inPlay} chips)`);
+      continue;
+    }
     const held = await usdcBalance(p.publicKey);
     const need = TARGET_MICRO_USDC - held;
     if (need <= 0) continue;
@@ -235,15 +272,34 @@ async function seat(b, tableId) {
   log(`  ${b.name}: ${ok ? "seated" : "COULD NOT SEAT"}`);
   if (!ok) (b.__toasts ?? []).slice(-4).forEach((t) => log(`      ${t}`));
 
-  for (let i = 0; i < 2; i++) {
-    if (!(await visible(b.page, /authorise session key/i))) break;
-    await click(b.page, /authorise session key/i);
+  /*
+   * The session key, which is TWO presses, not one.
+   *
+   * "Authorise session key" opens a panel explaining what the key can and
+   * cannot do, and "Continue" is what actually signs. Clicking only the first
+   * and waiting for the prompt to disappear waits forever — the panel is the
+   * prompt — and the table then sits at READY TO START with nobody able to
+   * start it. That is exactly how a whole session produced zero hands.
+   */
+  for (let i = 0; i < 4; i++) {
+    const needsKey = await visible(b.page, /authorise session key/i);
+    const canConfirm = await visible(b.page, /^continue$/i);
+    if (!needsKey && !canConfirm) break;
+    if (canConfirm) {
+      await click(b.page, /^continue$/i);
+    } else {
+      await click(b.page, /authorise session key/i);
+    }
+    // The signature is a chain round trip; the button vanishing is the signal.
     await b.page
-      .waitForFunction(() => !/authorise session key/i.test(document.body.innerText), {
-        timeout: 90_000,
-      })
+      .waitForFunction(
+        () => /start playing/i.test(document.body.innerText),
+        { timeout: 60_000 },
+      )
       .catch(() => {});
   }
+  const armed = await visible(b.page, /start playing/i);
+  log(`  ${b.name}: session key ${armed ? "authorised" : "NOT authorised"}`);
   return ok;
 }
 
