@@ -3509,12 +3509,3 @@ input[type="range"]::-moz-range-thumb {
   font: inherit;
   color: inherit;
 }
-
-/* The refusal page for a table URL reached without being able to play. */
-.table-closed {
-  padding-top: 96px;
-  max-width: 640px;
-}
-.table-closed .hero-actions {
-  margin-top: var(--sp-8);
-}

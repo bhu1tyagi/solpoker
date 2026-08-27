@@ -51,7 +51,7 @@ const POLL_MS = 4000;
 
 const fmtUsdc = (micro: number) => `$${(micro / 1e6).toFixed(2)}`;
 
-export function LobbyGate() {
+export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean } = {}) {
   const reduce = useReducedMotion();
   const toast = useUiStore((s) => s.toast);
   const forced = useUiStore((s) => s.gateOpen);
@@ -103,9 +103,16 @@ export function LobbyGate() {
    * does. Dismissing is deliberately cheap: a stranger should be able to look
    * around a poker room without being held at the door. What they cannot do
    * is take a seat, and that is enforced where the seat is, not here.
+   *
+   * `onlyWhenAsked` drops the first half entirely, for the table page. The
+   * lobby is where somebody arrives to get set up, so opening unprompted there
+   * is doing them a favour; a table reached from a shared link is somewhere
+   * they arrived to watch a game, and greeting them with a form is the same
+   * mistake the old refusal page made, in a smaller box.
    */
-  const open =
-    mounted && !resolving && active !== -1 && (forced || !dismissed);
+  const open = onlyWhenAsked
+    ? mounted && !resolving && active !== -1 && forced
+    : mounted && !resolving && active !== -1 && (forced || !dismissed);
 
   /*
    * The player pressed "Connect wallet" while the balances are still being

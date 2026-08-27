@@ -5,10 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useReadiness, READINESS_STEPS } from "@/hooks/use-readiness";
+import { useReadiness } from "@/hooks/use-readiness";
 import { useUiStore } from "@/stores/ui-store";
-import { SiteHeader } from "@/components/chrome/SiteHeader";
-import { Orbs } from "@/components/chrome/Orbs";
 import { LobbyGate } from "@/components/onboarding/LobbyGate";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
@@ -98,6 +96,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const { publicKey, signTransaction, connected } = useWallet();
   // Same source the lobby and the gate use, so all three agree on who may sit.
   const readiness = useReadiness();
+  const openGate = useUiStore((s) => s.openGate);
   const { connection: erConnection, program: erProgram, connect: connectTee } = useTee();
   const player = usePlayer();
 
@@ -514,25 +513,30 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     : undefined;
 
   /*
-   * The refusal has to live here too, not only on the lobby card.
+   * Taking a seat is the only thing that needs a set-up wallet, so it is the
+   * only thing that asks.
    *
-   * A card that opens the gate stops the ordinary route in, but the table is
-   * a plain URL: pasted, bookmarked, or followed from a shared link, it would
-   * otherwise let someone who has never connected a wallet into a room they
-   * cannot act in. `resolving` is deliberately excluded — turning a player
-   * away while their balances are still arriving would refuse people who are
-   * in fact ready.
-   *
-   * A player already seated is never turned away, whatever their balance says:
-   * chips on a seat must always be reachable.
+   * Watching costs nothing and gives away nothing — the felt shows what is
+   * public on chain either way — so a link followed from a friend lands on the
+   * table, not on a door. The gate opens at the chair, over the room, at
+   * whichever step is actually missing.
    */
-  const seated = mySeat >= 0;
-  if (!readiness.resolving && !readiness.ready && !seated) {
-    return <TableClosed active={readiness.active} />;
-  }
+  const onSeatClick = useCallback(
+    (i: number) => {
+      if (!connected || !readiness.ready) {
+        openGate();
+        return;
+      }
+      setSitting(i);
+      setBuyIn(affordableBuyIn);
+    },
+    [connected, readiness.ready, openGate, affordableBuyIn],
+  );
 
   return (
     <>
+      {/* Mounted, not shown. A seat click is the only thing that opens it. */}
+      <LobbyGate onlyWhenAsked />
       {/* The room fills the screen. The table sits in the middle of it and the
           controls live in the four corners, the way a real client is laid out,
           so nothing floats in a panel and nothing competes with the felt. */}
@@ -582,14 +586,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
               // will serve your hole cards to you and to nobody else. Only
               // shown once you are actually seated.
               secured={mySeat >= 0 ? link === "live" : undefined}
-              onSit={
-                delegated === false && mySeat < 0 && connected
-                  ? (i) => {
-                      setSitting(i);
-                      setBuyIn(affordableBuyIn);
-                    }
-                  : undefined
-              }
+              onSit={delegated === false && mySeat < 0 ? onSeatClick : undefined}
             />
           </div>
         </div>
@@ -1496,40 +1493,17 @@ function useShowdown(
   }, [hand, seats, mySeat, myHole, myHoleHandNumber]);
 }
 
-/**
- * The door, for someone who arrived at a table without being able to play at
- * one.
+/*
+ * There used to be a "Not yet" page here.
  *
- * It says which step is missing rather than only that entry was refused, and
- * it offers the two things that are actually useful from here: finish setting
- * up, or go and look at the room. A bare "not allowed" would leave a player
- * who followed a friend's link with nothing to do.
+ * Anyone whose wallet was not fully set up had the entire table replaced by a
+ * door: no felt, no players, no idea what they had been sent a link to, just a
+ * refusal and two buttons. It refused people who were merely still loading, and
+ * it refused people who had no intention of sitting down and only wanted to
+ * watch — which a poker room has never had a reason to stop.
+ *
+ * The room is open now. Nothing is gated on being able to play except playing:
+ * clicking a chair opens the same setup gate the lobby uses, at the step that
+ * is actually missing, over the table you were looking at rather than instead
+ * of it.
  */
-function TableClosed({ active }: { active: number }) {
-  const openGate = useUiStore((s) => s.openGate);
-  const step = READINESS_STEPS[active] ?? READINESS_STEPS[0];
-  return (
-    <>
-      <SiteHeader />
-      <LobbyGate />
-      <main id="main" className="landing">
-        <Orbs />
-        <div className="landing-inner table-closed">
-          <h1 className="hero-title">Not yet</h1>
-          <p className="trust-lede">
-            A seat at this table needs one more thing: {step.title.toLowerCase()},{" "}
-            {step.short}.
-          </p>
-          <div className="hero-actions">
-            <Button variant="gradient" size="xl" onClick={openGate}>
-              Finish setting up
-            </Button>
-            <Button href="/lobby" variant="ghost" size="xl">
-              Back to the lobby
-            </Button>
-          </div>
-        </div>
-      </main>
-    </>
-  );
-}
