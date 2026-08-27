@@ -95,19 +95,39 @@ function chipsFor(amount: number): { count: number; token: string }[] {
  * One chip, seen from slightly above: a flat disc, so it is an ellipse rather
  * than a bar. The lighter top face and the darker edge below it are what stop a
  * stack of these reading as a row of sliders.
+ *
+ * The edge carries spots. Every real chip has them — the pale dashes moulded
+ * into the rim — and they are the single detail that separates a stack of chips
+ * from a stack of coloured discs: they give the edge a texture that repeats up
+ * the pile, so the eye reads depth instead of a gradient. Drawn as a repeating
+ * gradient on the lower half rather than as elements, so a six-high column is
+ * still one div per chip.
+ *
+ * Every colour is mixed from the one denomination token, so a chip can never
+ * drift out of its own hue however the palette moves.
  */
 function Coin({ size, token }: { size: number; token: string }) {
   const h = Math.max(4, Math.round(size * 0.42));
+  // The spots shrink with the chip so they stay spots rather than stripes.
+  const spot = Math.max(2, Math.round(size * 0.13));
+  const gap = Math.max(2, Math.round(size * 0.11));
+  const edge = `color-mix(in srgb, ${token} 45%, var(--c-felt))`;
+  const spotColor = `color-mix(in srgb, ${token} 55%, white)`;
   return (
     <div
       style={{
         width: size,
         height: h,
         borderRadius: "50%",
-        // Face on top, the chip's own edge in shadow beneath it. Both are
-        // mixed from the one denomination colour, so a chip cannot drift out
-        // of its own hue.
-        background: `linear-gradient(180deg, ${token} 0%, ${token} 45%, color-mix(in srgb, ${token} 72%, var(--c-felt)) 46%, color-mix(in srgb, ${token} 45%, var(--c-felt)) 100%)`,
+        background: [
+          // 1. The moulded spots, on the edge only. Clipped to the bottom half
+          //    by its own size and position, so the face stays clean.
+          `repeating-linear-gradient(90deg, ${spotColor} 0 ${spot}px, transparent ${spot}px ${spot + gap}px) no-repeat left ${Math.round(h * 0.58)}px / 100% ${Math.round(h * 0.26)}px`,
+          // 2. A highlight arc across the top face, where the light lands.
+          `radial-gradient(120% 180% at 34% 8%, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 52%) no-repeat`,
+          // 3. Face, then the chip's own edge in shadow beneath it.
+          `linear-gradient(180deg, ${token} 0%, ${token} 45%, color-mix(in srgb, ${token} 72%, var(--c-felt)) 46%, ${edge} 100%)`,
+        ].join(", "),
         // A hairline of rim-light along the top edge, the way every raised
         // surface in this system catches light from above.
         boxShadow: "var(--e-raised)",
@@ -121,11 +141,21 @@ export function ChipStack({
   size = 18,
   showAmount = true,
   compact = false,
+  pill = false,
 }: {
   amount: number;
   size?: number;
   showAmount?: boolean;
   compact?: boolean;
+  /**
+   * Set the figure in a dark pill rather than as bare text.
+   *
+   * Bets sit on the cloth, where plain white numerals have nothing behind them
+   * and go illegible over a chip pile or the felt mark. The pill is the same
+   * one the pot uses, so a bet and the pot it is going into are visibly the
+   * same kind of object.
+   */
+  pill?: boolean;
 }) {
   if (amount <= 0) return null;
   const columns = chipsFor(amount);
@@ -172,9 +202,19 @@ export function ChipStack({
         <span
           className="num"
           style={{
+            fontFamily: pill ? "var(--font-mono)" : undefined,
             fontSize: compact ? "var(--t-label-size)" : "var(--t-body-sm-size)",
             fontWeight: 700,
             color: "var(--c-ink)",
+            ...(pill
+              ? {
+                  padding: compact ? "1px 6px" : "2px 8px",
+                  borderRadius: "var(--r-pill)",
+                  background: "rgba(0, 0, 0, 0.55)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  lineHeight: 1.35,
+                }
+              : null),
           }}
         >
           <AnimatedNumber value={amount} />

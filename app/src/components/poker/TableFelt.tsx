@@ -7,6 +7,7 @@ import { ChipStack } from "@/components/primitives/Chip";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { SeatPod } from "./SeatPod";
 import { ShuffleLoop } from "./ShuffleLoop";
+import { DealerLoop } from "./DealerLoop";
 import { TABLE_GEOMETRY, spring, stagger } from "@/styles/theme";
 import { MAX_SEATS, STREET_NAMES } from "@/lib/constants";
 import { NO_CARD } from "@/lib/engine/cards";
@@ -238,40 +239,61 @@ export function TableFelt({
               exit={{ opacity: 0, scale: 0.9 }}
               transition={spring.snappy}
               // The draft's pot: a black pill on the cloth, label over a mono
-              // green figure, bordered with the faintest hairline.
+              // green figure, bordered with the faintest hairline — with the
+              // money itself standing beside it.
+              //
+              // A figure alone is not a pot. Bets are drawn as physical chips
+              // all the way across the felt and then arrived at a number, which
+              // is the one moment in a hand where they should be most solid.
+              // The pile rides in the pill rather than out on the cloth at
+              // `geo.pot`, which is the lane the board and the street name
+              // already occupy.
               style={{
                 display: "flex",
-                flexDirection: "column",
                 alignItems: "center",
-                padding: compact ? "3px 12px" : "4px 16px",
+                gap: compact ? 7 : 9,
+                padding: compact ? "5px 12px 5px 9px" : "6px 16px 6px 11px",
                 borderRadius: "var(--r-pill)",
                 background: "rgba(0, 0, 0, 0.6)",
                 border: "1px solid rgba(255, 255, 255, 0.1)",
               }}
             >
-              <span
-                className="label"
+              <ChipStack
+                amount={displayPot}
+                size={compact ? 12 : 15}
+                showAmount={false}
+              />
+              <div
                 style={{
-                  fontSize: compact ? 8 : 10,
-                  letterSpacing: "0.1em",
-                  textTransform: "uppercase",
-                  color: "rgba(255, 255, 255, 0.4)",
-                  fontWeight: 800,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
                 }}
               >
-                main pot
-              </span>
-              <span
-                className="num"
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: compact ? 13 : 17,
-                  fontWeight: 700,
-                  color: "var(--c-green)",
-                }}
-              >
-                <AnimatedNumber value={displayPot} />
-              </span>
+                <span
+                  className="label"
+                  style={{
+                    fontSize: compact ? 8 : 10,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: "rgba(255, 255, 255, 0.4)",
+                    fontWeight: 800,
+                  }}
+                >
+                  main pot
+                </span>
+                <span
+                  className="num"
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: compact ? 13 : 17,
+                    fontWeight: 700,
+                    color: "var(--c-green)",
+                  }}
+                >
+                  <AnimatedNumber value={displayPot} />
+                </span>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -421,7 +443,7 @@ export function TableFelt({
                 boxShadow: "var(--e-overlay)",
               }}
             >
-              <ShuffleLoop label={overlay} />
+              <DealerLoop label={overlay} />
             </motion.div>
           </div>
         )}
@@ -452,7 +474,12 @@ export function TableFelt({
               transition={spring.snappy}
               style={{ position: "absolute", transform: "translate(-50%, -50%)", zIndex: 20 }}
             >
-              <ChipStack amount={seat.committedStreet} size={compact ? 12 : 15} compact />
+              <ChipStack
+                amount={seat.committedStreet}
+                size={compact ? 13 : 18}
+                compact
+                pill
+              />
             </motion.div>
           );
         })}
