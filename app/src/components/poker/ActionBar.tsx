@@ -221,22 +221,31 @@ function PresetButton({
   );
 }
 
+/**
+ * The verbs in the design system's own voice. One accent: the raise is the
+ * only filled button, because it is the one that escalates. Fold carries its
+ * meaning in an outlined wash of the loss colour rather than a red slab —
+ * a slab shouted over the whole room — and check/call is quiet glass.
+ */
 const TONES = {
   danger: {
-    background: "var(--c-loss)",
-    color: "var(--c-felt)",
+    background: "color-mix(in srgb, var(--c-loss) 10%, transparent)",
+    border: "1px solid color-mix(in srgb, var(--c-loss) 38%, transparent)",
+    color: "var(--c-loss)",
   },
   accent: {
     background: "var(--c-green)",
+    border: "1px solid var(--c-green)",
     color: "var(--c-felt)",
   },
   dark: {
-    background: "var(--c-felt-edge)",
+    background: "var(--c-glass-fill)",
+    border: "1px solid var(--c-glass-border)",
     color: "var(--c-ink)",
   },
 } as const;
 
-/** The three verbs. Flat, wide, and unmistakable at arm's length. */
+/** The three verbs. Wide, quiet, and unmistakable at arm's length. */
 function BigButton({
   tone,
   disabled,
@@ -261,15 +270,21 @@ function BigButton({
       style={{
         ...TONES[tone],
         flex,
-        height: 52,
-        border: "none",
-        borderRadius: "var(--r-lg)",
+        height: 48,
+        borderRadius: "var(--r-md)",
+        fontFamily: "var(--font-display)",
         fontSize: "var(--t-body-sm-size)",
+        fontWeight: 700,
         textTransform: "uppercase",
-        letterSpacing: "0.04em",
+        letterSpacing: "0.05em",
         cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.45 : 1,
+        opacity: disabled ? 0.38 : 1,
         whiteSpace: "nowrap",
+        backdropFilter: "blur(8px)",
+        boxShadow:
+          tone === "accent" && !disabled
+            ? "0 0 24px color-mix(in srgb, var(--c-green) 22%, transparent)"
+            : "var(--e-raised)",
       }}
     >
       {children}

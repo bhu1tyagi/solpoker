@@ -616,7 +616,10 @@ input[type="range"]::-moz-range-thumb {
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  max-width: min(760px, 92vw);
+  /* A real width, not a cap. As a shrink-to-fit column, the action bar's
+     100% had nothing to be 100% of, and the three verbs crushed into a
+     huddle of clipped labels. */
+  width: min(640px, 92vw);
   z-index: var(--z-action-bar);
 }
 .hud-fields {
@@ -667,6 +670,7 @@ input[type="range"]::-moz-range-thumb {
     left: auto;
     transform: none;
     align-items: flex-end;
+    width: auto;
     max-width: min(720px, 82vw);
   }
   .action-bar {
@@ -744,6 +748,7 @@ input[type="range"]::-moz-range-thumb {
   }
   .hud-br {
     grid-row: 4;
+    width: auto;
     max-width: none;
     align-items: stretch;
     /* Static in the grid; the desktop centring transform must not follow. */

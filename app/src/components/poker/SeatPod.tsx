@@ -496,13 +496,33 @@ function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" |
       <ellipse cx="60" cy="70" rx="48" ry="34" fill="rgba(0,0,0,0.45)" filter="url(#chair-ground)" />
       <ellipse cx="60" cy="66" rx="38" ry="26" fill="rgba(0,0,0,0.5)" filter="url(#chair-ground-tight)" />
 
-      {/* The frame, bottom up: its own side wall first, then the upholstery
-          over it, then a seam of shadow under the crown, then the crown's
-          light. Each layer is the same horseshoe shifted by height. */}
+      {/* The seat FIRST, so the backrest lands on top of it and the cushion
+          reads as tucked into the frame — drawn the other way round, the
+          sitting surface floated above its own chair. A sofa cushion, not a
+          disc: a rounded square that runs to the arms with no gap. */}
+      <rect x="25" y="21" width="70" height="66" rx="22" fill="color-mix(in srgb, #000 55%, var(--c-chair-cushion))" />
+      <rect x="25" y="16" width="70" height="66" rx="22" fill="url(#chair-cushion)" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
+      {/* The stitched seam, inset the way upholstery is. */}
+      <rect x="32" y="23" width="56" height="47" rx="15" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1.4" strokeDasharray="3.2 4.2" />
+      {/* Light pooling along the cushion's front edge, toward the table. */}
+      <path d="M 38 24 L 82 24" stroke="rgba(255,255,255,0.10)" strokeWidth="7" strokeLinecap="round" />
+
+      {/* The frame over the cushion, bottom up: its own side wall, the
+          upholstery, a seam of shadow under the crown, the crown's light.
+          Each layer is the same horseshoe shifted by height. */}
       <path d={HS} fill="none" stroke="color-mix(in srgb, #000 55%, var(--c-chair-back))" strokeWidth="19" strokeLinecap="round" transform="translate(0 6)" />
       <path d={HS} fill="none" stroke="url(#chair-back)" strokeWidth="19" strokeLinecap="round" />
       <path d={HS} fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="7" strokeLinecap="round" transform="translate(0 3.4)" />
       <path d={HS} fill="none" stroke="color-mix(in srgb, var(--c-ink) 17%, transparent)" strokeWidth="4.5" strokeLinecap="round" transform="translate(0 -5)" />
+
+      {/* The shadow the backrest throws onto the seat it wraps. */}
+      <path
+        d="M 29 64 C 29 88, 91 88, 91 64"
+        fill="none"
+        stroke="rgba(0,0,0,0.30)"
+        strokeWidth="6"
+        strokeLinecap="round"
+      />
 
       {/* Armrest pads, each catching the light on its forward shoulder. */}
       <circle cx="20" cy="32" r="10" fill="url(#chair-armcap)" />
@@ -510,32 +530,11 @@ function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" |
       <ellipse cx="17.5" cy="29" rx="4" ry="3" fill="rgba(255,255,255,0.14)" />
       <ellipse cx="97.5" cy="29" rx="4" ry="3" fill="rgba(255,255,255,0.14)" />
 
-      {/* The cushion: foam edge below, seat above, a crescent of shadow
-          where it tucks under the backrest, a stitched seam, and the light
-          pooling on its crown. */}
-      <ellipse cx="60" cy="57" rx="35" ry="33" fill="color-mix(in srgb, #000 55%, var(--c-chair-cushion))" />
-      <circle cx="60" cy="52" r="35" fill="url(#chair-cushion)" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
-      <path
-        d="M 30 70 A 35 35 0 0 0 90 70"
-        fill="none"
-        stroke="rgba(0,0,0,0.35)"
-        strokeWidth="9"
-        strokeLinecap="round"
-      />
-      <circle cx="60" cy="52" r="26.5" fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="1.4" strokeDasharray="3.2 4.2" />
-      <path
-        d="M 37 40 A 29 29 0 0 1 74 30.5"
-        fill="none"
-        stroke="rgba(255,255,255,0.10)"
-        strokeWidth="7"
-        strokeLinecap="round"
-      />
-
       {/* The invitation. A plus is symmetric, so it survives every turn of
           the chair without a counter-rotation. */}
       <g stroke="var(--c-green)" strokeWidth="4" strokeLinecap="round">
-        <path d="M 60 44 L 60 60" />
-        <path d="M 52 52 L 68 52" />
+        <path d="M 60 39 L 60 55" />
+        <path d="M 52 47 L 68 47" />
       </g>
     </svg>
   );
