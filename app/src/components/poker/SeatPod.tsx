@@ -137,7 +137,7 @@ export function SeatPod({
         {/* An open seat is an actual chair waiting at the rail, its back
             turned away from the table. The green plus on the cushion is the
             whole invitation. */}
-        <Chair size={d.avatar + (compact ? 10 : 16)} side={side} />
+        <Chair size={d.avatar + (compact ? 16 : 30)} side={side} />
         <span
           className="label"
           style={{
@@ -454,98 +454,88 @@ const CHAIR_TURN = { bottom: 0, top: 180, left: 90, right: -90 } as const;
  * middle is the only interface object on it, and the only invitation needed.
  */
 function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" | "right" }) {
+  // The horseshoe of backrest and armrests, reused by every layer below so
+  // the side wall, the upholstery and the light all follow one geometry.
+  const HS = "M 20 32 L 20 66 C 20 100, 100 100, 100 66 L 100 32";
   return (
     <svg
       aria-hidden
       width={size}
       height={size}
-      viewBox="0 0 100 100"
+      viewBox="0 0 120 120"
       style={{ transform: `rotate(${CHAIR_TURN[side]}deg)`, display: "block" }}
     >
       <defs>
-        <radialGradient id="chair-cushion" cx="50%" cy="42%" r="65%">
-          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 9%, var(--c-chair-cushion))" />
-          <stop offset="55%" stopColor="var(--c-chair-cushion)" />
-          <stop offset="100%" stopColor="color-mix(in srgb, var(--c-chair-cushion) 78%, #000)" />
+        {/* Leather takes its light unevenly: a hot spot forward of centre,
+            falling away fast toward the welt. */}
+        <radialGradient id="chair-cushion" cx="46%" cy="34%" r="72%">
+          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 16%, var(--c-chair-cushion))" />
+          <stop offset="42%" stopColor="color-mix(in srgb, var(--c-ink) 6%, var(--c-chair-cushion))" />
+          <stop offset="78%" stopColor="var(--c-chair-cushion)" />
+          <stop offset="100%" stopColor="color-mix(in srgb, var(--c-chair-cushion) 62%, #000)" />
         </radialGradient>
         <linearGradient id="chair-back" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 10%, var(--c-chair-back))" />
-          <stop offset="100%" stopColor="var(--c-chair-back)" />
+          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 18%, var(--c-chair-back))" />
+          <stop offset="45%" stopColor="var(--c-chair-back)" />
+          <stop offset="100%" stopColor="color-mix(in srgb, var(--c-chair-back) 70%, #000)" />
         </linearGradient>
+        <radialGradient id="chair-armcap" cx="38%" cy="32%" r="80%">
+          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 22%, var(--c-chair-back))" />
+          <stop offset="100%" stopColor="color-mix(in srgb, var(--c-chair-back) 80%, #000)" />
+        </radialGradient>
         <filter id="chair-ground" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="4" />
+          <feGaussianBlur stdDeviation="5" />
+        </filter>
+        <filter id="chair-ground-tight" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="2.5" />
         </filter>
       </defs>
 
-      {/* The pool of shadow the chair stands in, thrown slightly toward the
-          viewer the way overhead light throws it. */}
-      <ellipse cx="50" cy="58" rx="35" ry="26" fill="rgba(0,0,0,0.55)" filter="url(#chair-ground)" />
+      {/* Two shadows ground it: a wide soft pool, and a tighter dark one
+          right under the frame. One blur alone floats. */}
+      <ellipse cx="60" cy="70" rx="48" ry="34" fill="rgba(0,0,0,0.45)" filter="url(#chair-ground)" />
+      <ellipse cx="60" cy="66" rx="38" ry="26" fill="rgba(0,0,0,0.5)" filter="url(#chair-ground-tight)" />
 
-      {/* Backrest and armrests: one horseshoe, arms reaching toward the
-          table, built in three passes that give it a body. The dark copy
-          below is its own side wall; the gradient band is the upholstery;
-          the bright arc along the crown is the room's light landing on it. */}
-      <path
-        d="M 14 24 L 14 56 C 14 85, 86 85, 86 56 L 86 24"
-        fill="none"
-        stroke="color-mix(in srgb, #000 42%, var(--c-chair-back))"
-        strokeWidth="15"
-        strokeLinecap="round"
-        transform="translate(0 3.5)"
-      />
-      <path
-        d="M 14 24 L 14 56 C 14 85, 86 85, 86 56 L 86 24"
-        fill="none"
-        stroke="url(#chair-back)"
-        strokeWidth="15"
-        strokeLinecap="round"
-      />
-      <path
-        d="M 14 24 L 14 56 C 14 85, 86 85, 86 56 L 86 24"
-        fill="none"
-        stroke="color-mix(in srgb, var(--c-ink) 14%, transparent)"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        transform="translate(0 -3.2)"
-      />
-      {/* Armrest pads: a catch of light on each cap. */}
-      <circle cx="14" cy="24" r="4" fill="color-mix(in srgb, var(--c-ink) 16%, var(--c-chair-back))" />
-      <circle cx="86" cy="24" r="4" fill="color-mix(in srgb, var(--c-ink) 16%, var(--c-chair-back))" />
+      {/* The frame, bottom up: its own side wall first, then the upholstery
+          over it, then a seam of shadow under the crown, then the crown's
+          light. Each layer is the same horseshoe shifted by height. */}
+      <path d={HS} fill="none" stroke="color-mix(in srgb, #000 55%, var(--c-chair-back))" strokeWidth="19" strokeLinecap="round" transform="translate(0 6)" />
+      <path d={HS} fill="none" stroke="url(#chair-back)" strokeWidth="19" strokeLinecap="round" />
+      <path d={HS} fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="7" strokeLinecap="round" transform="translate(0 3.4)" />
+      <path d={HS} fill="none" stroke="color-mix(in srgb, var(--c-ink) 17%, transparent)" strokeWidth="4.5" strokeLinecap="round" transform="translate(0 -5)" />
 
-      {/* The cushion: a dark side wall first, then the seat itself on top of
-          it, so it reads as two inches of foam rather than a printed disc. */}
-      <ellipse cx="50" cy="45.5" rx="29" ry="28" fill="color-mix(in srgb, #000 50%, var(--c-chair-cushion))" />
-      <circle
-        cx="50"
-        cy="42"
-        r="29"
-        fill="url(#chair-cushion)"
-        stroke="rgba(255,255,255,0.12)"
-        strokeWidth="1"
-      />
-      {/* The stitched seam, and the light pooling on the cushion's crown. */}
-      <circle
-        cx="50"
-        cy="42"
-        r="22"
-        fill="none"
-        stroke="rgba(255,255,255,0.13)"
-        strokeWidth="1.3"
-        strokeDasharray="2.8 3.8"
-      />
+      {/* Armrest pads, each catching the light on its forward shoulder. */}
+      <circle cx="20" cy="32" r="10" fill="url(#chair-armcap)" />
+      <circle cx="100" cy="32" r="10" fill="url(#chair-armcap)" />
+      <ellipse cx="17.5" cy="29" rx="4" ry="3" fill="rgba(255,255,255,0.14)" />
+      <ellipse cx="97.5" cy="29" rx="4" ry="3" fill="rgba(255,255,255,0.14)" />
+
+      {/* The cushion: foam edge below, seat above, a crescent of shadow
+          where it tucks under the backrest, a stitched seam, and the light
+          pooling on its crown. */}
+      <ellipse cx="60" cy="57" rx="35" ry="33" fill="color-mix(in srgb, #000 55%, var(--c-chair-cushion))" />
+      <circle cx="60" cy="52" r="35" fill="url(#chair-cushion)" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
       <path
-        d="M 31 32 A 24 24 0 0 1 62 24.5"
+        d="M 30 70 A 35 35 0 0 0 90 70"
         fill="none"
-        stroke="color-mix(in srgb, var(--c-ink) 10%, transparent)"
-        strokeWidth="5"
+        stroke="rgba(0,0,0,0.35)"
+        strokeWidth="9"
+        strokeLinecap="round"
+      />
+      <circle cx="60" cy="52" r="26.5" fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="1.4" strokeDasharray="3.2 4.2" />
+      <path
+        d="M 37 40 A 29 29 0 0 1 74 30.5"
+        fill="none"
+        stroke="rgba(255,255,255,0.10)"
+        strokeWidth="7"
         strokeLinecap="round"
       />
 
       {/* The invitation. A plus is symmetric, so it survives every turn of
           the chair without a counter-rotation. */}
-      <g stroke="var(--c-green)" strokeWidth="3.4" strokeLinecap="round">
-        <path d="M 50 35 L 50 49" />
-        <path d="M 43 42 L 57 42" />
+      <g stroke="var(--c-green)" strokeWidth="4" strokeLinecap="round">
+        <path d="M 60 44 L 60 60" />
+        <path d="M 52 52 L 68 52" />
       </g>
     </svg>
   );

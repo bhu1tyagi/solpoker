@@ -749,16 +749,19 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             )}
           </AnimatePresence>
 
-          {mySeat >= 0 && session && (
-            <ActionBar
-              hand={viewHand}
-              seat={viewSeats[mySeat]}
-              seatIndex={mySeat}
-              pot={pot}
-              busy={acting}
-              onAct={onAct}
-            />
-          )}
+          {/* Always mounted, for everyone. The room's controls are part of
+              the room: a spectator sees the same three greyed verbs a seated
+              player waits behind, and nothing about the page rearranges when
+              they finally sit. `busy` locks the buttons for anyone who could
+              not act anyway — no seat, or no session key yet. */}
+          <ActionBar
+            hand={viewHand}
+            seat={mySeat >= 0 ? viewSeats[mySeat] : null}
+            seatIndex={mySeat}
+            pot={pot}
+            busy={acting || mySeat < 0 || !session}
+            onAct={onAct}
+          />
 
           {/* Taking a seat sets this up on its own. The notice is what is left
               when that did not land — a refused prompt, an expired key, a
