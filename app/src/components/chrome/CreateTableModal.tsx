@@ -57,6 +57,7 @@ export function CreateTableModal({
   const { publicKey, signAllTransactions } = useWallet();
   const router = useRouter();
   const [stake, setStake] = useState(0);
+  const [name, setName] = useState("");
   const [timeout, setTimeoutSecs] = useState(30);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
@@ -155,6 +156,18 @@ export function CreateTableModal({
         }
       }
 
+      // Register the name, set-once, fire-and-forget: the table exists
+      // whether or not the registry hears about it, and the lobby falls back
+      // to a generated name if this never lands.
+      if (name.trim()) {
+        void fetch("/api/table-name", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ tableId: tableId.toString(), name: name.trim() }),
+          keepalive: true,
+        }).catch(() => {});
+      }
+
       toast("Table created", "good");
       onCreated();
       onClose();
@@ -169,6 +182,20 @@ export function CreateTableModal({
 
   return (
     <Modal open={open} onClose={busy ? () => {} : onClose} title="New table">
+      <Field label="Table name (optional)">
+        {/* A label, not an identity: 31 chars, plain charset, named once.
+            Left empty, the table gets its generated name. */}
+        <input
+          type="text"
+          value={name}
+          maxLength={31}
+          placeholder="Left blank, we pick one"
+          onChange={(e) => setName(e.target.value)}
+          className="modal-name-input"
+          disabled={busy}
+        />
+      </Field>
+
       <Field label="Stakes">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
           {STAKES.map((s, i) => {

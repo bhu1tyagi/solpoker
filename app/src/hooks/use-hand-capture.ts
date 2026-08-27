@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { handId, saveHand } from "@/lib/history-db";
+import { reportHand } from "@/lib/report-hand";
 import { pruneSalts } from "@/lib/salts";
 import { decodeHand } from "@/lib/decode";
 import { verify } from "@/lib/verifier/verify-shuffle";
@@ -166,6 +167,9 @@ export function useHandCapture(
               await saveHand(record).catch(() => {
                 // Storage refused. The hand is lost to history, play continues.
               });
+              // The lobby's 24h numbers come from these reports; the server
+              // re-verifies before storing, and a failure is nobody's problem.
+              reportHand(record);
               pruneSalts(table.toBase58(), n);
               return;
             }
