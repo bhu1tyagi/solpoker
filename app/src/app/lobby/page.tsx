@@ -484,13 +484,12 @@ function TableCard({
         transition={spring.snappy}
       >
         <header className="table-card-head">
-          <div>
-            <h3>{displayName(t.table.tableId, registered)}</h3>
-            <p className="table-card-kind">
-              NL Hold&rsquo;em <span aria-hidden>&middot;</span> six-max
-              <span className="tnum table-card-id"> #{String(t.table.tableId)}</span>
-            </p>
-          </div>
+          {/* One line. The variant and the id said the same thing on every
+              card, which is the definition of clutter; the full id survives in
+              the hover title for anyone who needs to quote it. */}
+          <h3 title={`#${String(t.table.tableId)}`}>
+            {displayName(t.table.tableId, registered)}
+          </h3>
           {t.house && !live && (
             <span className="table-card-house" title="Opened by the house, always here">
               house
@@ -504,45 +503,66 @@ function TableCard({
           )}
         </header>
 
-        <dl className="table-card-facts">
-          <div>
-            <dt className="label">Blinds</dt>
-            <dd className="num">
+        {/* The two numbers a player chooses a table by, each behind a small
+            mark instead of a caption. The words live on for hover and screen
+            readers; the eye gets the figures. */}
+        <div className="table-card-stats">
+          <span
+            className="tc-stat"
+            title="Blinds"
+            aria-label={`Blinds ${
+              t.config
+                ? `${formatUsd(t.config.smallBlind)} / ${formatUsd(t.config.bigBlind)}`
+                : "unknown"
+            }`}
+          >
+            <ChipGlyph size={13} />
+            <b className="num">
               {t.config
                 ? `${formatUsd(t.config.smallBlind)} / ${formatUsd(t.config.bigBlind)}`
                 : "-"}
-            </dd>
-          </div>
-          <div>
-            <dt className="label">Buy-in</dt>
-            <dd className="num">
+            </b>
+          </span>
+          <span
+            className="tc-stat"
+            title="Buy-in"
+            aria-label={`Buy-in ${
+              t.config ? formatUsdRange(t.config.minBuyIn, t.config.maxBuyIn) : "unknown"
+            }`}
+          >
+            <BuyInMark />
+            <b className="num">
               {t.config ? formatUsdRange(t.config.minBuyIn, t.config.maxBuyIn) : "-"}
-            </dd>
-          </div>
-        </dl>
+            </b>
+          </span>
+        </div>
 
-        {/* What has actually happened here. Each fact drops out on its own
-            when it is not known, so a table with hands but no observed pot
-            still says how busy it has been. */}
-        {played?.hands != null && (
-          <p className="table-card-log">
-            <span className="num">{played.hands.toLocaleString()}</span>{" "}
-            {played.hands === 1 ? "hand" : "hands"} {since}
-            {played.avgPotChips !== null && (
-              <>
-                <span aria-hidden>&middot;</span> avg pot{" "}
-                <span className="num">{formatUsd(played.avgPotChips)}</span>
-              </>
-            )}
-            {/* A live table's recency is the pulsing dot above; only a quiet
-                one needs telling how long it has been quiet. */}
-            {!live && played.lastHandAt !== null && (
-              <>
-                <span aria-hidden>&middot;</span> last {ago(played.lastHandAt)}
-              </>
-            )}
-          </p>
-        )}
+        {/* What has actually happened here — one quiet line on every card, so
+            a room that has never dealt sits at the same height as one that
+            has, and says so instead of saying nothing. */}
+        <p className="table-card-log">
+          {played?.hands ? (
+            <>
+              <span className="num">{played.hands.toLocaleString()}</span>{" "}
+              {played.hands === 1 ? "hand" : "hands"} {since}
+              {played.avgPotChips !== null && (
+                <>
+                  <span aria-hidden>&middot;</span> avg pot{" "}
+                  <span className="num">{formatUsd(played.avgPotChips)}</span>
+                </>
+              )}
+              {/* A live table's recency is the pulsing dot above; only a quiet
+                  one needs telling how long it has been quiet. */}
+              {!live && played.lastHandAt !== null && (
+                <>
+                  <span aria-hidden>&middot;</span> last {ago(played.lastHandAt)}
+                </>
+              )}
+            </>
+          ) : (
+            <span className="table-card-log-quiet">no hands dealt yet</span>
+          )}
+        </p>
 
         <div className="table-card-foot">
           <span className="table-card-seats" aria-label={`${t.seated} of ${MAX_SEATS} seats taken`}>
@@ -563,6 +583,23 @@ function TableCard({
         </div>
       </motion.article>
     </Wrapper>
+  );
+}
+
+/**
+ * The buy-in mark: three chips in a stack, drawn in the same line weight as
+ * the chip glyph beside it. A caption said "Buy-in" in ten characters; the
+ * stack says it in eleven pixels.
+ */
+function BuyInMark() {
+  return (
+    <svg aria-hidden width={13} height={13} viewBox="0 0 16 16" style={{ flexShrink: 0 }}>
+      <g fill="none" stroke="currentColor" strokeWidth="1.5">
+        <ellipse cx="8" cy="4.2" rx="5.6" ry="2.4" />
+        <path d="M2.4 4.2v3.6c0 1.33 2.5 2.4 5.6 2.4s5.6-1.07 5.6-2.4V4.2" />
+        <path d="M2.4 7.8v3.6c0 1.33 2.5 2.4 5.6 2.4s5.6-1.07 5.6-2.4V7.8" />
+      </g>
+    </svg>
   );
 }
 

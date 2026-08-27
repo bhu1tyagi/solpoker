@@ -156,13 +156,13 @@ export function TableFelt({
       {/* The table, per the Superdesign "High Stakes Table" draft: a stadium
           with a broad near-black rail around deep green cloth — the one place
           the product stops being a dark UI and becomes a physical object. The
-          200px corner radius is the draft's own; it clamps toward semicircles
-          as the table narrows. */}
+          999px radius clamps to half the short side, so the ends are true
+          semicircles at any width: a pill, never a rounded rectangle. */}
       <div
         style={{
           position: "absolute",
           inset: geo.ellipseInset,
-          borderRadius: "min(200px, 24cqh)",
+          borderRadius: 999,
           border: "12px solid var(--c-felt-rail)",
           // The cloth: lit from dead centre, falling to near-black at the rim,
           // with the draft's deep inset shadow pooling against the rail.
