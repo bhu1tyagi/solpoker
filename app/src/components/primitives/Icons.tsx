@@ -68,29 +68,28 @@ export function TableIcon({ size = 20 }: Props) {
   // would have them all resolve against whichever mounted first.
   const id = useId();
 
-  // Below 24px the edge spots and the fifth slab close into a smudge, so the
-  // small cut drops them and keeps the set's normal stroke. Scaling one
-  // drawing to every size is how a 16px button icon becomes a blot.
-  if (size < 24) {
-    return (
-      <svg {...frame(size)}>
-        <defs>
-          <mask id={id}>
-            <rect x="0" y="0" width="24" height="24" fill="white" />
-            <circle cx="8" cy="14.5" r="8" fill="black" />
-          </mask>
-        </defs>
-        <g mask={`url(#${id})`}>
-          <rect x="11" y="3" width="10.5" height="2.6" rx="1.3" />
-          <rect x="12.5" y="7.4" width="9" height="2.6" rx="1.3" />
-          <rect x="10.8" y="11.8" width="10.7" height="2.6" rx="1.3" />
-          <rect x="12.3" y="16.2" width="9.2" height="2.6" rx="1.3" />
-        </g>
-        <circle cx="8" cy="14.5" r="6.4" />
-        <circle cx="8" cy="14.5" r="2.6" />
-      </svg>
-    );
-  }
+  // Eight edge spots, cut into the rim itself rather than drawn as a separate
+  // ring inside it.
+  //
+  // This is the detail that says "poker chip", so it is the last thing that
+  // can be allowed to drop out — and an inner ring is exactly what does drop
+  // out. Nearly every use of this icon is 15 to 22px, where the chip is only
+  // eight or nine pixels across; three concentric strokes inside that close
+  // into a smudge no matter how they are tuned. Notching the rim costs no
+  // second ring, survives at any size, and is what a real chip's edge does.
+  // Eight is also what the Pokerable mark uses, so the two agree.
+  //
+  // Butt caps, explicitly. The set rounds its line ends, and round caps grow
+  // each dash by half a stroke at both ends — at 16px that is the whole gap,
+  // and the spots seal into a plain circle.
+  const spots = {
+    strokeDasharray: "3 1.95",
+    strokeDashoffset: "1.5",
+    strokeLinecap: "butt" as const,
+  };
+  // The chip, at the same place and size whatever the cut.
+  const chip = { cx: 7.6, cy: 14.4 };
+  const detailed = size >= 28;
 
   return (
     <svg {...chipFrame(size)}>
@@ -99,22 +98,35 @@ export function TableIcon({ size = 20 }: Props) {
           <rect x="0" y="0" width="24" height="24" fill="white" />
           {/* A shade wider than the chip, so the slab ends stop clear of its
               rim instead of kissing it. */}
-          <circle cx="7.6" cy="14.4" r="7.5" fill="black" />
+          <circle {...chip} r="7.6" fill="black" />
         </mask>
       </defs>
-      {/* Five slabs, each nudged left or right of the one below it. A
-          perfectly aligned pile reads as a stack of paper; real chips never
-          land squarely on each other. */}
+      {/* Slabs nudged left or right of the one below. A perfectly aligned
+          pile reads as a stack of paper; real chips never land squarely on
+          each other. The fifth is the one piece of detail that IS size-aware:
+          five slabs leave two thirds of a pixel between them at 16px. */}
       <g mask={`url(#${id})`}>
-        <rect x="11" y="2.2" width="10.5" height="2.3" rx="1.15" />
-        <rect x="12.4" y="5.5" width="9" height="2.3" rx="1.15" />
-        <rect x="10.6" y="8.8" width="10.6" height="2.3" rx="1.15" />
-        <rect x="12.6" y="12.1" width="8.8" height="2.3" rx="1.15" />
-        <rect x="11.2" y="15.4" width="10" height="2.3" rx="1.15" />
+        {detailed ? (
+          <>
+            <rect x="11" y="2.2" width="10.5" height="2.3" rx="1.15" />
+            <rect x="12.4" y="5.5" width="9" height="2.3" rx="1.15" />
+            <rect x="10.6" y="8.8" width="10.6" height="2.3" rx="1.15" />
+            <rect x="12.6" y="12.1" width="8.8" height="2.3" rx="1.15" />
+            <rect x="11.2" y="15.4" width="10" height="2.3" rx="1.15" />
+          </>
+        ) : (
+          <>
+            <rect x="11" y="3" width="10.5" height="2.6" rx="1.3" />
+            <rect x="12.5" y="7.4" width="9" height="2.6" rx="1.3" />
+            <rect x="10.8" y="11.8" width="10.7" height="2.6" rx="1.3" />
+            <rect x="12.3" y="16.2" width="9.2" height="2.6" rx="1.3" />
+          </>
+        )}
       </g>
-      <circle cx="7.6" cy="14.4" r="6.3" />
-      <circle cx="7.6" cy="14.4" r="4.8" strokeDasharray="2.5 2.1" />
-      <circle cx="7.6" cy="14.4" r="2.65" />
+      <circle {...chip} r="6.3" {...spots} />
+      {/* Big enough to be a chip's centre pad rather than a punched hole,
+          and far enough inside the rim to stay clear of it at 15px. */}
+      <circle {...chip} r="2.65" />
     </svg>
   );
 }
