@@ -78,8 +78,17 @@ const funder = Keypair.fromSecretKey(
 const log = (...a) => console.log(...a);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Enough SOL for a session key and its fees, with headroom for a long run. */
-const TARGET_LAMPORTS = 0.05 * LAMPORTS_PER_SOL;
+/**
+ * SOL per wallet.
+ *
+ * 0.05 was not enough and failed in a way that named nothing: starting the
+ * table died on `delegate seat 0 failed: Custom(1)`, which is the delegation
+ * CPI running out of lamports. The payer for that is the SESSION KEY, not the
+ * wallet — the wallet tops the key up, the key pays to move the seat and the
+ * hole account onto the rollup, and the float has to cover both plus the
+ * per-hand fees. 0.15 is what the two-browser gate uses for the same work.
+ */
+const TARGET_LAMPORTS = 0.15 * LAMPORTS_PER_SOL;
 /** Enough USDC to buy in, plus room to rebuy once. */
 const TARGET_MICRO_USDC = Math.round(BUYIN * 1.1) * 10_000;
 
