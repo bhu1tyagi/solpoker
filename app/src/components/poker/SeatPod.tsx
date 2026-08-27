@@ -414,10 +414,19 @@ export function SeatPod({
             marginTop: cardsOn === "below" ? 4 : 0,
             // Offset exactly as the cards row is, so the claim sits under the
             // cards it is about — centred on the pod it slid beneath the
-            // avatar tile, which clipped it mid-word.
+            // avatar tile, which clipped it mid-word. Positioned, or the
+            // z-index is ignored and the cards land on top of the words.
+            position: "relative",
             marginLeft: avatarOn === "left" ? d.avatar + (compact ? 4 : 8) : 0,
             marginRight: avatarOn === "right" ? d.avatar + (compact ? 4 : 8) : 0,
             zIndex: 3,
+            // Its own dark pill, like every other label on the table. Bare
+            // green text was fine on the old dark cards and vanished the day
+            // the cards turned white.
+            padding: "2px 8px",
+            borderRadius: "var(--r-pill)",
+            background: "rgba(0, 0, 0, 0.6)",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
           }}
         >
           <PrivacyRing secured={!!secured} size={13} />

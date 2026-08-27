@@ -153,112 +153,62 @@ export function TableFelt({
         margin: "0 auto",
       }}
     >
-      {/* The table: a stadium — straight rails, semicircular ends, the pill of
-          a real card room — with a raised rail running around a sunken cloth.
-          A 999px radius clamps to half the short side, which is what makes the
-          ends true semicircles at any width. The room itself is the page
-          background, not a panel drawn in here. */}
+      {/* The table, per the Superdesign "High Stakes Table" draft: a stadium
+          with a broad near-black rail around deep green cloth — the one place
+          the product stops being a dark UI and becomes a physical object. The
+          200px corner radius is the draft's own; it clamps toward semicircles
+          as the table narrows. */}
       <div
         style={{
           position: "absolute",
           inset: geo.ellipseInset,
-          borderRadius: 999,
-          // The rail: the one raised object in the room. It reads as an edge
-          // because it is lighter than both the room and the cloth it holds.
+          borderRadius: "min(200px, 24cqh)",
+          border: "12px solid var(--c-felt-rail)",
+          // The cloth: lit from dead centre, falling to near-black at the rim,
+          // with the draft's deep inset shadow pooling against the rail.
           background:
-            "linear-gradient(180deg, var(--c-felt-edge) 0%, var(--c-felt-raised) 55%, var(--c-felt-edge) 100%)",
-          border: "1px solid var(--c-rule)",
-          boxShadow: "var(--e-raised), 0 28px 80px rgba(0, 0, 0, 0.5)",
+            "radial-gradient(circle at center, var(--c-felt-cloth) 0%, var(--c-felt-cloth-deep) 100%)",
+          boxShadow:
+            "inset 0 0 150px rgba(0, 0, 0, 0.8), 0 50px 100px -20px rgba(0, 0, 0, 0.5)",
+          overflow: "hidden",
         }}
       >
-        {/* The cloth, sunk inside the rail. Percentages track each axis of the
-            box, so the vertical inset is scaled by the aspect ratio to keep the
-            rail the same thickness all the way round.
-
-            It is not a green oval. The surface of this product is felt in the
-            sense the design system means — the near-black ground the whole
-            interface is built on — and an emerald table sitting on it would
-            be the one object in the room that belongs to a different palette.
-            Lit from above centre so the board is the brightest part of the
-            cloth, with an inset shadow where it dips below the rail. */}
-        <div
-          style={{
-            position: "absolute",
-            inset: "6.5% 4%",
-            borderRadius: 999,
-            background:
-              "radial-gradient(ellipse at 50% 34%, var(--c-felt-edge) 0%, var(--c-felt-raised) 62%, color-mix(in srgb, var(--c-felt-raised) 70%, var(--c-felt)) 100%)",
-            border: "1px solid var(--c-rule)",
-            boxShadow:
-              "inset 0 3px 22px rgba(0, 0, 0, 0.5), inset 0 -28px 64px color-mix(in srgb, var(--c-felt) 62%, transparent)",
-          }}
-        >
-          {/* The betting line: a hairline printed into the cloth. */}
-          <div
-            style={{
-              position: "absolute",
-              inset: "7% 4.5%",
-              borderRadius: 999,
-              border: "1px solid var(--c-rule)",
-              pointerEvents: "none",
-            }}
-          />
-        </div>
-        <div
+        {/* The house mark, printed dead centre into the cloth the way the
+            draft prints its brand there — low contrast, so cards and chips
+            always beat it, and an empty table still says whose room this is.
+            Inside the cloth's own box so the overflow clip keeps it on the
+            felt. */}
+        <svg
           aria-hidden
+          viewBox="0 0 100 100"
           style={{
             position: "absolute",
             left: "50%",
-            top: "82%",
+            top: "50%",
             transform: "translate(-50%, -50%)",
-            fontFamily: "var(--font-display)",
-            fontSize: "clamp(8px, 1.6cqw, 13px)",
-            letterSpacing: "0.42em",
-            textTransform: "uppercase",
-            color: "color-mix(in srgb, var(--c-ink) 7%, transparent)",
-            whiteSpace: "nowrap",
+            width: "19%",
+            opacity: 0.09,
+            filter: "blur(1px)",
+            color: "var(--c-ink)",
             pointerEvents: "none",
           }}
         >
-          Pokerable
-        </div>
+          <circle
+            cx="50"
+            cy="50"
+            r="42"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="10"
+            strokeDasharray="20.3 12.7"
+            strokeDashoffset="10.15"
+          />
+          <circle cx="50" cy="50" r="33" fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.7" />
+          <g transform="translate(50 51) scale(0.5) translate(-50 -50)">
+            <path d={SPADE_PATH} fill="currentColor" />
+          </g>
+        </svg>
       </div>
-
-      {/* The house mark, diffused into the cloth behind the board — the full
-          chip-and-spade, not just the spade, so the felt carries the same
-          identity as the header. Low contrast and softly blurred: cards and
-          chips always beat it, and an empty table still says whose room this
-          is. Drawn before the board in the tree, so the cards land on top. */}
-      <svg
-        aria-hidden
-        viewBox="0 0 100 100"
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: geo.boardTop,
-          transform: "translate(-50%, -50%)",
-          width: "17%",
-          opacity: 0.055,
-          filter: "blur(2px)",
-          color: "var(--c-ink)",
-          pointerEvents: "none",
-        }}
-      >
-        <circle
-          cx="50"
-          cy="50"
-          r="42"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="10"
-          strokeDasharray="20.3 12.7"
-          strokeDashoffset="10.15"
-        />
-        <circle cx="50" cy="50" r="33" fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.7" />
-        <g transform="translate(50 51) scale(0.5) translate(-50 -50)">
-          <path d={SPADE_PATH} fill="currentColor" />
-        </g>
-      </svg>
 
       {/* Board and pot, centred. Absolute centring shrink-wraps to half the
           felt, so the column takes its content's width or the status line
@@ -287,29 +237,37 @@ export function TableFelt({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={spring.snappy}
+              // The draft's pot: a black pill on the cloth, label over a mono
+              // green figure, bordered with the faintest hairline.
               style={{
                 display: "flex",
-                alignItems: "baseline",
-                gap: 8,
+                flexDirection: "column",
+                alignItems: "center",
+                padding: compact ? "3px 12px" : "4px 16px",
+                borderRadius: "var(--r-pill)",
+                background: "rgba(0, 0, 0, 0.6)",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
               }}
             >
               <span
+                className="label"
                 style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: compact ? 12 : 15,
-                  color: "var(--c-ink-muted)",
+                  fontSize: compact ? 8 : 10,
+                  letterSpacing: "0.1em",
                   textTransform: "uppercase",
-                  letterSpacing: "-0.01em",
+                  color: "rgba(255, 255, 255, 0.4)",
+                  fontWeight: 800,
                 }}
               >
-                total pot :
+                main pot
               </span>
               <span
                 className="num"
                 style={{
-                  fontSize: compact ? 14 : 17,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: compact ? 13 : 17,
                   fontWeight: 700,
-                  color: "var(--c-ink)",
+                  color: "var(--c-green)",
                 }}
               >
                 <AnimatedNumber value={displayPot} />

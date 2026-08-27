@@ -22,8 +22,13 @@ export const COLOR = {
   feltEdge: '#17171A',
 
   // The table itself, and only the table. Deep poker green — the one place the
-  // product stops being a dark UI and becomes a physical object.
+  // product stops being a dark UI and becomes a physical object. The cloth
+  // pair is the radial the Superdesign "High Stakes Table" draft lights the
+  // felt with (bright centre to dark rim); the rail is its 12px surround.
   bgFelt: '#071a12',
+  feltCloth: '#0a2f1f',
+  feltClothDeep: '#05140d',
+  feltRail: '#1a1a1a',
 
   // Glass. The default panel is the SOLID fill with the translucent wash and the
   // blur layered over it. The solid is not decoration: backdrop-filter composites
@@ -58,14 +63,20 @@ export const COLOR = {
   info: '#4DA3FF',
 
   // Playing card faces. Cards are LIGHT objects on a dark table, like real
-  // cards. A dark card on dark felt reads as a hole, not a card.
-  cardFace: '#F5F3EE',
-  cardFaceEdge: '#DCD8CE',
-  cardBack: '#161C2A',
+  // cards. A dark card on dark felt reads as a hole, not a card. Pure white
+  // and the zinc back come from the Superdesign draft the table now follows.
+  cardFace: '#FFFFFF',
+  cardFaceEdge: '#E4E4E7',
+  cardBack: '#27272A',
+  cardBackEdge: '#3F3F46',
+  // The draft's card red: rose-600, measured 4.9:1 on white.
+  cardRed: '#E11D48',
+  cardBlack: '#09090B',
 
-  // Four-colour deck. Standard online-poker convention and the accessible
-  // default: red/black alone is the worst possible pairing for deuteranopia.
-  // All four measured against --card-face.
+  // Four-colour deck — the accessible ALTERNATE for a settings toggle. The
+  // default deck is the draft's classic red/black above; suit is never
+  // carried by colour alone (the symbol prints beside every rank), and these
+  // four remain for players who want the colours to differ too.
   suitSpade: '#15202B',   // 14.87:1
   suitHeart: '#C2143C',   //  5.47:1
   suitDiamond: '#1667C2', //  5.05:1
@@ -172,7 +183,7 @@ export const RADIUS = {
   sm: '6px',
   md: '10px',
   lg: '14px',
-  card: '8px',    // playing cards, tuned to look right at 64px tall
+  card: '6px',    // playing cards — the Superdesign draft's own corner
   chip: '999px',
   pill: '999px',
 } as const;

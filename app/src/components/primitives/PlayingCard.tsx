@@ -2,46 +2,48 @@
 
 import { motion, useReducedMotion } from "motion/react";
 import { NO_CARD, RANK_CHARS, SUIT_SYMBOLS, rankOf, suitOf } from "@/lib/engine/cards";
+import { SPADE_PATH } from "@/components/primitives/Logo";
 import { spring } from "@/styles/theme";
 
 type Size = "sm" | "md" | "lg";
 
 /**
- * Card geometry, laid out the way a real card is: an index in the top-left
- * corner — rank over suit — its mirror in the bottom-right, and one large pip
- * in the middle. The corner is what reads in a fanned or partly covered hand;
- * the pip is what reads across the table.
+ * Card geometry, from the Superdesign "High Stakes Table" draft: a corner
+ * index — rank with a small suit beside it — mirrored in the far corner, and
+ * one large pip in the middle. The corner is what reads in a fanned or partly
+ * covered hand; the pip is what reads across the table. The lg card is the
+ * draft's own 70×98.
  */
 const SIZES: Record<
   Size,
   { w: number; h: number; rank: number; suit: number; pip: number; pad: number }
 > = {
-  sm: { w: 40, h: 57, rank: 13, suit: 9, pip: 21, pad: 3 },
-  md: { w: 56, h: 80, rank: 17, suit: 12, pip: 30, pad: 5 },
-  lg: { w: 72, h: 102, rank: 21, suit: 14, pip: 40, pad: 6 },
+  sm: { w: 40, h: 57, rank: 10, suit: 8, pip: 18, pad: 3 },
+  md: { w: 56, h: 80, rank: 12, suit: 10, pip: 24, pad: 4 },
+  lg: { w: 70, h: 98, rank: 14, suit: 12, pip: 30, pad: 5 },
 };
 
 /**
- * The four-colour deck, in suit order: clubs, diamonds, hearts, spades.
+ * The classic two-colour deck, in suit order: clubs, diamonds, hearts, spades.
  *
- * This is the default rather than an option, and the reason is accessibility
- * before convention: red-versus-black is the worst possible pairing for the
- * most common colour blindness, and it is the exact pairing a poker interface
- * reaches for by default. All four are measured against --c-card-face.
+ * The default, because it is the deck the chosen table design is drawn with.
+ * Suit is never carried by colour alone — the symbol is printed beside every
+ * rank and in the centre pip — and the four-colour deck below stays available
+ * for a settings toggle, where red/black is hard to separate.
  */
 export const SUIT_COLORS = [
+  "var(--c-card-black)",
+  "var(--c-card-red)",
+  "var(--c-card-red)",
+  "var(--c-card-black)",
+];
+
+/** The four-colour deck, the accessible alternate for the settings toggle. */
+export const SUIT_COLORS_FOUR = [
   "var(--c-suit-club)",
   "var(--c-suit-diamond)",
   "var(--c-suit-heart)",
   "var(--c-suit-spade)",
-];
-
-/** The two-colour deck, for players who switch four-colour off in settings. */
-export const SUIT_COLORS_TWO = [
-  "var(--c-suit-two-color-black)",
-  "var(--c-suit-two-color-red)",
-  "var(--c-suit-two-color-red)",
-  "var(--c-suit-two-color-black)",
 ];
 
 interface Props {
@@ -54,8 +56,8 @@ interface Props {
   dimmed?: boolean;
   /** Lift and ring it, for the winning five. */
   highlighted?: boolean;
-  /** Two-colour deck. Off by default; four-colour is the accessible choice. */
-  twoColor?: boolean;
+  /** Four-colour deck, for players who switch it on in settings. */
+  fourColor?: boolean;
   className?: string;
 }
 
@@ -65,7 +67,7 @@ export function PlayingCard({
   size = "md",
   dimmed = false,
   highlighted = false,
-  twoColor = false,
+  fourColor = false,
   className,
 }: Props) {
   const reduce = useReducedMotion();
@@ -102,7 +104,7 @@ export function PlayingCard({
         animate={{ rotateY: showFace ? 0 : 180 }}
         transition={reduce ? { duration: 0.15 } : spring.deal}
       >
-        <Face card={card} s={s} highlighted={highlighted} twoColor={twoColor} />
+        <Face card={card} s={s} highlighted={highlighted} fourColor={fourColor} />
         <Back s={s} />
       </motion.div>
     </motion.div>
@@ -113,35 +115,35 @@ function Face({
   card,
   s,
   highlighted,
-  twoColor,
+  fourColor,
 }: {
   card?: number;
   s: (typeof SIZES)[Size];
   highlighted: boolean;
-  twoColor: boolean;
+  fourColor: boolean;
 }) {
   const known = card !== undefined && card !== NO_CARD && card < 52;
-  const palette = twoColor ? SUIT_COLORS_TWO : SUIT_COLORS;
+  const palette = fourColor ? SUIT_COLORS_FOUR : SUIT_COLORS;
   const color = known ? palette[suitOf(card)] : "var(--c-ink-faint)";
   const rank = known ? RANK_CHARS[rankOf(card)].replace("T", "10") : "";
   const suit = known ? SUIT_SYMBOLS[suitOf(card)] : "";
 
-  // The index column: rank over suit, tight as print. "10" is the one
-  // two-character rank, so it drops a size to hold the same column width.
+  // The index, as the draft prints it: rank with a small suit at its side, on
+  // one line. "10" is the one two-character rank, so it drops a size to hold
+  // roughly the same footprint.
   const index = (
     <span
       style={{
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
         lineHeight: 1,
-        gap: Math.max(1, Math.round(s.rank * 0.08)),
+        gap: Math.max(1, Math.round(s.rank * 0.14)),
       }}
     >
       <span
         className="num"
         style={{
-          fontSize: rank === "10" ? s.rank * 0.8 : s.rank,
+          fontSize: rank === "10" ? s.rank * 0.82 : s.rank,
           fontWeight: 700,
           lineHeight: 1,
           letterSpacing: rank === "10" ? "-0.06em" : undefined,
@@ -161,16 +163,14 @@ function Face({
         backfaceVisibility: "hidden",
         borderRadius: "var(--r-card)",
         /*
-         * A card is a light object on a dark table, exactly like a real one.
-         * The previous deck was dark slate on dark felt, which reads as a hole
-         * in the table rather than a card lying on it.
+         * A card is a light object on a dark table, exactly like a real one —
+         * pure white per the draft, with its soft drop shadow standing the
+         * card off the cloth.
          */
         background: "var(--c-card-face)",
-        // A hairline of the paper's own shadow along the bottom edge, so a
-        // fanned hand shows where one card ends and the next begins.
         boxShadow: highlighted
-          ? "0 0 0 2px var(--c-green), inset 0 -1px 0 var(--c-card-face-edge)"
-          : "inset 0 -1px 0 var(--c-card-face-edge)",
+          ? "0 0 0 2px var(--c-green), 0 4px 10px rgba(0, 0, 0, 0.3)"
+          : "0 4px 10px rgba(0, 0, 0, 0.3)",
         color,
         userSelect: "none",
       }}
@@ -178,8 +178,8 @@ function Face({
       {known && (
         <>
           <span style={{ position: "absolute", top: s.pad, left: s.pad + 1 }}>{index}</span>
-          {/* The mirror index: the same column turned through 180°, so the
-              card reads the same whichever way it lands. */}
+          {/* The mirror index: the same line turned through 180°, so the card
+              reads the same whichever way it lands. */}
           <span
             style={{
               position: "absolute",
@@ -190,8 +190,7 @@ function Face({
           >
             {index}
           </span>
-          {/* The pip, seated just below centre the way weight sits on printed
-              stock — dead centre reads high once the corners are inked. */}
+          {/* The pip, seated dead centre as the draft sets it. */}
           <span
             style={{
               position: "absolute",
@@ -200,7 +199,6 @@ function Face({
               placeItems: "center",
               fontSize: s.pip,
               lineHeight: 1,
-              paddingTop: s.pad,
             }}
           >
             {suit}
@@ -212,12 +210,11 @@ function Face({
 }
 
 /**
- * The back: the dark card stock with the chip ring's dash rhythm laid over it
- * at low contrast. It is the mark's geometry rather than a generic pattern,
- * and it is what makes a face-down hand read as a physical object at a glance.
+ * The back, per the draft's locked card: dark zinc stock inside a heavier
+ * zinc border, with the house mark sitting faintly in the middle — the same
+ * treatment the draft gives its face-down river card.
  */
 function Back({ s }: { s: (typeof SIZES)[Size] }) {
-  const inset = Math.max(3, Math.round(s.w * 0.07));
   return (
     <div
       style={{
@@ -227,20 +224,28 @@ function Back({ s }: { s: (typeof SIZES)[Size] }) {
         transform: "rotateY(180deg)",
         borderRadius: "var(--r-card)",
         background: "var(--c-card-back)",
-        boxShadow: "var(--e-raised)",
+        border: "2px solid var(--c-card-back-edge)",
+        boxShadow: "0 4px 10px rgba(0, 0, 0, 0.3)",
+        display: "grid",
+        placeItems: "center",
         overflow: "hidden",
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          inset,
-          borderRadius: "var(--r-sm)",
-          border: "1px solid color-mix(in srgb, var(--c-purple) 34%, transparent)",
-          background:
-            "repeating-linear-gradient(45deg, color-mix(in srgb, var(--c-purple) 16%, transparent) 0 2px, transparent 2px 7px)",
-        }}
-      />
+      <svg aria-hidden viewBox="0 0 100 100" style={{ width: "46%", opacity: 0.2, color: "var(--c-ink)" }}>
+        <circle
+          cx="50"
+          cy="50"
+          r="42"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="10"
+          strokeDasharray="20.3 12.7"
+          strokeDashoffset="10.15"
+        />
+        <g transform="translate(50 51) scale(0.5) translate(-50 -50)">
+          <path d={SPADE_PATH} fill="currentColor" />
+        </g>
+      </svg>
     </div>
   );
 }
@@ -254,9 +259,10 @@ export function CardSlot({ size = "md" }: { size?: Size }) {
         width: s.w,
         height: s.h,
         borderRadius: "var(--r-card)",
-        // A recess in the felt, not a card: darker than the table, no rim-light.
-        background: "color-mix(in srgb, var(--c-felt) 55%, transparent)",
-        border: "1px solid var(--c-rule)",
+        // The draft's undealt slot: dark zinc stock in a heavier zinc border,
+        // quieter than a face-down card because nothing is there yet.
+        background: "color-mix(in srgb, var(--c-card-back) 70%, transparent)",
+        border: "2px solid color-mix(in srgb, var(--c-card-back-edge) 60%, transparent)",
       }}
     />
   );

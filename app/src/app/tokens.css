@@ -7,6 +7,9 @@
   --c-felt-raised: #101013;
   --c-felt-edge: #17171A;
   --c-bg-felt: #071a12;
+  --c-felt-cloth: #0a2f1f;
+  --c-felt-cloth-deep: #05140d;
+  --c-felt-rail: #1a1a1a;
   --c-glass-solid: #101013;
   --c-glass-fill: rgba(255,255,255,0.03);
   --c-glass-border: rgba(255,255,255,0.08);
@@ -23,9 +26,12 @@
   --c-loss: #FF5C5C;
   --c-warn: #FFB020;
   --c-info: #4DA3FF;
-  --c-card-face: #F5F3EE;
-  --c-card-face-edge: #DCD8CE;
-  --c-card-back: #161C2A;
+  --c-card-face: #FFFFFF;
+  --c-card-face-edge: #E4E4E7;
+  --c-card-back: #27272A;
+  --c-card-back-edge: #3F3F46;
+  --c-card-red: #E11D48;
+  --c-card-black: #09090B;
   --c-suit-spade: #15202B;
   --c-suit-heart: #C2143C;
   --c-suit-diamond: #1667C2;
@@ -62,7 +68,7 @@
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
-  --r-card: 8px;
+  --r-card: 6px;
   --r-chip: 999px;
   --r-pill: 999px;
 
