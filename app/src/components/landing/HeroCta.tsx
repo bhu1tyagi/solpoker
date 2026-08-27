@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Button } from "@/components/primitives/Button";
 import { ArrowRightIcon } from "@/components/primitives/Icons";
+import { useUiStore } from "@/stores/ui-store";
 
 /**
  * The hero's primary CTA, aware of wallet state.
@@ -24,7 +25,16 @@ export function HeroCta() {
 
   const ready = mounted && connected;
   return (
-    <Button href="/lobby" variant="gradient" size="xl">
+    // "Connect wallet" must land with the gate open — it is the wallet
+    // picker — even for someone who dismissed it on an earlier visit. A
+    // connected player is just going to the room, and the gate can stay
+    // however they left it.
+    <Button
+      href="/lobby"
+      variant="gradient"
+      size="xl"
+      onClick={ready ? undefined : () => useUiStore.getState().openGate()}
+    >
       {ready ? "Go to the lobby" : "Connect wallet"}
       <ArrowRightIcon size={18} />
     </Button>

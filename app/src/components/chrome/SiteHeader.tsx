@@ -40,6 +40,7 @@ const NAV = [
 function WalletSlot() {
   const { connected, publicKey, disconnect } = useWallet();
   const toast = useUiStore((s) => s.toast);
+  const openGate = useUiStore((s) => s.openGate);
   const [mounted, setMounted] = useState(false);
   const [menu, setMenu] = useState(false);
 
@@ -47,7 +48,18 @@ function WalletSlot() {
 
   if (!mounted || !connected || !publicKey) {
     return (
-      <Button href="/lobby" variant="gradient" size="lg" className="site-cta-link">
+      // The gate at /lobby is the wallet picker, and openGate un-dismisses
+      // it. Without the click, a player who had closed the gate to look
+      // around pressed this button, the router "navigated" to the page they
+      // were already on, and nothing visibly happened — a connect button
+      // that appeared to be broken.
+      <Button
+        href="/lobby"
+        variant="gradient"
+        size="lg"
+        className="site-cta-link"
+        onClick={openGate}
+      >
         Connect wallet
       </Button>
     );
@@ -200,7 +212,12 @@ export function SiteHeader() {
               variant="gradient"
               size="lg"
               fullWidth
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setOpen(false);
+                // Same as the desktop CTA: the gate is the wallet picker,
+                // and it must reopen even if it was dismissed earlier.
+                useUiStore.getState().openGate();
+              }}
             >
               Connect wallet
             </Button>
