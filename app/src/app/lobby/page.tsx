@@ -43,6 +43,9 @@ const TIERS = [
   { key: "high", label: "High", sub: "$2.50 / $5", bb: 500 },
 ] as const;
 
+/** A stat tile: its name, its figure, and the window the figure covers. */
+type Tile = [label: string, value: string, window?: string];
+
 export default function Lobby() {
   const { connected, publicKey } = useWallet();
   const { state, buy, sell, busy, affordable, buyBlocked, sellBlocked } = usePlayer();
@@ -76,20 +79,6 @@ export default function Lobby() {
     [tables, me],
   );
 
-  /*
-   * The stat row has two halves, and they answer different questions.
-   *
-   * The first four are RIGHT NOW, computed from the same on-chain listing the
-   * grid renders and refreshed on its own 6-second poll, so a tile can never
-   * disagree with the cards below it.
-   *
-   * The rest are OVER TIME, and the chain cannot answer them at all: hand
-   * accounts are reused, so a settled pot is gone the moment the next hand
-   * starts. They come from hands that clients reported and the server
-   * re-verified, and each one is rendered only when it exists. A missing
-   * indexer, an empty database or a day with no pots observed reads as
-   * absence; none of them is ever a zero.
-   */
   const stats = useMemo(() => {
     const live = visible.filter((t) => t.delegated).length;
     const players = visible.reduce((n, t) => n + t.seated, 0);
@@ -99,6 +88,45 @@ export default function Lobby() {
     );
     return { players, tables: visible.length, seats, live };
   }, [visible]);
+
+  /*
+   * The stat row: four tiles, and what has been PLAYED gets them.
+   *
+   * Volume, pot sizes and hand counts are what someone deciding whether to
+   * sit down is actually asking about, and the chain cannot answer any of
+   * them — hand accounts are reused, so a settled pot is gone the moment the
+   * next hand starts. They come from hands clients reported and the server
+   * re-verified.
+   *
+   * The chain figures are the fallback rather than the headline. They fill
+   * whatever the database cannot answer, in order, so the row is always four
+   * tiles: a brand-new room with nothing stored still says how many seats are
+   * open instead of showing an empty band, and a room with a day behind it
+   * leads with the day. Nothing is ever padded with a zero — a tile appears
+   * because some source genuinely knows its number.
+   */
+  const tiles = useMemo(() => {
+    const played: Tile[] = [];
+    if (meta.hands !== null) {
+      played.push(["Hands", meta.hands.toLocaleString(), since]);
+    }
+    if (meta.volumeChips !== null) {
+      played.push(["Volume", formatUsd(meta.volumeChips), since]);
+    }
+    if (meta.avgPotChips !== null) {
+      played.push(["Average pot", formatUsd(meta.avgPotChips), since]);
+    }
+    if (meta.biggestPotChips !== null) {
+      played.push(["Biggest pot", formatUsd(meta.biggestPotChips), since]);
+    }
+    const now: Tile[] = [
+      ["Players seated", String(stats.players)],
+      ["Active tables", String(stats.tables)],
+      ["Open seats", String(stats.seats)],
+      ["Hands live", String(stats.live)],
+    ];
+    return [...played, ...now.slice(0, Math.max(0, 4 - played.length))];
+  }, [meta, since, stats]);
 
   const filtered = useMemo(
     () =>
@@ -196,30 +224,11 @@ export default function Lobby() {
           )}
 
           <section className="lobby-stats" aria-label="Room activity">
-            {(
-              [
-                ["Players seated", String(stats.players)],
-                ["Active tables", String(stats.tables)],
-                ["Open seats", String(stats.seats)],
-                ["Hands live", String(stats.live)],
-                // The window is shown rather than assumed. The server hands
-                // back 24h while there was play in it and all time otherwise,
-                // and a tile that said "24h" over an all-time figure would be
-                // a small, constant lie.
-                ...(meta.hands !== null
-                  ? [["Hands", meta.hands.toLocaleString(), since]]
-                  : []),
-                ...(meta.volumeChips !== null
-                  ? [["Volume", formatUsd(meta.volumeChips), since]]
-                  : []),
-                ...(meta.avgPotChips !== null
-                  ? [["Average pot", formatUsd(meta.avgPotChips), since]]
-                  : []),
-                ...(meta.biggestPotChips !== null
-                  ? [["Biggest pot", formatUsd(meta.biggestPotChips), since]]
-                  : []),
-              ] as [string, string, string?][]
-            ).map(([label, value, note]) => (
+            {/* The window is shown rather than assumed. The server hands back
+                24h while there was play in it and all time otherwise, and a
+                tile that said "24h" over an all-time figure would be a small,
+                constant lie. */}
+            {tiles.map(([label, value, note]) => (
               <div key={label} className="lobby-stat glass">
                 <span className="label">
                   {label}
