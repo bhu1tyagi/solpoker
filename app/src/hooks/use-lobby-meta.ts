@@ -53,6 +53,20 @@ export interface LobbyMeta extends Totals {
    */
   handsDealt: number | null;
   /**
+   * Floors the on-chain rake proves, for the figures the chain does not store
+   * directly. Present only when rake has actually been taken.
+   *
+   * The lobby prefers an observed figure and falls back to these, marking the
+   * result as a lower bound when it does. They are never mixed silently: a
+   * bound that reads as a total is the same lie as an invented number, just
+   * with arithmetic in front of it.
+   */
+  rakeFloor: {
+    volumeChips: number;
+    avgPotChips: number;
+    biggestPotChips: number;
+  } | null;
+  /**
    * Which stretch of time every figure above covers. The server picks the
    * last 24 hours while there was play in it and all time otherwise, so a
    * quiet night reads as history rather than as an empty room. Labels have to
@@ -67,6 +81,7 @@ const EMPTY: LobbyMeta = {
   names: {},
   stored: false,
   handsDealt: null,
+  rakeFloor: null,
   window: "24h",
   hands: null,
   potted: null,
@@ -93,6 +108,7 @@ export function useLobbyMeta(): LobbyMeta {
             names: body.names ?? {},
             stored: body.stored === true,
             handsDealt: body.handsDealt ?? null,
+            rakeFloor: body.rakeFloor ?? null,
             window: body.window === "all" ? "all" : "24h",
             hands: body.hands ?? null,
             potted: body.potted ?? null,
