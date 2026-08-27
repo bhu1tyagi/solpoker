@@ -561,7 +561,7 @@ input[type="range"]::-moz-range-thumb {
   /* Heavier below than above: the betting console lives in a band directly
      under the table, so the felt rides high and the space it gives up is
      exactly where the console goes. */
-  padding: 44px var(--sp-6) 196px;
+  padding: 44px var(--sp-6) 160px;
   container-type: size;
 }
 /* 2.2:1 landscape, capped at --table-max-w. The cqh coefficient is the aspect
@@ -619,7 +619,7 @@ input[type="range"]::-moz-range-thumb {
   /* A real width, not a cap. As a shrink-to-fit column, the action bar's
      100% had nothing to be 100% of, and the three verbs crushed into a
      huddle of clipped labels. */
-  width: min(880px, 94vw);
+  width: min(700px, 94vw);
   z-index: var(--z-action-bar);
 }
 .hud-fields {
@@ -630,29 +630,100 @@ input[type="range"]::-moz-range-thumb {
 
 /* The action bar fills its corner on a desktop and the whole width of a
    phone, where the three verbs need to be thumb-sized. */
-/* The betting console: the sizing card on the left, the four verbs beside
-   it, the way the reference client lays its own out. One row on a desktop;
-   the phone variants restack it below. */
+/* The betting console: no chrome, no panel. A slim sizing strip — presets,
+   slider, the figure — floats over a fixed-height row of verbs, the layout
+   every serious client converges on: the hand hovers where the verbs are,
+   and the sizing is one glance up, never a reach away. The buttons are
+   their own objects; nothing encloses them. */
 .action-bar {
   display: flex;
-  align-items: stretch;
-  gap: var(--sp-3);
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
 }
 .bar-sizing {
-  flex: 0 0 252px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
   transition: opacity 220ms ease;
 }
 .bar-verbs {
-  flex: 1;
   display: flex;
-  align-items: stretch;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
+}
+/* The slider, drawn from scratch — the native control is invisible on
+   near-black. A sunken rail, filled in green up to the thumb (--pct is set
+   from the live value), and a thumb that reads as a chip: green core, dark
+   bezel, a ring of its own light. */
+.bar-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  --pct: 0%;
+}
+.bar-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(
+    90deg,
+    var(--c-green-deep) 0%,
+    var(--c-green) var(--pct),
+    rgba(255, 255, 255, 0.09) var(--pct)
+  );
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.bar-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--c-green);
+  border: 3px solid var(--c-felt);
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--c-green) 55%, transparent),
+    0 0 16px color-mix(in srgb, var(--c-green) 45%, transparent);
+  transition: transform var(--m-fast) var(--m-ease);
+}
+.bar-slider:hover::-webkit-slider-thumb {
+  transform: scale(1.18);
+}
+.bar-slider::-moz-range-track {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.bar-slider::-moz-range-progress {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, var(--c-green-deep), var(--c-green));
+}
+.bar-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 3px solid var(--c-felt);
+  border-radius: 50%;
+  background: var(--c-green);
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--c-green) 55%, transparent),
+    0 0 16px color-mix(in srgb, var(--c-green) 45%, transparent);
+}
+.bar-slider:disabled {
+  cursor: default;
+}
+.bar-slider:disabled::-webkit-slider-runnable-track {
+  background: rgba(255, 255, 255, 0.07);
+}
+.bar-slider:disabled::-webkit-slider-thumb {
+  background: var(--c-ink-faint);
+  box-shadow: none;
+  transform: none;
 }
 
 /* A phone on its side: the same wide room, pulled in tight. The action bar

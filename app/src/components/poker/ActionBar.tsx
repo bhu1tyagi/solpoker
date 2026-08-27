@@ -103,61 +103,60 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
       transition={spring.gentle}
     >
       <div
-        className="bar-sizing glass"
+        className="bar-sizing"
         style={{
-          opacity: sizingLive ? 1 : 0.45,
+          opacity: sizingLive ? 1 : 0.35,
           pointerEvents: sizingLive ? undefined : "none",
         }}
         aria-hidden={!sizingLive}
       >
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-          <span
-            className="label"
-            style={{
-              fontSize: 10,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: "var(--c-ink-faint)",
-            }}
+        {shownPresets.map((p) => (
+          <PresetButton
+            key={p.label}
+            active={sizingLive && raiseTo === p.to}
+            onClick={() => sizingLive && setRaiseTo(p.to)}
           >
-            bet amount
-          </span>
-          <span
-            className="tnum bar-readout"
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--t-body-size)",
-              fontWeight: 700,
-              color: sizingLive ? "var(--c-green)" : "var(--c-ink-faint)",
-            }}
-          >
-            {sizingLive ? raiseTo.toLocaleString() : "—"}
-          </span>
-        </div>
+            {p.label}
+          </PresetButton>
+        ))}
         <input
           type="range"
+          className="bar-slider"
           min={sizingLive ? la.minRaiseTo : 0}
           max={sizingLive ? la.maxRaiseTo : 100}
           step={1}
           value={sizingLive ? raiseTo : 0}
           disabled={!sizingLive}
           onChange={(e) => setRaiseTo(Number(e.target.value))}
-          style={{ width: "100%", accentColor: "var(--c-green)", height: 16 }}
+          style={
+            {
+              flex: 1,
+              minWidth: 60,
+              height: 18,
+              // The green fill runs exactly to the thumb.
+              "--pct": sizingLive
+                ? `${
+                    la.maxRaiseTo > la.minRaiseTo
+                      ? ((raiseTo - la.minRaiseTo) / (la.maxRaiseTo - la.minRaiseTo)) * 100
+                      : 100
+                  }%`
+                : "0%",
+            } as React.CSSProperties
+          }
         />
-        <div
-          className="bar-presets"
-          style={{ display: "flex", gap: 5, alignItems: "stretch" }}
+        <span
+          className="tnum bar-readout"
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--t-body-sm-size)",
+            fontWeight: 700,
+            minWidth: 56,
+            textAlign: "right",
+            color: sizingLive ? "var(--c-green)" : "var(--c-ink-faint)",
+          }}
         >
-          {shownPresets.map((p) => (
-            <PresetButton
-              key={p.label}
-              active={sizingLive && raiseTo === p.to}
-              onClick={() => sizingLive && setRaiseTo(p.to)}
-            >
-              {p.label}
-            </PresetButton>
-          ))}
-        </div>
+          {sizingLive ? raiseTo.toLocaleString() : "—"}
+        </span>
       </div>
 
       <div className="bar-verbs">
@@ -214,7 +213,6 @@ function PresetButton({
       whileTap={{ scale: 0.95 }}
       transition={spring.snappy}
       style={{
-        flex: 1,
         // The active size takes the purple, as the reference's ALL-IN tile
         // does — green is spoken for by the money and the raise.
         background: active ? "var(--c-purple)" : "var(--c-felt-raised)",
@@ -226,7 +224,7 @@ function PresetButton({
         fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: "0.03em",
-        padding: "7px 2px",
+        padding: "5px 9px",
         cursor: "pointer",
         whiteSpace: "nowrap",
       }}
@@ -286,8 +284,10 @@ function BigButton({
       style={{
         ...TONES[tone],
         flex,
-        minHeight: 56,
-        borderRadius: "var(--r-lg)",
+        // A hand's height, exactly. The verbs once stretched to whatever
+        // stood beside them and turned into billboards.
+        height: 46,
+        borderRadius: "var(--r-md)",
         fontFamily: "var(--font-display)",
         fontSize: "var(--t-body-sm-size)",
         fontWeight: tone === "gradient" ? 800 : 700,
@@ -298,7 +298,7 @@ function BigButton({
         whiteSpace: "nowrap",
         boxShadow:
           tone === "gradient" && !disabled
-            ? "0 0 30px rgba(20, 241, 149, 0.2)"
+            ? "0 0 26px rgba(20, 241, 149, 0.2)"
             : "var(--e-raised)",
       }}
     >

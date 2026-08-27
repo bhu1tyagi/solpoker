@@ -514,8 +514,6 @@ function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" |
           far one. The dark band along the top edge is what sinks the seat. */}
       <path d="M 36 21 L 84 21" stroke="rgba(0,0,0,0.40)" strokeWidth="8" strokeLinecap="round" />
       <path d="M 40 78 L 80 78" stroke="rgba(255,255,255,0.07)" strokeWidth="5" strokeLinecap="round" />
-      {/* The stitched seam, inset the way upholstery is. */}
-      <rect x="32" y="25" width="56" height="45" rx="15" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="1.4" strokeDasharray="3.2 4.2" />
 
       {/* The frame over the cushion, bottom up: its own side wall, the
           upholstery, a seam of shadow under the crown, the crown's light.
