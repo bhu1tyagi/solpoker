@@ -78,40 +78,39 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
         { label: "all in", to: 0 },
       ];
 
+  const canCall = myTurn && la.canCall;
+  const raiseLabel = !sizingLive
+    ? "raise"
+    : raiseTo >= la.maxRaiseTo
+      ? "all in"
+      : hand?.currentBet
+        ? `raise to ${raiseTo.toLocaleString()}`
+        : `bet ${raiseTo.toLocaleString()}`;
+
   return (
     <motion.div
-      // The class carries the width: the whole band under the table on a
-      // desktop, the bottom edge on a phone.
+      // The betting console, laid out as the reference client draws it: the
+      // sizing card on the left — BET AMOUNT, the figure, the slider, the
+      // pot-fraction presets — and the four verbs beside it.
       //
       // Always mounted, all of it. The bar used to appear only on your turn,
       // and the moment between turns read as the controls being gone rather
-      // than waiting. A real client keeps the whole section standing — the
-      // sizing row, the amount, the slider, the verbs — so this one does
-      // too: the parts that cannot act simply sleep.
-      className="action-bar glass"
+      // than waiting. A real client keeps the whole console standing, so
+      // this one does too: the parts that cannot act simply sleep.
+      className="action-bar"
       initial={false}
-      animate={{ opacity: myTurn ? 1 : 0.85 }}
+      animate={{ opacity: myTurn ? 1 : 0.8 }}
       transition={spring.gentle}
-      style={{ padding: "14px 16px" }}
     >
       <div
+        className="bar-sizing glass"
         style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          marginBottom: 12,
-          opacity: sizingLive ? 1 : 0.35,
+          opacity: sizingLive ? 1 : 0.45,
           pointerEvents: sizingLive ? undefined : "none",
-          transition: "opacity 220ms ease",
         }}
         aria-hidden={!sizingLive}
       >
-        {/* Sideways on a phone there is no row to spare; the slider
-            covers the same range the presets shortcut. */}
-        <div
-          className="bar-presets"
-          style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}
-        >
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
           <span
             className="label"
             style={{
@@ -119,35 +118,17 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
               letterSpacing: "0.1em",
               textTransform: "uppercase",
               color: "var(--c-ink-faint)",
-              marginRight: 4,
             }}
           >
             bet amount
           </span>
-          {shownPresets.map((p) => (
-            <PresetButton
-              key={p.label}
-              active={sizingLive && raiseTo === p.to}
-              onClick={() => sizingLive && setRaiseTo(p.to)}
-            >
-              {p.label}
-            </PresetButton>
-          ))}
-          {/* On a phone this readout would wrap the row; the raise
-              button already repeats the figure. */}
           <span
             className="tnum bar-readout"
             style={{
-              marginLeft: "auto",
-              fontFamily: "var(--font-display)",
-              fontSize: "var(--t-body-sm-size)",
-              color: sizingLive ? "var(--c-green)" : "var(--c-ink-faint)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--t-body-size)",
               fontWeight: 700,
-              background: "var(--c-felt-raised)",
-              borderRadius: "var(--r-lg)",
-              padding: "7px 14px",
-              minWidth: 76,
-              textAlign: "right",
+              color: sizingLive ? "var(--c-green)" : "var(--c-ink-faint)",
             }}
           >
             {sizingLive ? raiseTo.toLocaleString() : "—"}
@@ -161,62 +142,63 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
           value={sizingLive ? raiseTo : 0}
           disabled={!sizingLive}
           onChange={(e) => setRaiseTo(Number(e.target.value))}
-          style={{ width: "100%", accentColor: "var(--c-green)", height: 18 }}
+          style={{ width: "100%", accentColor: "var(--c-green)", height: 16 }}
         />
+        <div
+          className="bar-presets"
+          style={{ display: "flex", gap: 5, alignItems: "stretch" }}
+        >
+          {shownPresets.map((p) => (
+            <PresetButton
+              key={p.label}
+              active={sizingLive && raiseTo === p.to}
+              onClick={() => sizingLive && setRaiseTo(p.to)}
+            >
+              {p.label}
+            </PresetButton>
+          ))}
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10 }}>
+      <div className="bar-verbs">
         <BigButton
-          tone="danger"
+          tone="dark"
           disabled={busy || !la.canFold}
           onClick={() => onAct("fold", 0)}
           flex={1}
         >
           Fold
         </BigButton>
-
-        {/* Check when it is legal, and also while it is not your turn: a
-            quiet "Call 0" there implied money where none was asked. */}
-        {la.canCheck || !myTurn ? (
-          <BigButton
-            tone="dark"
-            disabled={busy || !la.canCheck}
-            onClick={() => onAct("check", seat?.committedStreet ?? 0)}
-            flex={1}
-          >
-            Check
-          </BigButton>
-        ) : (
-          <BigButton
-            tone="dark"
-            disabled={busy || !la.canCall}
-            onClick={() => onAct("call", (seat?.committedStreet ?? 0) + la.callAmount)}
-            flex={1}
-          >
-            Call {la.callAmount.toLocaleString()}
-          </BigButton>
-        )}
-
         <BigButton
-          tone="accent"
+          tone="dark"
+          disabled={busy || !la.canCheck}
+          onClick={() => onAct("check", seat?.committedStreet ?? 0)}
+          flex={1}
+        >
+          Check
+        </BigButton>
+        <BigButton
+          tone="outline"
+          disabled={busy || !canCall}
+          onClick={() => onAct("call", (seat?.committedStreet ?? 0) + la.callAmount)}
+          flex={1}
+        >
+          {canCall ? `Call (${la.callAmount.toLocaleString()})` : "Call"}
+        </BigButton>
+        <BigButton
+          tone="gradient"
           disabled={busy || !la.canRaise}
           onClick={() => onAct(raiseTo >= la.maxRaiseTo ? "allin" : "raise", raiseTo)}
-          flex={1.35}
+          flex={1.4}
         >
-          {!myTurn || !la.canRaise
-            ? "Raise"
-            : raiseTo >= la.maxRaiseTo
-              ? "All in"
-              : hand?.currentBet
-                ? `Raise ${raiseTo.toLocaleString()}`
-                : `Bet ${raiseTo.toLocaleString()}`}
+          {raiseLabel}
         </BigButton>
       </div>
     </motion.div>
   );
 }
 
-/** The sizing row's small angular buttons: MIN, 1/3, POT, ALL IN. */
+/** The sizing card's preset tiles: MIN, 1/3, 1/2, POT, ALL IN. */
 function PresetButton({
   active,
   onClick,
@@ -232,15 +214,19 @@ function PresetButton({
       whileTap={{ scale: 0.95 }}
       transition={spring.snappy}
       style={{
-        background: active ? "var(--c-green)" : "var(--c-felt-raised)",
-        color: active ? "var(--c-felt)" : "var(--c-ink-muted)",
-        border: "none",
-        borderRadius: "var(--r-lg)",
+        flex: 1,
+        // The active size takes the purple, as the reference's ALL-IN tile
+        // does — green is spoken for by the money and the raise.
+        background: active ? "var(--c-purple)" : "var(--c-felt-raised)",
+        color: active ? "var(--c-ink)" : "var(--c-ink-muted)",
+        border: "1px solid var(--c-glass-border)",
+        borderRadius: "var(--r-sm)",
         fontFamily: "var(--font-display)",
-        fontSize: 11,
+        fontSize: 10,
+        fontWeight: 700,
         textTransform: "uppercase",
-        letterSpacing: "0.04em",
-        padding: "8px 13px",
+        letterSpacing: "0.03em",
+        padding: "7px 2px",
         cursor: "pointer",
         whiteSpace: "nowrap",
       }}
@@ -251,30 +237,31 @@ function PresetButton({
 }
 
 /**
- * The verbs in the design system's own voice. One accent: the raise is the
- * only filled button, because it is the one that escalates. Fold carries its
- * meaning in an outlined wash of the loss colour rather than a red slab —
- * a slab shouted over the whole room — and check/call is quiet glass.
+ * The verbs in the reference client's voice. Fold and check are quiet dark
+ * tiles; call is a green outline, money-coloured but not shouting; the raise
+ * is the one loud object — the brand's purple-to-green gradient — because it
+ * is the action that escalates.
  */
 const TONES = {
-  danger: {
-    background: "color-mix(in srgb, var(--c-loss) 10%, transparent)",
-    border: "1px solid color-mix(in srgb, var(--c-loss) 38%, transparent)",
-    color: "var(--c-loss)",
-  },
-  accent: {
-    background: "var(--c-green)",
-    border: "1px solid var(--c-green)",
-    color: "var(--c-felt)",
-  },
   dark: {
-    background: "var(--c-glass-fill)",
+    background: "var(--c-glass-solid)",
+    backgroundImage: "linear-gradient(var(--c-glass-fill), var(--c-glass-fill))",
     border: "1px solid var(--c-glass-border)",
-    color: "var(--c-ink)",
+    color: "var(--c-ink-muted)",
+  },
+  outline: {
+    background: "color-mix(in srgb, var(--c-green) 6%, transparent)",
+    border: "1px solid color-mix(in srgb, var(--c-green) 55%, transparent)",
+    color: "var(--c-green)",
+  },
+  gradient: {
+    background: "linear-gradient(90deg, var(--c-purple) 0%, var(--c-green) 100%)",
+    border: "1px solid transparent",
+    color: "var(--c-felt)",
   },
 } as const;
 
-/** The three verbs. Wide, quiet, and unmistakable at arm's length. */
+/** The four verbs. Wide, quiet, and unmistakable at arm's length. */
 function BigButton({
   tone,
   disabled,
@@ -299,20 +286,19 @@ function BigButton({
       style={{
         ...TONES[tone],
         flex,
-        height: 48,
-        borderRadius: "var(--r-md)",
+        minHeight: 56,
+        borderRadius: "var(--r-lg)",
         fontFamily: "var(--font-display)",
         fontSize: "var(--t-body-sm-size)",
-        fontWeight: 700,
+        fontWeight: tone === "gradient" ? 800 : 700,
         textTransform: "uppercase",
         letterSpacing: "0.05em",
         cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.38 : 1,
+        opacity: disabled ? 0.4 : 1,
         whiteSpace: "nowrap",
-        backdropFilter: "blur(8px)",
         boxShadow:
-          tone === "accent" && !disabled
-            ? "0 0 24px color-mix(in srgb, var(--c-green) 22%, transparent)"
+          tone === "gradient" && !disabled
+            ? "0 0 30px rgba(20, 241, 149, 0.2)"
             : "var(--e-raised)",
       }}
     >

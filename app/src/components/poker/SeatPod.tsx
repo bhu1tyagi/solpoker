@@ -128,19 +128,24 @@ export function SeatPod({
           background: "none",
           padding: 0,
           cursor: onSit ? "pointer" : "default",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 6,
+          display: "block",
+          position: "relative",
         }}
       >
         {/* An open seat is an actual chair waiting at the rail, its back
             turned away from the table. The green plus on the cushion is the
-            whole invitation. */}
+            whole invitation. The label hangs OUTSIDE the layout box: counted
+            in, it pushed every chair half a label off its anchor — away from
+            the top rail, into the bottom one — and the table read lopsided. */}
         <Chair size={d.avatar + (compact ? 16 : 30)} side={side} />
         <span
           className="label"
           style={{
+            position: "absolute",
+            top: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginTop: 2,
             fontSize: d.nameFont,
             letterSpacing: "0.08em",
             textTransform: "uppercase",
@@ -149,6 +154,7 @@ export function SeatPod({
             borderRadius: "var(--r-pill)",
             background: "rgba(0, 0, 0, 0.4)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
+            whiteSpace: "nowrap",
           }}
         >
           open · {index + 1}
