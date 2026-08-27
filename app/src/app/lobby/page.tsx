@@ -128,7 +128,11 @@ export default function Lobby() {
     }
     const money = (chips: number | null) => (chips === null ? DASH : formatUsd(chips));
     return [
-      ["Hands", (meta.hands ?? 0).toLocaleString(), since],
+      // The program's own counter, so this covers hands played before any of
+      // the reporting existed. It carries no timestamps, so unlike the money
+      // beside it there is no honest way to window it: it says "all time" even
+      // when the rest of the row is showing a day.
+      ["Hands", (meta.handsDealt ?? meta.hands ?? 0).toLocaleString(), "all time"],
       ["Volume", money(meta.volumeChips), since],
       ["Average pot", money(meta.avgPotChips), since],
       ["Biggest pot", money(meta.biggestPotChips), since],

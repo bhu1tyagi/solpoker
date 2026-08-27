@@ -72,6 +72,26 @@ export function ensureSchema(s: Sql): Promise<void> {
         ALTER TABLE hands ADD COLUMN IF NOT EXISTS cluster text NOT NULL DEFAULT 'devnet'`;
       await s`
         CREATE INDEX IF NOT EXISTS hands_cluster_settled ON hands (cluster, settled_at)`;
+      // The high-water mark of each table's on-chain hand counter.
+      //
+      // This is a backfill AND a safety net. The counter is the program's own,
+      // so it covers hands played before any of this reporting existed and
+      // hands whose client never managed to report them. And because
+      // `close_table` deletes the table account outright, a count read live
+      // from chain falls to zero the moment a table is tidied away; written
+      // down here, it survives.
+      //
+      // `hands` only ever moves up, enforced in the upsert rather than trusted:
+      // a partial read or a lagging replica must not be able to lower it.
+      await s`
+        CREATE TABLE IF NOT EXISTS table_hands (
+          cluster    text NOT NULL,
+          table_id   numeric NOT NULL,
+          hands      bigint NOT NULL,
+          first_seen timestamptz NOT NULL DEFAULT now(),
+          last_seen  timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (cluster, table_id)
+        )`;
       await s`
         CREATE TABLE IF NOT EXISTS table_names (
           table_id   numeric PRIMARY KEY,

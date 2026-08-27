@@ -1,7 +1,41 @@
 import { NextResponse } from "next/server";
 import { CLUSTER_TAG, db, ensureSchema } from "@/lib/server/db";
+import { readTableHands } from "@/lib/server/chain";
 
 export const runtime = "nodejs";
+
+type Sql = NonNullable<ReturnType<typeof db>>;
+
+/**
+ * Fold the chain's own hand counters into the high-water table.
+ *
+ * Throttled per warm instance, because this is a `getProgramAccounts` and the
+ * lobby route is polled. The HTTP cache in front of the route does most of the
+ * work; this stops a burst of cold requests from turning into a burst of full
+ * program scans.
+ */
+let syncedAt = 0;
+const SYNC_EVERY_MS = 60_000;
+
+async function syncChainHands(s: Sql, now: number) {
+  if (now - syncedAt < SYNC_EVERY_MS) return;
+  const live = await readTableHands();
+  // Null means the RPC did not answer. Leave the stored counts alone: an
+  // unreachable endpoint is not a room where nothing has been played.
+  if (!live) return;
+  syncedAt = now;
+  const seen = live.filter((t) => t.hands > 0);
+  if (seen.length === 0) return;
+  await s`
+    INSERT INTO table_hands ${s(
+      seen.map((t) => ({ cluster: CLUSTER_TAG, table_id: t.tableId, hands: t.hands })),
+      "cluster",
+      "table_id",
+      "hands",
+    )}
+    ON CONFLICT (cluster, table_id) DO UPDATE
+      SET hands = greatest(table_hands.hands, excluded.hands), last_seen = now()`;
+}
 
 /**
  * What the lobby cannot read from chain: play totals built from hands the
@@ -85,6 +119,9 @@ export async function GET() {
   }
 
   await ensureSchema(s);
+  // Before counting anything, take whatever the chain will tell us. A failure
+  // in here must not take the lobby down with it.
+  await syncChainHands(s, Date.now()).catch(() => {});
 
   // Both windows in one pass, so the choice between them costs no round trip
   // and the two can never be read a second apart from each other.
@@ -132,6 +169,15 @@ export async function GET() {
 
   const nameRows = await s`SELECT table_id, name FROM table_names`;
 
+  // Hands, from the program's own counters rather than from hand reports.
+  //
+  // This is deliberately not windowed. The counter is a running total with no
+  // timestamps behind it, so there is no honest way to ask it about the last
+  // 24 hours — the tile says "all time" and means it.
+  const [dealt] = await s`
+    SELECT coalesce(sum(hands), 0)::bigint AS hands
+    FROM table_hands WHERE cluster = ${CLUSTER_TAG}`;
+
   const names: Record<string, string> = {};
   for (const r of nameRows) names[String(r.table_id)] = r.name as string;
 
@@ -153,6 +199,11 @@ export async function GET() {
       window,
       stored: true,
       ...totals(all as Record<string, unknown>, window),
+      // Overrides the reported-hand count above on purpose: the program's
+      // counter is the authority on how many hands were dealt, and the reports
+      // are best effort. They are kept apart in the payload so the gap between
+      // them stays visible rather than being averaged away.
+      handsDealt: Number(dealt.hands),
       tables,
     },
     { headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=60" } },

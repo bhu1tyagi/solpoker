@@ -43,6 +43,16 @@ export interface LobbyMeta extends Totals {
    */
   stored: boolean;
   /**
+   * Hands dealt, counted by the program itself and never windowed.
+   *
+   * Distinct from `hands`, which counts the reports that reached us. This one
+   * is the authority — it covers hands played before any reporting existed and
+   * hands whose client closed the tab before finishing the capture — but it
+   * comes from a running counter with no timestamps behind it, so it can only
+   * ever mean "all time".
+   */
+  handsDealt: number | null;
+  /**
    * Which stretch of time every figure above covers. The server picks the
    * last 24 hours while there was play in it and all time otherwise, so a
    * quiet night reads as history rather than as an empty room. Labels have to
@@ -56,6 +66,7 @@ export interface LobbyMeta extends Totals {
 const EMPTY: LobbyMeta = {
   names: {},
   stored: false,
+  handsDealt: null,
   window: "24h",
   hands: null,
   potted: null,
@@ -81,6 +92,7 @@ export function useLobbyMeta(): LobbyMeta {
           setMeta({
             names: body.names ?? {},
             stored: body.stored === true,
+            handsDealt: body.handsDealt ?? null,
             window: body.window === "all" ? "all" : "24h",
             hands: body.hands ?? null,
             potted: body.potted ?? null,
