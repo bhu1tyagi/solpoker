@@ -563,7 +563,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
                 not strand two icons on a line of their own. */}
             <span className="m-only" style={{ display: "flex", gap: 8 }}>
               <MuteButton muted={muted} setMuted={setMuted} />
-              <Link href="/" style={{ textDecoration: "none" }}>
+              <Link href="/lobby" style={{ textDecoration: "none" }}>
                 <IconButton title="Leave table">
                   <ExitIcon />
                 </IconButton>
@@ -591,7 +591,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             }}
           >
             <BalancePill chips={player.state?.chips} small />
-            <Link href="/" style={{ textDecoration: "none" }}>
+            <Link href="/lobby" style={{ textDecoration: "none" }}>
               <IconButton title="Buy more chips" solid>
                 <PlusIcon />
               </IconButton>
@@ -677,7 +677,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           )}
           <span className="m-hide" style={{ display: "flex", gap: 8 }}>
             <MuteButton muted={muted} setMuted={setMuted} />
-            <Link href="/" style={{ textDecoration: "none" }}>
+            <Link href="/lobby" style={{ textDecoration: "none" }}>
               <IconButton title="Leave table">
                 <ExitIcon />
               </IconButton>
@@ -689,7 +689,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             and the balance lives in the top strip instead. */}
         <div className="hud-bl">
           <BalancePill chips={player.state?.chips} />
-          <Link href="/" style={{ textDecoration: "none" }}>
+          <Link href="/lobby" style={{ textDecoration: "none" }}>
             <IconButton title="Buy more chips" solid>
               <PlusIcon />
             </IconButton>

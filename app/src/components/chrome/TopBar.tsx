@@ -35,8 +35,8 @@ export function TopBar({ chips }: { chips?: number }) {
     >
       <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
         <Link
-          href="/"
-          aria-label="Pokerable home"
+          href="/lobby"
+          aria-label="Back to lobby"
           style={{
             display: "inline-flex",
             alignItems: "center",
