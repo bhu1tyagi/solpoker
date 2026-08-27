@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -340,6 +340,7 @@ export default function Lobby() {
 
       <ExchangeModal
         mode={exchange}
+        setMode={setExchange}
         onClose={() => setExchange(null)}
         chips={state?.chips ?? 0}
         affordable={affordable}
@@ -946,6 +947,7 @@ function IconButton({
  */
 function ExchangeModal({
   mode,
+  setMode,
   onClose,
   chips,
   affordable,
@@ -956,6 +958,7 @@ function ExchangeModal({
   ready,
 }: {
   mode: "buy" | "sell" | null;
+  setMode: (m: "buy" | "sell") => void;
   onClose: () => void;
   chips: number;
   affordable: number;
@@ -966,6 +969,10 @@ function ExchangeModal({
   ready: boolean;
 }) {
   const [amount, setAmount] = useState(0);
+  // The dollar field keeps its own text while it is being typed in, or the
+  // derived value would rewrite the box mid-keystroke and eat the cursor.
+  const [usdText, setUsdText] = useState("");
+  const editingUsd = useRef(false);
   const buying = mode === "buy";
   const max = buying ? affordable : chips;
   const clamped = Math.min(Math.max(amount, 0), max);
@@ -984,6 +991,10 @@ function ExchangeModal({
   useEffect(() => {
     if (mode) setAmount(max);
   }, [mode, max]);
+
+  useEffect(() => {
+    if (!editingUsd.current) setUsdText((clamped / 100).toFixed(2));
+  }, [clamped]);
   // Until the balances land, every control here would be disabled with nothing
   // to explain why. Say so instead: a dead row of buttons reads as broken.
   const waiting = !ready;
@@ -992,25 +1003,38 @@ function ExchangeModal({
     <Modal
       open={mode !== null}
       onClose={onClose}
-      title={buying ? "Buy chips with USDC" : "Cash out to USDC"}
+      title="Chips"
     >
-      {/*
-        The figure first, and big: dollars are what the player is deciding,
-        chips are the unit they arrive as. The mark stands bare beside it,
-        no tile, the same way the funding steps carry theirs.
-      */}
-      <div className="xchg-figure glass">
-        <UsdcMark size={36} />
-        <div>
-          <span className="num xchg-amount">{formatUsd(clamped)}</span>
-          <span className="xchg-chips">
-            <ChipGlyph size={13} />
-            <span className="num">{clamped.toLocaleString()}</span> chips
-          </span>
-        </div>
+      {/* Buying and cashing out are the same dialog with the direction
+          flipped, so they are tabs rather than two ways in. */}
+      <div className="xchg-tabs" role="tablist" aria-label="Direction">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={buying}
+          className={buying ? "xchg-tab is-on" : "xchg-tab"}
+          onClick={() => setMode("buy")}
+        >
+          Buy chips
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!buying}
+          className={!buying ? "xchg-tab is-on" : "xchg-tab"}
+          onClick={() => setMode("sell")}
+        >
+          Cash out
+        </button>
       </div>
 
-      {/* Quarter, half, all: always reachable, always meaningful. */}
+      <p className="xchg-balance">
+        <ChipGlyph size={15} />
+        <span className="num">{chips.toLocaleString()}</span> chips
+        <span className="xchg-balance-sep" aria-hidden />
+        <span className="num">{formatUsd(chips)}</span>
+      </p>
+
       <div className="xchg-presets">
         {presets.map(([label, v]) => (
           <button
@@ -1026,30 +1050,64 @@ function ExchangeModal({
         ))}
       </div>
 
-      <input
-        type="range"
-        className="xchg-slider"
-        min={0}
-        max={Math.max(max, 1)}
-        step={1}
-        value={clamped}
-        disabled={max === 0}
-        aria-label={buying ? "Chips to buy" : "Chips to cash out"}
-        onChange={(e) => setAmount(Number(e.target.value))}
-      />
-
-      <div className="xchg-total">
-        <span>{buying ? "You pay" : "You receive"}</span>
-        <span className="num">{formatUsd(clamped)} USDC</span>
+      {/* Both sides are editable and each drives the other: some players
+          think in chips, some in dollars, and neither should have to do the
+          arithmetic. */}
+      <div className="xchg-convert">
+        <label className="xchg-field">
+          <ChipGlyph size={17} />
+          <input
+            className="num"
+            inputMode="numeric"
+            aria-label={buying ? "Chips to buy" : "Chips to cash out"}
+            value={clamped === 0 ? "" : String(clamped)}
+            placeholder="0"
+            disabled={max === 0}
+            onChange={(e) => {
+              const n = Number(e.target.value.replace(/[^\d]/g, ""));
+              setAmount(Number.isFinite(n) ? n : 0);
+            }}
+          />
+        </label>
+        <span className="xchg-eq" aria-hidden>
+          =
+        </span>
+        <label className="xchg-field">
+          <UsdcMark size={17} />
+          <input
+            className="num"
+            inputMode="decimal"
+            aria-label="Amount in USDC"
+            value={usdText}
+            placeholder="0.00"
+            disabled={max === 0}
+            onFocus={() => (editingUsd.current = true)}
+            onBlur={() => {
+              editingUsd.current = false;
+              setUsdText((clamped / 100).toFixed(2));
+            }}
+            onChange={(e) => {
+              const t = e.target.value.replace(/[^\d.]/g, "");
+              setUsdText(t);
+              const n = Number(t);
+              if (Number.isFinite(n)) setAmount(Math.round(n * 100));
+            }}
+          />
+        </label>
       </div>
 
-      {/* Said once, quietly, so nobody meets it for the first time in a
-          failed signature. */}
-      <p className="xchg-note">
-        {buying
-          ? `Chips are backed one for one by the USDC you deposit, at a cent a chip. Solana charges its fees in SOL, not USDC. Keep at least ${(PLAY_FLOOR_LAMPORTS / 1e9).toFixed(3)} SOL here, or you will be able to buy chips and not sit down with them.`
-          : "Cashing out returns USDC to this wallet at the same cent a chip. Chips on a table have to be picked up first."}
-      </p>
+      {/* The facts, as facts. This replaced a paragraph nobody read, and the
+          SOL line stays because a wallet can hold plenty of dollars and still
+          be unable to sit down. */}
+      <ul className="xchg-facts">
+        <li>
+          Min <span className="num">{formatUsd(1)}</span>
+        </li>
+        <li>
+          1 chip = <span className="num">{formatUsd(1)}</span>
+        </li>
+        <li>{buying ? "Fees in SOL" : "Table chips must be picked up first"}</li>
+      </ul>
 
       {(waiting || blocked) && (
         <p role="status" className="xchg-status">
@@ -1061,6 +1119,7 @@ function ExchangeModal({
         <Button
           variant="gradient"
           size="lg"
+          fullWidth
           disabled={clamped === 0 || blocked !== null || waiting}
           loading={busy !== null}
           onClick={async () => {
@@ -1069,10 +1128,7 @@ function ExchangeModal({
             onClose();
           }}
         >
-          {buying ? `Buy chips for ${formatUsd(clamped)}` : `Cash out ${formatUsd(clamped)}`}
-        </Button>
-        <Button variant="quiet" size="lg" onClick={onClose}>
-          Cancel
+          {buying ? `Buy for ${formatUsd(clamped)}` : `Cash out ${formatUsd(clamped)}`}
         </Button>
       </div>
     </Modal>

@@ -45,15 +45,19 @@ export function ClockIcon({ size = 20 }: Props) {
  * specific things. A side-on stack is legible but is the universally
  * recognised database glyph.
  *
- * Two overlapping chips stay unmistakably chips at every size, and chips are
- * what a poker lobby is listing.
+ * A banded stack with one chip standing on edge in front is the shape people
+ * already read as poker chips, and it survives 16px: the stack's two bands
+ * stay separate, and the standing chip keeps its inner ring.
  */
 export function TableIcon({ size = 20 }: Props) {
   return (
     <svg {...frame(size)}>
-      <circle cx="9" cy="15" r="6" />
-      <circle cx="15" cy="9" r="6" />
-      <circle cx="15" cy="9" r="2.2" />
+      {/* The stack, seen from the side: one rim and two banded layers. */}
+      <ellipse cx="16.5" cy="6.5" rx="4.8" ry="2.1" />
+      <path d="M11.7 6.5v3c0 1.2 2.1 2.1 4.8 2.1s4.8-.9 4.8-2.1v-3M11.7 9.5v3c0 1.2 2.1 2.1 4.8 2.1s4.8-.9 4.8-2.1v-3" />
+      {/* The chip standing on edge in front, face toward the reader. */}
+      <circle cx="8" cy="15.5" r="5.6" />
+      <circle cx="8" cy="15.5" r="2" />
     </svg>
   );
 }
