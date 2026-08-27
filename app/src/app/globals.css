@@ -2947,3 +2947,138 @@ input[type="range"]::-moz-range-thumb {
   border-color: var(--c-green);
   outline: none;
 }
+
+/* ------------------------------------------------------------------ */
+/* Buying chips and cashing out.                                       */
+/* ------------------------------------------------------------------ */
+
+.xchg-figure {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  margin-bottom: var(--sp-5);
+  border-radius: var(--r-lg);
+}
+.xchg-figure > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.xchg-amount {
+  font-size: var(--t-display-lg-size);
+  font-weight: 700;
+  line-height: 1.02;
+  color: var(--c-ink);
+}
+.xchg-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-ink-faint);
+  font-size: var(--t-body-sm-size);
+}
+
+.xchg-presets {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+/* Segmented, not three separate buttons: they are one choice. */
+.xchg-preset {
+  flex: 1;
+  min-height: var(--touch-target);
+  background: var(--c-felt-raised);
+  border: 1px solid var(--c-glass-border);
+  border-radius: var(--r-md);
+  color: var(--c-ink-muted);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm-size);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color var(--m-ui-fast) var(--m-ease),
+    border-color var(--m-ui-fast) var(--m-ease);
+}
+.xchg-preset:hover:not(:disabled) {
+  color: var(--c-ink);
+  border-color: var(--c-rule-strong);
+}
+.xchg-preset.is-on {
+  background: color-mix(in srgb, var(--c-green) 12%, transparent);
+  border-color: var(--c-green);
+  color: var(--c-green);
+}
+.xchg-preset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.xchg-slider {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  background: var(--c-rule-strong);
+  border-radius: var(--r-pill);
+  margin: 0 0 var(--sp-5);
+  outline-offset: 6px;
+}
+.xchg-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-chip);
+  background: var(--c-green);
+  border: 3px solid var(--c-felt);
+  cursor: grab;
+}
+.xchg-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-chip);
+  background: var(--c-green);
+  border: 3px solid var(--c-felt);
+  cursor: grab;
+}
+.xchg-slider:disabled::-webkit-slider-thumb {
+  background: var(--c-rule-strong);
+  cursor: not-allowed;
+}
+
+.xchg-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--c-rule);
+  color: var(--c-ink-muted);
+  font-size: var(--t-body-size);
+}
+.xchg-total .num {
+  color: var(--c-ink);
+  font-weight: 700;
+  font-size: var(--t-body-lg-size);
+}
+
+.xchg-note {
+  margin: var(--sp-3) 0 var(--sp-5);
+  color: var(--c-ink-faint);
+  font-size: var(--t-body-sm-size);
+  line-height: 1.55;
+}
+.xchg-status {
+  margin: 0 0 var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 2px solid var(--c-info);
+  background: var(--c-felt-raised);
+  border-radius: var(--r-sm);
+  color: var(--c-ink-muted);
+  font-size: var(--t-body-sm-size);
+  line-height: 1.5;
+}
+.xchg-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}

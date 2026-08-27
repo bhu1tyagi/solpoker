@@ -994,63 +994,41 @@ function ExchangeModal({
       onClose={onClose}
       title={buying ? "Buy chips with USDC" : "Cash out to USDC"}
     >
-      {/* The headline figure: dollars first, chips underneath. */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--sp-3)",
-          padding: "var(--sp-4)",
-          marginBottom: "var(--sp-4)",
-          background: "var(--c-felt-raised)",
-          borderRadius: "var(--r-lg)",
-          border: "1px solid var(--c-rule)",
-        }}
-      >
-        <UsdcMark size={34} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-          <span
-            className="num"
-            style={{
-              fontSize: "var(--t-display-lg-size)",
-              fontWeight: 600,
-              color: "var(--c-ink)",
-              lineHeight: 1.05,
-            }}
-          >
-            {formatUsd(clamped)}
-          </span>
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: "var(--t-body-sm-size)",
-              color: "var(--c-ink-muted)",
-            }}
-          >
+      {/*
+        The figure first, and big: dollars are what the player is deciding,
+        chips are the unit they arrive as. The mark stands bare beside it,
+        no tile, the same way the funding steps carry theirs.
+      */}
+      <div className="xchg-figure glass">
+        <UsdcMark size={36} />
+        <div>
+          <span className="num xchg-amount">{formatUsd(clamped)}</span>
+          <span className="xchg-chips">
             <ChipGlyph size={13} />
             <span className="num">{clamped.toLocaleString()}</span> chips
           </span>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "var(--sp-2)", marginBottom: "var(--sp-3)", flexWrap: "wrap" }}>
+      {/* Quarter, half, all: always reachable, always meaningful. */}
+      <div className="xchg-presets">
         {presets.map(([label, v]) => (
-          <Button
+          <button
             key={label}
-            size="sm"
-            variant={clamped === v && v > 0 ? "primary" : "ghost"}
+            type="button"
+            className={clamped === v && v > 0 ? "xchg-preset is-on" : "xchg-preset"}
+            aria-pressed={clamped === v && v > 0}
             disabled={max === 0}
             onClick={() => setAmount(v)}
           >
             {label}
-          </Button>
+          </button>
         ))}
       </div>
 
       <input
         type="range"
+        className="xchg-slider"
         min={0}
         max={Math.max(max, 1)}
         step={1}
@@ -1058,61 +1036,31 @@ function ExchangeModal({
         disabled={max === 0}
         aria-label={buying ? "Chips to buy" : "Chips to cash out"}
         onChange={(e) => setAmount(Number(e.target.value))}
-        style={{ width: "100%", marginBottom: "var(--sp-4)" }}
       />
 
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "var(--sp-2)",
-          color: "var(--c-ink-muted)",
-          fontSize: "var(--t-body-sm-size)",
-        }}
-      >
+      <div className="xchg-total">
         <span>{buying ? "You pay" : "You receive"}</span>
-        <span className="num" style={{ color: "var(--c-ink)", fontWeight: 600 }}>
-          {formatUsd(clamped)} USDC
-        </span>
+        <span className="num">{formatUsd(clamped)} USDC</span>
       </div>
 
       {/* Said once, quietly, so nobody meets it for the first time in a
           failed signature. */}
-      <p
-        style={{
-          margin: "0 0 var(--sp-4)",
-          fontSize: "var(--t-label-size)",
-          color: "var(--c-ink-faint)",
-          lineHeight: 1.5,
-        }}
-      >
+      <p className="xchg-note">
         {buying
-          ? `Chips are backed one for one by the USDC you deposit, at a cent a chip. Solana charges its fees in SOL, not USDC — keep at least ${(PLAY_FLOOR_LAMPORTS / 1e9).toFixed(3)} SOL here, or you will be able to buy chips and not sit down with them.`
+          ? `Chips are backed one for one by the USDC you deposit, at a cent a chip. Solana charges its fees in SOL, not USDC. Keep at least ${(PLAY_FLOOR_LAMPORTS / 1e9).toFixed(3)} SOL here, or you will be able to buy chips and not sit down with them.`
           : "Cashing out returns USDC to this wallet at the same cent a chip. Chips on a table have to be picked up first."}
       </p>
 
       {(waiting || blocked) && (
-        <p
-          role="status"
-          style={{
-            margin: "0 0 var(--sp-4)",
-            padding: "var(--sp-3)",
-            borderRadius: "var(--r-md)",
-            background: "var(--c-felt-raised)",
-            borderLeft: "2px solid var(--c-info)",
-            fontSize: "var(--t-body-sm-size)",
-            color: "var(--c-ink-muted)",
-            lineHeight: 1.5,
-          }}
-        >
-          {waiting ? "Checking your balance…" : blocked}
+        <p role="status" className="xchg-status">
+          {waiting ? "Checking your balance" : blocked}
         </p>
       )}
 
-      <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+      <div className="xchg-actions">
         <Button
-          variant="primary"
+          variant="gradient"
+          size="lg"
           disabled={clamped === 0 || blocked !== null || waiting}
           loading={busy !== null}
           onClick={async () => {
@@ -1123,7 +1071,7 @@ function ExchangeModal({
         >
           {buying ? `Buy chips for ${formatUsd(clamped)}` : `Cash out ${formatUsd(clamped)}`}
         </Button>
-        <Button variant="quiet" onClick={onClose}>
+        <Button variant="quiet" size="lg" onClick={onClose}>
           Cancel
         </Button>
       </div>

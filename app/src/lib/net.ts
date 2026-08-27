@@ -97,7 +97,7 @@ export function friendlyError(e: unknown): string {
   // ended up in a toast. A player cannot act on that, and it reads as the
   // thing being broken rather than one step having failed.
   console.error("unmapped error:", e);
-  return "Something went wrong. Nothing was charged — try again.";
+  return "Something went wrong. Nothing was charged. Try again.";
 }
 
 /**

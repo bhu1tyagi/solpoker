@@ -341,7 +341,7 @@ export async function ensureSession(
     throw new Error(
       `Playing needs about ${need} SOL in this wallet for the session key and network fees, ` +
         `and it holds ${has}. Chips are bought with USDC, but Solana charges its fees in SOL. ` +
-        `Top up and try again — the SOL comes back when the session is swept.`,
+        `Top up and try again. The SOL comes back when the session is swept.`,
     );
   }
 

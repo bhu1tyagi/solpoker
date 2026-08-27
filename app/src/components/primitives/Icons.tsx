@@ -36,27 +36,24 @@ export function ClockIcon({ size = 20 }: Props) {
 
 /** Spade: the suit, standing for a poker table. */
 /*
- * A poker table, not a suit.
+ * Chips, for a table.
  *
- * These two were spades, which say "cards" but never "room". A racetrack
- * with seats around it is what a lobby is actually listing, and it is
- * unambiguous at a glance beside a row of them. Drawn to Lucide's grid and
- * stroke so it sits with the rest of the set; no icon library ships a poker
- * table, and a generic grid or panel glyph would have meant less.
+ * Three other shapes were drawn and rejected at 16px, which is the size these
+ * are actually used at. A racetrack with seat pips was semantically exact and
+ * closed into a pill. A single chip with full edge spots becomes a gear, and
+ * would have collided with the mark, whose dashed ring already means three
+ * specific things. A side-on stack is legible but is the universally
+ * recognised database glyph.
  *
- * The seat pips are filled rather than stroked: at 16px a 1px ring closes up
- * into a smudge, while a solid dot stays a dot.
+ * Two overlapping chips stay unmistakably chips at every size, and chips are
+ * what a poker lobby is listing.
  */
 export function TableIcon({ size = 20 }: Props) {
   return (
     <svg {...frame(size)}>
-      <rect x="2" y="6" width="20" height="12" rx="6" />
-      <circle cx="8" cy="9" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="8.4" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="9" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="8" cy="15" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="15.6" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="15" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="15" r="6" />
+      <circle cx="15" cy="9" r="6" />
+      <circle cx="15" cy="9" r="2.2" />
     </svg>
   );
 }
@@ -147,23 +144,13 @@ export function RefreshIcon({ size = 20 }: Props) {
 }
 
 /** A spade with a plus: open a new table. */
-/**
- * Opening a new one: a whole table, plus.
- *
- * The first attempt broke the table's outline to make room for the plus, and
- * an incomplete racetrack reads as a rendering bug rather than a table. A
- * narrower table with the plus beside it keeps both shapes intact and stays
- * legible at 16px, which is the size it is actually used at.
- */
+/** One chip and a plus: opening a table rather than joining one. */
 export function NewTableIcon({ size = 20 }: Props) {
   return (
     <svg {...frame(size)}>
-      <rect x="1.5" y="6" width="14" height="11" rx="5.5" />
-      <circle cx="5.5" cy="9" r="1.05" fill="currentColor" stroke="none" />
-      <circle cx="9.5" cy="8.6" r="1.05" fill="currentColor" stroke="none" />
-      <circle cx="5.5" cy="14" r="1.05" fill="currentColor" stroke="none" />
-      <circle cx="9.5" cy="14.4" r="1.05" fill="currentColor" stroke="none" />
-      <path d="M19 14v6M16 17h6" />
+      <circle cx="10" cy="10" r="7" />
+      <circle cx="10" cy="10" r="2.5" />
+      <path d="M19 15v6M16 18h6" />
     </svg>
   );
 }

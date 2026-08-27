@@ -400,7 +400,7 @@ export function useTableActions(args: {
           console.error("delegation failed, returning the table to Solana:", e);
           await rollBack();
           throw new Error(
-            "The table could not be moved to the game validator, so it has been left on Solana. Nothing was lost — try starting again.",
+            "The table could not be moved to the game validator, so it has been left on Solana. Nothing was lost, so try starting again.",
           );
         }
 
@@ -434,7 +434,7 @@ export function useTableActions(args: {
           console.error("the rollup never served every account; returning the table to Solana");
           await rollBack();
           throw new Error(
-            "The game validator did not pick the table up in time, so it has been left on Solana. Nothing was lost — try starting again.",
+            "The game validator did not pick the table up in time, so it has been left on Solana. Nothing was lost, so try starting again.",
           );
         }
 
@@ -641,7 +641,7 @@ export function useTableActions(args: {
         const cleared = await erProgram.account.hand.fetch(handPda(table)).catch(() => null);
         if (cleared && cleared.shuffleState !== SHUFFLE_IDLE) {
           toast(
-            "The table could not be closed yet. Your chips are safe on the table — try again in a minute.",
+            "The table could not be closed yet. Your chips are safe on the table, so try again in a minute.",
             "bad",
           );
           return;

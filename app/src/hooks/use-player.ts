@@ -161,7 +161,7 @@ export function usePlayer() {
   const buyBlocked: string | null = !state
     ? null
     : !gasOk
-      ? "Add a little SOL to this wallet — Solana charges network fees in SOL, not USDC."
+      ? "Add a little SOL to this wallet. Solana charges network fees in SOL, not USDC."
       : state.microUsdc === 0
         ? "This wallet has no USDC yet. Send some here, then buy chips."
         : null;

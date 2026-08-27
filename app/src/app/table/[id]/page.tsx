@@ -1220,13 +1220,13 @@ function useStalledStatus(status: string | undefined): string | undefined {
   // for players" really can last all day and is not a fault.
   switch (status) {
     case "waiting for players to shuffle in":
-      return "a player has not shuffled in — try reloading, or pause the table";
+      return "a player has not shuffled in, so try reloading, or pause the table";
     case "shuffling":
-      return "the shuffle is taking longer than it should — it will retry, or pause the table";
+      return "the shuffle is taking longer than it should. It will retry, or pause the table";
     case "starting the next hand":
-      return "the next hand has not started — try reloading, or pause the table";
+      return "the next hand has not started, so try reloading, or pause the table";
     case "connecting":
-      return "still connecting to the game validator — try reloading";
+      return "still connecting to the game validator, so try reloading";
     default:
       return status;
   }
@@ -1264,7 +1264,7 @@ function useStatusLine(
   // take a different chair.
   const mine = mySeat >= 0 ? seats[mySeat] : null;
   if (mine?.occupant && !mine.cardsSecured) {
-    return "this chair is still held by whoever sat here last — take a different one";
+    return "this chair is still held by whoever sat here last, so take a different one";
   }
 
   if (funded < 2) return "not enough players with chips";
