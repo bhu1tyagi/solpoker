@@ -107,6 +107,15 @@ export function LobbyGate() {
   const open =
     mounted && !resolving && active !== -1 && (forced || !dismissed);
 
+  /*
+   * The player pressed "Connect wallet" while the balances are still being
+   * read. Saying nothing there reads as a dead button, and opening the full
+   * gate would accuse them of steps the data cannot yet confirm — the exact
+   * malfunction this used to have. A small holding card is the honest state:
+   * something is happening, nothing is being claimed.
+   */
+  const holding = mounted && resolving && forced;
+
   // Deposits land from outside this tab; poll while a funding step shows.
   useEffect(() => {
     if (!open || !connected) return;
@@ -135,6 +144,45 @@ export function LobbyGate() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, dismissGate]);
+
+  if (holding) {
+    return (
+      <div className="gate-scrim" onClick={dismissGate}>
+        <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Checking your wallet"
+          className="gate glass glass-blur"
+          onClick={(e) => e.stopPropagation()}
+          initial={reduce ? false : { opacity: 0, y: 14, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
+          style={{ maxWidth: 420 }}
+        >
+          <header className="gate-head">
+            <h2>One moment</h2>
+            <p>Reading your wallet&rsquo;s balances from the chain.</p>
+          </header>
+          {/* Three shimmering bars where the steps will be. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "6px 0 10px" }} aria-hidden>
+            {[76, 58, 66].map((w, i) => (
+              <motion.div
+                key={i}
+                animate={reduce ? undefined : { opacity: [0.35, 0.7, 0.35] }}
+                transition={{ repeat: Infinity, duration: 1.4, delay: i * 0.18 }}
+                style={{
+                  height: 14,
+                  width: `${w}%`,
+                  borderRadius: "var(--r-pill)",
+                  background: "var(--c-felt-edge)",
+                }}
+              />
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (!open) return null;
 

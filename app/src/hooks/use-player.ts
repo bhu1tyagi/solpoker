@@ -56,43 +56,51 @@ export function usePlayer() {
       setState(null);
       return;
     }
-    try {
-      const conn = getBaseConnection();
-      // One round trip. `getAccountInfo` on the token account rather than
-      // `getTokenAccountBalance`, which throws when the account is missing —
-      // and "never held USDC" is an ordinary state, not an error.
-      const [info, ataInfo, lamports] = await Promise.all([
-        conn.getAccountInfo(playerPda(publicKey)),
-        conn.getAccountInfo(usdcAta(publicKey)),
-        conn.getBalance(publicKey),
-      ]);
+    // Retried through network weather, because everything downstream treats
+    // "no data" as an answer eventually. One swallowed failure here used to
+    // leave the balances unknown for the whole visit, and the onboarding
+    // gate would then open to accuse a funded wallet of holding nothing.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const conn = getBaseConnection();
+        // One round trip. `getAccountInfo` on the token account rather than
+        // `getTokenAccountBalance`, which throws when the account is missing —
+        // and "never held USDC" is an ordinary state, not an error.
+        const [info, ataInfo, lamports] = await Promise.all([
+          conn.getAccountInfo(playerPda(publicKey)),
+          conn.getAccountInfo(usdcAta(publicKey)),
+          conn.getBalance(publicKey),
+        ]);
 
-      const hasUsdcAccount = ataInfo !== null;
-      const microUsdc = ataInfo ? readTokenAmount(new Uint8Array(ataInfo.data)) : 0;
+        const hasUsdcAccount = ataInfo !== null;
+        const microUsdc = ataInfo ? readTokenAmount(new Uint8Array(ataInfo.data)) : 0;
 
-      if (!info) {
+        if (!info) {
+          setState({
+            exists: false,
+            chips: 0,
+            handsPlayed: 0,
+            microUsdc,
+            hasUsdcAccount,
+            lamports,
+          });
+          return;
+        }
+        const p = decodePlayer(new Uint8Array(info.data));
         setState({
-          exists: false,
-          chips: 0,
-          handsPlayed: 0,
+          exists: true,
+          chips: p.chips,
+          handsPlayed: p.handsPlayed,
           microUsdc,
           hasUsdcAccount,
           lamports,
         });
         return;
+      } catch {
+        // A failed read is not "no account". Wait out the weather and try
+        // again; state stays as it was in the meantime.
+        await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
       }
-      const p = decodePlayer(new Uint8Array(info.data));
-      setState({
-        exists: true,
-        chips: p.chips,
-        handsPlayed: p.handsPlayed,
-        microUsdc,
-        hasUsdcAccount,
-        lamports,
-      });
-    } catch {
-      // A failed read is not "no account". Leave state as it was; the next
-      // refresh will try again.
     }
   }, [publicKey]);
 

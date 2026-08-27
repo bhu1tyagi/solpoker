@@ -81,12 +81,21 @@ export function useReadiness(): Readiness {
   ];
   const active = done.indexOf(false);
 
+  /*
+   * Two different kinds of waiting, and only one of them may time out.
+   *
+   * The connect phase (mounting, the adapter reconnecting) is capped by
+   * `settled`: a wallet extension that never answers must not hang the page.
+   * But a CONNECTED wallet whose balances have not arrived is not a timeout
+   * case — it is simply not yet known, and the cap used to convert that
+   * unknown into "you hold nothing": one slow RPC read and the gate opened
+   * over a funded wallet, showing 0.000 SOL. Balance-unknown now stays
+   * resolving until the read lands (use-player retries it), and nothing
+   * accuses anyone in the meantime.
+   */
   const resolving =
-    !settled &&
-    (!mounted ||
-      connecting ||
-      expectAuto ||
-      (connected && state === null));
+    (!settled && (!mounted || connecting || expectAuto)) ||
+    (mounted && connected && state === null);
 
   return {
     ready: active === -1,
