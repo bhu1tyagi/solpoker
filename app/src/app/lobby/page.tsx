@@ -999,6 +999,49 @@ function ExchangeModal({
   // to explain why. Say so instead: a dead row of buttons reads as broken.
   const waiting = !ready;
 
+  const chipField = (
+    <label className="xchg-field" key="chips">
+      <ChipGlyph size={17} />
+      <input
+        className="num"
+        inputMode="numeric"
+        aria-label={buying ? "Chips to buy" : "Chips to cash out"}
+        value={clamped === 0 ? "" : String(clamped)}
+        placeholder="0"
+        disabled={max === 0}
+        onChange={(e) => {
+          const n = Number(e.target.value.replace(/[^\d]/g, ""));
+          setAmount(Number.isFinite(n) ? n : 0);
+        }}
+      />
+    </label>
+  );
+
+  const usdField = (
+    <label className="xchg-field" key="usd">
+      <UsdcMark size={17} />
+      <input
+        className="num"
+        inputMode="decimal"
+        aria-label="Amount in USDC"
+        value={usdText}
+        placeholder="0.00"
+        disabled={max === 0}
+        onFocus={() => (editingUsd.current = true)}
+        onBlur={() => {
+          editingUsd.current = false;
+          setUsdText((clamped / 100).toFixed(2));
+        }}
+        onChange={(e) => {
+          const t = e.target.value.replace(/[^\d.]/g, "");
+          setUsdText(t);
+          const n = Number(t);
+          if (Number.isFinite(n)) setAmount(Math.round(n * 100));
+        }}
+      />
+    </label>
+  );
+
   return (
     <Modal
       open={mode !== null}
@@ -1050,50 +1093,21 @@ function ExchangeModal({
         ))}
       </div>
 
-      {/* Both sides are editable and each drives the other: some players
-          think in chips, some in dollars, and neither should have to do the
-          arithmetic. */}
+      {/*
+        Both sides are editable and each drives the other: some players think
+        in chips, some in dollars, and neither should do the arithmetic.
+
+        The LEFT field is always what you give up. Buying, that is USDC
+        leaving the wallet; cashing out, it is chips leaving the table. The
+        pair reads left to right as the trade actually happens, so the
+        direction is legible without reading the tab.
+      */}
       <div className="xchg-convert">
-        <label className="xchg-field">
-          <ChipGlyph size={17} />
-          <input
-            className="num"
-            inputMode="numeric"
-            aria-label={buying ? "Chips to buy" : "Chips to cash out"}
-            value={clamped === 0 ? "" : String(clamped)}
-            placeholder="0"
-            disabled={max === 0}
-            onChange={(e) => {
-              const n = Number(e.target.value.replace(/[^\d]/g, ""));
-              setAmount(Number.isFinite(n) ? n : 0);
-            }}
-          />
-        </label>
+        {buying ? usdField : chipField}
         <span className="xchg-eq" aria-hidden>
           =
         </span>
-        <label className="xchg-field">
-          <UsdcMark size={17} />
-          <input
-            className="num"
-            inputMode="decimal"
-            aria-label="Amount in USDC"
-            value={usdText}
-            placeholder="0.00"
-            disabled={max === 0}
-            onFocus={() => (editingUsd.current = true)}
-            onBlur={() => {
-              editingUsd.current = false;
-              setUsdText((clamped / 100).toFixed(2));
-            }}
-            onChange={(e) => {
-              const t = e.target.value.replace(/[^\d.]/g, "");
-              setUsdText(t);
-              const n = Number(t);
-              if (Number.isFinite(n)) setAmount(Math.round(n * 100));
-            }}
-          />
-        </label>
+        {buying ? chipField : usdField}
       </div>
 
       {/* The facts, as facts. This replaced a paragraph nobody read, and the

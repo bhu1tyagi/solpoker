@@ -45,19 +45,33 @@ export function ClockIcon({ size = 20 }: Props) {
  * specific things. A side-on stack is legible but is the universally
  * recognised database glyph.
  *
- * A banded stack with one chip standing on edge in front is the shape people
- * already read as poker chips, and it survives 16px: the stack's two bands
- * stay separate, and the standing chip keeps its inner ring.
+ * A slab stack with one chip standing in front is the shape people already
+ * read as poker chips, and it survives 16px: the slabs stay separate and the
+ * chip keeps its inner ring.
+ *
+ * The rim dashes are the chip's edge spots. They sit close to the mark's
+ * dashed ring, which is reserved for the turn clock, the loader and the
+ * privacy indicator; the slab stack behind is what keeps the two apart.
  */
 export function TableIcon({ size = 20 }: Props) {
   return (
     <svg {...frame(size)}>
-      {/* The stack, seen from the side: one rim and two banded layers. */}
-      <ellipse cx="16.5" cy="6.5" rx="4.8" ry="2.1" />
-      <path d="M11.7 6.5v3c0 1.2 2.1 2.1 4.8 2.1s4.8-.9 4.8-2.1v-3M11.7 9.5v3c0 1.2 2.1 2.1 4.8 2.1s4.8-.9 4.8-2.1v-3" />
-      {/* The chip standing on edge in front, face toward the reader. */}
-      <circle cx="8" cy="15.5" r="5.6" />
-      <circle cx="8" cy="15.5" r="2" />
+      {/* The stack: five slabs seen edge-on, the lower ones set in slightly
+          so the pile reads as leaning back rather than as a ladder. */}
+      <rect x="10.5" y="2.5" width="11" height="2.4" rx="1.2" />
+      <rect x="10.5" y="5.9" width="11" height="2.4" rx="1.2" />
+      <rect x="12" y="9.3" width="9.5" height="2.4" rx="1.2" />
+      <rect x="12" y="12.7" width="9.5" height="2.4" rx="1.2" />
+      <rect x="12" y="16.1" width="9.5" height="2.4" rx="1.2" />
+      {/*
+          The chip in front, face toward the reader. It is filled with the
+          page ground rather than left hollow, so the slabs are occluded by it
+          instead of running through it; a chip you can see the stack through
+          is a chip made of glass.
+      */}
+      <circle cx="7.8" cy="14" r="6.2" fill="var(--c-felt)" />
+      <circle cx="7.8" cy="14" r="6.2" strokeDasharray="3.2 2.3" />
+      <circle cx="7.8" cy="14" r="2.8" />
     </svg>
   );
 }
@@ -152,8 +166,10 @@ export function RefreshIcon({ size = 20 }: Props) {
 export function NewTableIcon({ size = 20 }: Props) {
   return (
     <svg {...frame(size)}>
-      <circle cx="10" cy="10" r="7" />
-      <circle cx="10" cy="10" r="2.5" />
+      {/* The same chip, alone with a plus: the stack would make three shapes
+          fight for 16 pixels, and one chip is what a new table starts as. */}
+      <circle cx="9.5" cy="10.5" r="6.4" strokeDasharray="3.3 2.4" />
+      <circle cx="9.5" cy="10.5" r="2.8" />
       <path d="M19 15v6M16 18h6" />
     </svg>
   );
