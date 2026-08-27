@@ -284,16 +284,24 @@ export function useTableActions(args: {
          *   Transfer: insufficient lamports 1215920, need 1600800
          *
          * So the float is now sized to the start being paid for: the core
-         * group plus one allowance per occupied seat, with a cushion for a
-         * retry. Delegation rent is refunded on undelegation, so this money
-         * rides along rather than being spent — it comes back to the key when
-         * the table returns to Solana, and home to the wallet on sweep.
+         * group plus one allowance per seat, with a cushion for a retry.
+         * Delegation rent is refunded on undelegation, so this money rides
+         * along rather than being spent — it comes back to the key when the
+         * table returns to Solana, and home to the wallet on sweep.
+         *
+         * Per SEAT, not per occupied seat. The loop below delegates all six,
+         * because the rollup refuses to run a hand unless every seat and hole
+         * account it might touch is there — and each seat rides with its hole,
+         * so one DelegateSeat transaction moves four rent buffers, not one.
+         * Measured on mainnet: the core group cost 9.2M lamports and each
+         * seat transaction 6.4M, so a six-seat start is ~48M. Sized for the
+         * occupied seats only, this funded 25M and died on the third seat —
+         * rolled back cleanly, but a start that can never finish.
          */
         const CORE_LAMPORTS = 12_000_000;
-        const PER_SEAT_LAMPORTS = 4_000_000;
+        const PER_SEAT_LAMPORTS = 7_000_000;
         const CUSHION_LAMPORTS = 4_000_000;
-        const needed =
-          CORE_LAMPORTS + occupiedSeats.length * PER_SEAT_LAMPORTS + CUSHION_LAMPORTS;
+        const needed = CORE_LAMPORTS + MAX_SEATS * PER_SEAT_LAMPORTS + CUSHION_LAMPORTS;
         const bal = await conn.getBalance(session.publicKey);
         if (bal < needed) {
           if (!signTransaction) throw new Error("connect a wallet first");

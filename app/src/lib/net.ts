@@ -64,10 +64,25 @@ export function errorName(e: unknown): string | null {
   return null;
 }
 
+/**
+ * The two layers disagree about who owns an account, which is what a table
+ * looks like from the rollup while delegation is mid-flight or mid-rollback.
+ */
+const WRONG_LAYER =
+  /ReadonlyDataModified|AccountOwnedByWrongProgram|ConstraintOwner|AccountNotInitialized/i;
+
 /** Something a player should read, rather than a stack trace. */
 export function friendlyError(e: unknown): string {
   const name = errorName(e);
   if (name && ERROR_MESSAGES[name]) return ERROR_MESSAGES[name];
+  // Checked before the bare-name fallthrough on purpose. errorName resolves
+  // AccountOwnedByWrongProgram from Anchor's numeric 3007 even when the text
+  // never contains the name — so the branch below that matches on the raw
+  // string never saw it, and a toast read `commit: AccountOwnedByWrongProgram`
+  // during the seconds a failed start took to roll back.
+  if (WRONG_LAYER.test(name ?? "") || WRONG_LAYER.test(String(e))) {
+    return "This table is part-way between Solana and the game validator. It usually settles by itself in a moment; if it keeps happening, pause the table to bring it back.";
+  }
   if (name) return name;
   if (isTransient(e)) return "Network hiccup. Retrying.";
   const s = String(e);
@@ -85,10 +100,6 @@ export function friendlyError(e: unknown): string {
   if (/blockhash not found|block height exceeded|expired/i.test(s)) {
     return "That took too long to confirm. Try again.";
   }
-  if (/ReadonlyDataModified|AccountOwnedByWrongProgram|ConstraintOwner|AccountNotInitialized/i.test(s)) {
-    return "This table is part-way between Solana and the game validator. Pause the table to bring it back, then try again.";
-  }
-
   // Nothing recognised. A player gets a sentence; the raw text goes to the
   // console, where it is useful.
   //
