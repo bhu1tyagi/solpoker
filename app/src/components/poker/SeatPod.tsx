@@ -466,13 +466,15 @@ function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" |
       style={{ transform: `rotate(${CHAIR_TURN[side]}deg)`, display: "block" }}
     >
       <defs>
-        {/* Leather takes its light unevenly: a hot spot forward of centre,
-            falling away fast toward the welt. */}
-        <radialGradient id="chair-cushion" cx="46%" cy="34%" r="72%">
-          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 16%, var(--c-chair-cushion))" />
-          <stop offset="42%" stopColor="color-mix(in srgb, var(--c-ink) 6%, var(--c-chair-cushion))" />
-          <stop offset="78%" stopColor="var(--c-chair-cushion)" />
-          <stop offset="100%" stopColor="color-mix(in srgb, var(--c-chair-cushion) 62%, #000)" />
+        {/* A seat is a hollow, not a dome: deepest in the middle where a
+            body sinks it, rising to a rim that catches the room's light.
+            The gradient runs dark-centre to lit-edge for exactly that
+            reason — the other way round it read as bulging up. */}
+        <radialGradient id="chair-cushion" cx="50%" cy="48%" r="72%">
+          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-chair-cushion) 68%, #000)" />
+          <stop offset="55%" stopColor="color-mix(in srgb, var(--c-chair-cushion) 86%, #000)" />
+          <stop offset="88%" stopColor="var(--c-chair-cushion)" />
+          <stop offset="100%" stopColor="color-mix(in srgb, var(--c-ink) 10%, var(--c-chair-cushion))" />
         </radialGradient>
         <linearGradient id="chair-back" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 18%, var(--c-chair-back))" />
@@ -502,10 +504,12 @@ function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" |
           disc: a rounded square that runs to the arms with no gap. */}
       <rect x="25" y="21" width="70" height="66" rx="22" fill="color-mix(in srgb, #000 55%, var(--c-chair-cushion))" />
       <rect x="25" y="16" width="70" height="66" rx="22" fill="url(#chair-cushion)" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
+      {/* Overhead light on a recess: shadow under its near lip, light on the
+          far one. The dark band along the top edge is what sinks the seat. */}
+      <path d="M 36 21 L 84 21" stroke="rgba(0,0,0,0.40)" strokeWidth="8" strokeLinecap="round" />
+      <path d="M 40 78 L 80 78" stroke="rgba(255,255,255,0.07)" strokeWidth="5" strokeLinecap="round" />
       {/* The stitched seam, inset the way upholstery is. */}
-      <rect x="32" y="23" width="56" height="47" rx="15" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1.4" strokeDasharray="3.2 4.2" />
-      {/* Light pooling along the cushion's front edge, toward the table. */}
-      <path d="M 38 24 L 82 24" stroke="rgba(255,255,255,0.10)" strokeWidth="7" strokeLinecap="round" />
+      <rect x="32" y="25" width="56" height="45" rx="15" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="1.4" strokeDasharray="3.2 4.2" />
 
       {/* The frame over the cushion, bottom up: its own side wall, the
           upholstery, a seam of shadow under the crown, the crown's light.

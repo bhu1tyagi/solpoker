@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import { spring } from "@/styles/theme";
 import { legalActions, raisePresets, type LegalActions } from "@/lib/engine/legal-actions";
 import type { HandView, SeatView } from "@/stores/table-store";
@@ -62,79 +62,108 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
     return all.filter((p) => (seen.has(p.to) ? false : (seen.add(p.to), true)));
   }, [la, pot, hand?.currentBet]);
 
+  // Whether the sizing controls do anything right now. They stay on screen
+  // regardless — a real client's bet controls are furniture, not a popup —
+  // and simply sleep between turns.
+  const sizingLive = myTurn && la.canRaise;
+  // Between turns the engine has no sizes to offer; the sleeping row shows
+  // the standard menu so the section keeps its shape and its meaning.
+  const shownPresets = sizingLive
+    ? presets
+    : [
+        { label: "min", to: 0 },
+        { label: "1/3", to: 0 },
+        { label: "1/2", to: 0 },
+        { label: "pot", to: 0 },
+        { label: "all in", to: 0 },
+      ];
+
   return (
     <motion.div
-      // The class carries the width: a corner panel on a desktop, the
-      // whole bottom edge on a phone.
+      // The class carries the width: the whole band under the table on a
+      // desktop, the bottom edge on a phone.
       //
-      // Always mounted. The bar used to appear only on your turn, and the
-      // moment between turns read as the controls being gone rather than
-      // waiting — a player glancing down found nothing where fold had just
-      // been. The verbs now hold their ground and grey out; only the sizing
-      // row above them comes and goes, upward, where nothing else stands.
-      className="action-bar"
+      // Always mounted, all of it. The bar used to appear only on your turn,
+      // and the moment between turns read as the controls being gone rather
+      // than waiting. A real client keeps the whole section standing — the
+      // sizing row, the amount, the slider, the verbs — so this one does
+      // too: the parts that cannot act simply sleep.
+      className="action-bar glass"
       initial={false}
-      animate={{ opacity: myTurn ? 1 : 0.75 }}
+      animate={{ opacity: myTurn ? 1 : 0.85 }}
       transition={spring.gentle}
+      style={{ padding: "14px 16px" }}
     >
-      <AnimatePresence>
-        {myTurn && la.canRaise && (
-          <motion.div
-            key="sizing"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={spring.gentle}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          marginBottom: 12,
+          opacity: sizingLive ? 1 : 0.35,
+          pointerEvents: sizingLive ? undefined : "none",
+          transition: "opacity 220ms ease",
+        }}
+        aria-hidden={!sizingLive}
+      >
+        {/* Sideways on a phone there is no row to spare; the slider
+            covers the same range the presets shortcut. */}
+        <div
+          className="bar-presets"
+          style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}
+        >
+          <span
+            className="label"
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: "var(--c-ink-faint)",
+              marginRight: 4,
+            }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
-              {/* Sideways on a phone there is no row to spare; the slider
-                  covers the same range the presets shortcut. */}
-              <div
-                className="bar-presets"
-                style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}
-              >
-                {presets.map((p) => (
-                  <PresetButton
-                    key={p.label}
-                    active={raiseTo === p.to}
-                    onClick={() => setRaiseTo(p.to)}
-                  >
-                    {p.label}
-                  </PresetButton>
-                ))}
-                {/* On a phone this readout would wrap the row; the raise
-                    button already repeats the figure. */}
-                <span
-                  className="tnum bar-readout"
-                  style={{
-                    marginLeft: "auto",
-                    fontFamily: "var(--font-display)",
-                    fontSize: "var(--t-body-sm-size)",
-                    color: "var(--c-ink)",
-                    fontWeight: 700,
-                    background: "var(--c-felt-raised)",
-                    borderRadius: "var(--r-lg)",
-                    padding: "7px 14px",
-                    minWidth: 76,
-                    textAlign: "right",
-                  }}
-                >
-                  {raiseTo.toLocaleString()}
-                </span>
-              </div>
-              <input
-                type="range"
-                min={la.minRaiseTo}
-                max={la.maxRaiseTo}
-                step={1}
-                value={raiseTo}
-                onChange={(e) => setRaiseTo(Number(e.target.value))}
-                style={{ width: "100%" }}
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            bet amount
+          </span>
+          {shownPresets.map((p) => (
+            <PresetButton
+              key={p.label}
+              active={sizingLive && raiseTo === p.to}
+              onClick={() => sizingLive && setRaiseTo(p.to)}
+            >
+              {p.label}
+            </PresetButton>
+          ))}
+          {/* On a phone this readout would wrap the row; the raise
+              button already repeats the figure. */}
+          <span
+            className="tnum bar-readout"
+            style={{
+              marginLeft: "auto",
+              fontFamily: "var(--font-display)",
+              fontSize: "var(--t-body-sm-size)",
+              color: sizingLive ? "var(--c-green)" : "var(--c-ink-faint)",
+              fontWeight: 700,
+              background: "var(--c-felt-raised)",
+              borderRadius: "var(--r-lg)",
+              padding: "7px 14px",
+              minWidth: 76,
+              textAlign: "right",
+            }}
+          >
+            {sizingLive ? raiseTo.toLocaleString() : "—"}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={sizingLive ? la.minRaiseTo : 0}
+          max={sizingLive ? la.maxRaiseTo : 100}
+          step={1}
+          value={sizingLive ? raiseTo : 0}
+          disabled={!sizingLive}
+          onChange={(e) => setRaiseTo(Number(e.target.value))}
+          style={{ width: "100%", accentColor: "var(--c-green)", height: 18 }}
+        />
+      </div>
 
       <div style={{ display: "flex", gap: 10 }}>
         <BigButton
