@@ -13,7 +13,9 @@ export const runtime = "nodejs";
  *
  * potChips rides along as an extra the verifier ignores; volume aggregates
  * simply skip hands that arrived without it. Idempotent on (table, hand):
- * six players all report the same hand and it lands once.
+ * six players all report the same hand and it lands once. The one thing a
+ * repeat report can change is the pot, and only upward — a client that joined
+ * mid-hand saw part of it, and the fullest observation is the right one.
  */
 export async function POST(req: Request) {
   const s = db();
@@ -58,7 +60,11 @@ export async function POST(req: Request) {
     INSERT INTO hands (id, cluster, table_id, hand_number, pot_chips, result_hash, record)
     VALUES (${id}, ${CLUSTER_TAG}, ${record.tableId}, ${record.handNumber}, ${pot},
             ${record.resultHash ?? null}, ${s.json(record as never)})
-    ON CONFLICT (id) DO NOTHING`;
+    ON CONFLICT (id) DO UPDATE SET pot_chips = CASE
+      WHEN hands.pot_chips IS NULL    THEN excluded.pot_chips
+      WHEN excluded.pot_chips IS NULL THEN hands.pot_chips
+      ELSE greatest(hands.pot_chips, excluded.pot_chips)
+    END`;
 
   return NextResponse.json({ stored: true });
 }

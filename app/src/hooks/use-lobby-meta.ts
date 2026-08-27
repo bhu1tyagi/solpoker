@@ -3,26 +3,52 @@
 import { useEffect, useState } from "react";
 
 /**
- * The backend's contribution to the lobby: the table name registry and the
- * trailing-24h aggregates built from server-verified hand reports.
+ * The backend's contribution to the lobby: play totals built from
+ * server-verified hand reports, the same totals broken down per table, and
+ * the table name registry.
  *
  * Everything here is optional by design. No DATABASE_URL, an unreachable
- * route, an empty day: the hook settles on nulls and an empty name map, and
- * the lobby renders exactly what the chain alone supports. A null is never
+ * route, an empty day: the hook settles on nulls and empty maps, and the
+ * lobby renders exactly what the chain alone supports. A null is never
  * rendered as a zero.
  */
-export interface LobbyMeta {
-  names: Record<string, string>;
-  hands24h: number | null;
-  volume24hChips: number | null;
+
+/** Play totals over whichever window the server chose. */
+export interface Totals {
+  /** Hands verified and stored. */
+  hands: number | null;
+  /** Chips that moved through pots. Null until hands carry an observed pot. */
+  volumeChips: number | null;
   avgPotChips: number | null;
+  biggestPotChips: number | null;
+}
+
+export interface TableTotals extends Totals {
+  /** Epoch millis of the most recent stored hand, or null. */
+  lastHandAt: number | null;
+}
+
+export interface LobbyMeta extends Totals {
+  names: Record<string, string>;
+  /**
+   * Which stretch of time every figure above covers. The server picks the
+   * last 24 hours while there was play in it and all time otherwise, so a
+   * quiet night reads as history rather than as an empty room. Labels have to
+   * follow this rather than hard-coding "24h", or they will say one thing
+   * while the numbers mean another.
+   */
+  window: "24h" | "all";
+  tables: Record<string, TableTotals>;
 }
 
 const EMPTY: LobbyMeta = {
   names: {},
-  hands24h: null,
-  volume24hChips: null,
+  window: "24h",
+  hands: null,
+  volumeChips: null,
   avgPotChips: null,
+  biggestPotChips: null,
+  tables: {},
 };
 
 const POLL_MS = 60_000;
@@ -40,9 +66,12 @@ export function useLobbyMeta(): LobbyMeta {
         if (!dead) {
           setMeta({
             names: body.names ?? {},
-            hands24h: body.hands24h ?? null,
-            volume24hChips: body.volume24hChips ?? null,
+            window: body.window === "all" ? "all" : "24h",
+            hands: body.hands ?? null,
+            volumeChips: body.volumeChips ?? null,
             avgPotChips: body.avgPotChips ?? null,
+            biggestPotChips: body.biggestPotChips ?? null,
+            tables: body.tables ?? {},
           });
         }
       } catch {

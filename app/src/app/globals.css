@@ -2728,6 +2728,19 @@ input[type="range"]::-moz-range-thumb {
   font-weight: 700;
   line-height: 1;
 }
+/* Which window a stored figure covers, said quietly beside its name. The
+   label is already uppercase and tracked out, so this only needs to step
+   back in weight and colour to read as a qualifier rather than a second
+   label. */
+.lobby-stat-when {
+  margin-left: var(--sp-2);
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--c-ink-faint);
+  opacity: 0.75;
+}
 
 .lobby-grid {
   display: grid;
@@ -2853,6 +2866,25 @@ input[type="range"]::-moz-range-thumb {
   color: var(--c-ink);
   font-weight: 700;
   font-size: var(--t-body-lg-size);
+}
+
+/* A table's track record: one quiet line, dot-separated, wrapping rather
+   than truncating so the last fact is never the one that disappears. */
+.table-card-log {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--sp-2);
+  margin: calc(var(--sp-4) * -1) 0 0;
+  color: var(--c-ink-faint);
+  font-size: var(--t-body-sm-size);
+}
+.table-card-log .num {
+  color: var(--c-ink-muted);
+  font-weight: 700;
+}
+.table-card-log span[aria-hidden] {
+  opacity: 0.5;
 }
 
 .table-card-foot {

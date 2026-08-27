@@ -8,7 +8,7 @@ import { pruneSalts } from "@/lib/salts";
 import { decodeHand } from "@/lib/decode";
 import { verify } from "@/lib/verifier/verify-shuffle";
 import { handPda } from "@/lib/pdas";
-import { useTableStore } from "@/stores/table-store";
+import { potTotal, useTableStore } from "@/stores/table-store";
 import { MAX_SEATS, SALT_REVEALED } from "@/lib/constants";
 
 /**
@@ -43,6 +43,16 @@ interface HandBuffer {
   salts: Map<number, SaltRecord>;
   /** Who was dealt in, remembered before settlement clears the mask. */
   dealtIn: number;
+  /**
+   * The pot, read while the hand is still live.
+   *
+   * There is no pot field anywhere: the pot is the sum of what the seats have
+   * committed, and settlement zeroes those. So it is watched rather than
+   * fetched, and kept as a running maximum. A snapshot taken at any single
+   * moment is only that street's total, and the notification carrying the last
+   * call can arrive after the one that clears the table.
+   */
+  pot: number;
 }
 
 const FETCH_TRIES = 14;
@@ -68,10 +78,11 @@ export function useHandCapture(
 
     let forHand = buffer.current.get(hand.handNumber);
     if (!forHand) {
-      forHand = { salts: new Map(), dealtIn: 0 };
+      forHand = { salts: new Map(), dealtIn: 0, pot: 0 };
       buffer.current.set(hand.handNumber, forHand);
     }
     forHand.dealtIn |= hand.dealtIn;
+    forHand.pot = Math.max(forHand.pot, potTotal(seats));
     for (let i = 0; i < MAX_SEATS; i++) {
       const s = seats[i];
       if (!s || s.saltState !== SALT_REVEALED || forHand.salts.has(i)) continue;
@@ -167,9 +178,12 @@ export function useHandCapture(
               await saveHand(record).catch(() => {
                 // Storage refused. The hand is lost to history, play continues.
               });
-              // The lobby's 24h numbers come from these reports; the server
+              // The lobby's volume numbers come from these reports; the server
               // re-verifies before storing, and a failure is nobody's problem.
-              reportHand(record);
+              // The pot travels beside the record rather than inside it: the
+              // record is the thing the verifier proves, and it must stay
+              // exactly what was proven, here and in IndexedDB.
+              reportHand(record, seen.pot);
               pruneSalts(table.toBase58(), n);
               return;
             }

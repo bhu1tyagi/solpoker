@@ -30,7 +30,7 @@ import { spring, stagger } from "@/styles/theme";
 import { MAX_SEATS, PLAY_FLOOR_LAMPORTS } from "@/lib/constants";
 import { formatUsd, formatUsdRange } from "@/lib/money";
 import { displayName } from "@/lib/table-names";
-import { useLobbyMeta } from "@/hooks/use-lobby-meta";
+import { useLobbyMeta, type TableTotals } from "@/hooks/use-lobby-meta";
 
 /**
  * Stake tiers, mirrored from CreateTableModal's STAKES by big blind. A table
@@ -55,6 +55,10 @@ export default function Lobby() {
   const [openOnly, setOpenOnly] = useState(false);
   const [liveOnly, setLiveOnly] = useState(false);
 
+  // How far back every stored figure on this page reaches. One phrase, used
+  // by the tiles and by each card, so they can never quietly disagree.
+  const since = meta.window === "24h" ? "past 24h" : "all time";
+
   const me = publicKey?.toBase58();
   const visible = useMemo(
     () =>
@@ -73,11 +77,18 @@ export default function Lobby() {
   );
 
   /*
-   * The stat row. Every figure is computed from the same on-chain listing the
-   * grid renders, refreshed on the listing's own 6-second poll. Nothing here
-   * is fetched separately, so the tiles can never disagree with the cards
-   * below them — and nothing here is invented. Volume and average pot stay
-   * absent until the settle-indexer backend exists to actually know them.
+   * The stat row has two halves, and they answer different questions.
+   *
+   * The first four are RIGHT NOW, computed from the same on-chain listing the
+   * grid renders and refreshed on its own 6-second poll, so a tile can never
+   * disagree with the cards below it.
+   *
+   * The rest are OVER TIME, and the chain cannot answer them at all: hand
+   * accounts are reused, so a settled pot is gone the moment the next hand
+   * starts. They come from hands that clients reported and the server
+   * re-verified, and each one is rendered only when it exists. A missing
+   * indexer, an empty database or a day with no pots observed reads as
+   * absence; none of them is ever a zero.
    */
   const stats = useMemo(() => {
     const live = visible.filter((t) => t.delegated).length;
@@ -184,26 +195,36 @@ export default function Lobby() {
             </div>
           )}
 
-          <section className="lobby-stats" aria-label="Right now">
+          <section className="lobby-stats" aria-label="Room activity">
             {(
               [
                 ["Players seated", String(stats.players)],
                 ["Active tables", String(stats.tables)],
                 ["Open seats", String(stats.seats)],
                 ["Hands live", String(stats.live)],
-                // Backend-fed, verified-hands aggregates. Rendered only when
-                // they exist: a missing indexer must read as absence, never
-                // as a zero-volume poker room.
-                ...(meta.hands24h !== null
-                  ? [["Hands, 24h", meta.hands24h.toLocaleString()]]
+                // The window is shown rather than assumed. The server hands
+                // back 24h while there was play in it and all time otherwise,
+                // and a tile that said "24h" over an all-time figure would be
+                // a small, constant lie.
+                ...(meta.hands !== null
+                  ? [["Hands", meta.hands.toLocaleString(), since]]
                   : []),
-                ...(meta.volume24hChips !== null
-                  ? [["Volume, 24h", formatUsd(meta.volume24hChips)]]
+                ...(meta.volumeChips !== null
+                  ? [["Volume", formatUsd(meta.volumeChips), since]]
                   : []),
-              ] as [string, string][]
-            ).map(([label, value]) => (
+                ...(meta.avgPotChips !== null
+                  ? [["Average pot", formatUsd(meta.avgPotChips), since]]
+                  : []),
+                ...(meta.biggestPotChips !== null
+                  ? [["Biggest pot", formatUsd(meta.biggestPotChips), since]]
+                  : []),
+              ] as [string, string, string?][]
+            ).map(([label, value, note]) => (
               <div key={label} className="lobby-stat glass">
-                <span className="label">{label}</span>
+                <span className="label">
+                  {label}
+                  {note && <em className="lobby-stat-when">{note}</em>}
+                </span>
                 <span className="num lobby-stat-fig">{value}</span>
               </div>
             ))}
@@ -312,7 +333,12 @@ export default function Lobby() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ ...spring.gentle, delay: i * stagger.list }}
                     >
-                      <TableCard t={t} registered={meta.names[String(t.table.tableId)]} />
+                      <TableCard
+                        t={t}
+                        registered={meta.names[String(t.table.tableId)]}
+                        played={meta.tables[String(t.table.tableId)]}
+                        since={since}
+                      />
                     </motion.div>
                   ))}
                 </div>
@@ -362,11 +388,26 @@ export default function Lobby() {
 }
 
 /**
- * A table as a place, not a row: generated name over real facts. Everything
- * on the card is read from chain except the name, which is deterministic
- * from the id (see table-names.ts) — labelling, never invented liveness.
+ * A table as a place, not a row: generated name over real facts.
+ *
+ * Stakes, seats and liveness are read from chain. The name is deterministic
+ * from the id (see table-names.ts) — labelling, never invented liveness. The
+ * track record underneath is the only part that comes from the database, and
+ * the whole line is absent for a table that has not been played yet: a new
+ * table showing "0 hands" would read as a room being avoided rather than as
+ * a room nobody has opened.
  */
-function TableCard({ t, registered }: { t: LobbyTable; registered?: string }) {
+function TableCard({
+  t,
+  registered,
+  played,
+  since,
+}: {
+  t: LobbyTable;
+  registered?: string;
+  played?: TableTotals;
+  since: string;
+}) {
   const joinable = isJoinable(t);
   const live = t.delegated;
 
@@ -410,6 +451,29 @@ function TableCard({ t, registered }: { t: LobbyTable; registered?: string }) {
           </div>
         </dl>
 
+        {/* What has actually happened here. Each fact drops out on its own
+            when it is not known, so a table with hands but no observed pot
+            still says how busy it has been. */}
+        {played?.hands != null && (
+          <p className="table-card-log">
+            <span className="num">{played.hands.toLocaleString()}</span>{" "}
+            {played.hands === 1 ? "hand" : "hands"} {since}
+            {played.avgPotChips !== null && (
+              <>
+                <span aria-hidden>&middot;</span> avg pot{" "}
+                <span className="num">{formatUsd(played.avgPotChips)}</span>
+              </>
+            )}
+            {/* A live table's recency is the pulsing dot above; only a quiet
+                one needs telling how long it has been quiet. */}
+            {!live && played.lastHandAt !== null && (
+              <>
+                <span aria-hidden>&middot;</span> last {ago(played.lastHandAt)}
+              </>
+            )}
+          </p>
+        )}
+
         <div className="table-card-foot">
           <span className="table-card-seats" aria-label={`${t.seated} of ${MAX_SEATS} seats taken`}>
             {Array.from({ length: MAX_SEATS }, (_, i) => (
@@ -430,6 +494,23 @@ function TableCard({ t, registered }: { t: LobbyTable; registered?: string }) {
       </motion.article>
     </Link>
   );
+}
+
+/**
+ * How long ago, in the coarsest unit that still says something.
+ *
+ * Deliberately vague past an hour. The reading anyone takes from this is
+ * "recently" or "not recently", and quoting "47 minutes" implies a precision
+ * the figure does not have: it is the last hand a client managed to report,
+ * not the last hand played.
+ */
+function ago(at: number): string {
+  const mins = Math.max(0, Math.round((Date.now() - at) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
 
 /**

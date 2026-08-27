@@ -10,14 +10,22 @@ import type { HandHistory } from "./verifier/verify-shuffle";
  * closing right after a hand ends, which is exactly when players leave.
  *
  * The server re-verifies the record before storing it; nothing sent here is
- * trusted as-is.
+ * trusted as-is. The pot is the one thing the verifier cannot prove — it is
+ * summed from seat state that settlement erases, not derived from the seed —
+ * so it rides alongside as a separate, clearly untrusted figure. Send it only
+ * when it was actually observed; a pot of zero would be indistinguishable
+ * from a hand nobody was watching, and it would drag the average down.
  */
-export function reportHand(record: HandHistory): void {
+export function reportHand(record: HandHistory, potChips?: number): void {
   try {
+    const body =
+      typeof potChips === "number" && potChips > 0
+        ? { ...record, potChips }
+        : record;
     void fetch("/api/hands", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(record),
+      body: JSON.stringify(body),
       keepalive: true,
     }).catch(() => {});
   } catch {
