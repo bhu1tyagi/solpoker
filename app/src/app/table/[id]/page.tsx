@@ -5,6 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { useReadiness, READINESS_STEPS } from "@/hooks/use-readiness";
+import { useUiStore } from "@/stores/ui-store";
+import { SiteHeader } from "@/components/chrome/SiteHeader";
+import { Orbs } from "@/components/chrome/Orbs";
+import { LobbyGate } from "@/components/onboarding/LobbyGate";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import { TableFelt } from "@/components/poker/TableFelt";
@@ -59,6 +64,8 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
 
   const router = useRouter();
   const { publicKey, signTransaction, connected } = useWallet();
+  // Same source the lobby and the gate use, so all three agree on who may sit.
+  const readiness = useReadiness();
   const { connection: erConnection, program: erProgram, connect: connectTee } = useTee();
   const player = usePlayer();
 
@@ -440,6 +447,24 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
                 : actions.busy === "delete"
                   ? "closing the table"
                   : undefined;
+
+  /*
+   * The refusal has to live here too, not only on the lobby card.
+   *
+   * A card that opens the gate stops the ordinary route in, but the table is
+   * a plain URL: pasted, bookmarked, or followed from a shared link, it would
+   * otherwise let someone who has never connected a wallet into a room they
+   * cannot act in. `resolving` is deliberately excluded — turning a player
+   * away while their balances are still arriving would refuse people who are
+   * in fact ready.
+   *
+   * A player already seated is never turned away, whatever their balance says:
+   * chips on a seat must always be reachable.
+   */
+  const seated = mySeat >= 0;
+  if (!readiness.resolving && !readiness.ready && !seated) {
+    return <TableClosed active={readiness.active} />;
+  }
 
   return (
     <>
@@ -1351,4 +1376,42 @@ function useShowdown(
       handNames,
     };
   }, [hand, seats, mySeat, myHole, myHoleHandNumber]);
+}
+
+/**
+ * The door, for someone who arrived at a table without being able to play at
+ * one.
+ *
+ * It says which step is missing rather than only that entry was refused, and
+ * it offers the two things that are actually useful from here: finish setting
+ * up, or go and look at the room. A bare "not allowed" would leave a player
+ * who followed a friend's link with nothing to do.
+ */
+function TableClosed({ active }: { active: number }) {
+  const openGate = useUiStore((s) => s.openGate);
+  const step = READINESS_STEPS[active] ?? READINESS_STEPS[0];
+  return (
+    <>
+      <SiteHeader />
+      <LobbyGate />
+      <main id="main" className="landing">
+        <Orbs />
+        <div className="landing-inner table-closed">
+          <h1 className="hero-title">Not yet</h1>
+          <p className="trust-lede">
+            A seat at this table needs one more thing: {step.title.toLowerCase()},{" "}
+            {step.short}.
+          </p>
+          <div className="hero-actions">
+            <Button variant="gradient" size="xl" onClick={openGate}>
+              Finish setting up
+            </Button>
+            <Button href="/lobby" variant="ghost" size="xl">
+              Back to the lobby
+            </Button>
+          </div>
+        </div>
+      </main>
+    </>
+  );
 }

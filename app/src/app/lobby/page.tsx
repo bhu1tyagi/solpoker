@@ -31,6 +31,8 @@ import { MAX_SEATS, PLAY_FLOOR_LAMPORTS } from "@/lib/constants";
 import { formatUsd, formatUsdRange } from "@/lib/money";
 import { displayName } from "@/lib/table-names";
 import { useLobbyMeta, type TableTotals } from "@/hooks/use-lobby-meta";
+import { useReadiness } from "@/hooks/use-readiness";
+import { useUiStore } from "@/stores/ui-store";
 
 /**
  * Stake tiers, mirrored from CreateTableModal's STAKES by big blind. A table
@@ -63,6 +65,9 @@ export default function Lobby() {
   const [tab, setTab] = useState<"players" | "mine">("players");
   const [tier, setTier] = useState<"all" | (typeof TIERS)[number]["key"]>("all");
   const meta = useLobbyMeta();
+  // One source for who may sit down, shared with the gate so the two can
+  // never disagree about what is still missing.
+  const { ready } = useReadiness();
   const [openOnly, setOpenOnly] = useState(false);
   const [liveOnly, setLiveOnly] = useState(false);
 
@@ -173,13 +178,6 @@ export default function Lobby() {
       }),
     [visible, tier, openOnly, liveOnly],
   );
-
-  // Whether this wallet can actually sit down. Drives what the table area
-  // shows: a room list is no use to someone who cannot join one yet.
-  const notReady =
-    connected &&
-    state !== null &&
-    !(state.lamports >= PLAY_FLOOR_LAMPORTS && state.chips > 0);
 
   return (
     <>
@@ -347,8 +345,6 @@ export default function Lobby() {
                     Try again
                   </Button>
                 </EmptyRow>
-              ) : notReady && state ? (
-                <GetReady state={state} onDeposit={() => setExchange("buy")} />
               ) : visible.length === 0 ? (
                 <EmptyRow>
                   <TableIcon size={22} />
@@ -390,6 +386,7 @@ export default function Lobby() {
                         registered={meta.names[String(t.table.tableId)]}
                         played={meta.tables[String(t.table.tableId)]}
                         since={since}
+                        ready={ready}
                       />
                     </motion.div>
                   ))}
@@ -454,17 +451,44 @@ function TableCard({
   registered,
   played,
   since,
+  ready,
 }: {
   t: LobbyTable;
   registered?: string;
   played?: TableTotals;
   since: string;
+  ready: boolean;
 }) {
   const joinable = isJoinable(t);
   const live = t.delegated;
+  const openGate = useUiStore((s) => s.openGate);
+
+  /*
+   * A card is a link once the player can actually sit down, and a button that
+   * summons the gate until then.
+   *
+   * Not a disabled card: a greyed-out room with no explanation is the exact
+   * pattern this product's design rules forbid. The table stays inviting and
+   * fully legible, and pressing it says what is still missing.
+   */
+  const Wrapper = ({ children }: { children: React.ReactNode }) =>
+    ready ? (
+      <Link href={`/table/${t.table.tableId}`} style={{ textDecoration: "none" }}>
+        {children}
+      </Link>
+    ) : (
+      <button
+        type="button"
+        className="table-card-locked"
+        onClick={openGate}
+        aria-label={`${displayName(t.table.tableId, registered)}: finish setting up to sit down`}
+      >
+        {children}
+      </button>
+    );
 
   return (
-    <Link href={`/table/${t.table.tableId}`} style={{ textDecoration: "none" }}>
+    <Wrapper>
       <motion.article
         className="table-card glass glow-hover"
         whileHover={{ y: -2 }}
@@ -549,7 +573,7 @@ function TableCard({
           </span>
         </div>
       </motion.article>
-    </Link>
+    </Wrapper>
   );
 }
 
@@ -869,125 +893,6 @@ function Tab({
     </button>
   );
 }
-
-/**
- * An action with its name beside it.
- *
- * The icon alone was a guessing game for anything that is not universal, so
- * everything outside the balance strip says what it does.
- */
-function GetReady({
-  state,
-  onDeposit,
-}: {
-  state: { lamports: number; microUsdc: number; chips: number };
-  onDeposit: () => void;
-}) {
-  const gasOk = state.lamports >= PLAY_FLOOR_LAMPORTS;
-  const usdcOk = state.microUsdc > 0 || state.chips > 0;
-  const chipsOk = state.chips > 0;
-  const short = Math.ceil(((PLAY_FLOOR_LAMPORTS - state.lamports) / 1e9) * 1000) / 1000;
-
-  const step = !gasOk
-    ? {
-        icon: <SolanaMark size={20} />,
-        line: (
-          <>
-            Add <span className="num">{short.toFixed(3)}</span> SOL to cover network fees
-          </>
-        ),
-        action: null as React.ReactNode,
-        note: "Solana charges fees in SOL, not USDC. Most of it comes back.",
-      }
-    : !usdcOk
-      ? {
-          icon: <UsdcMark size={20} />,
-          line: <>Get some USDC to play with</>,
-          action: (
-            <a
-              href="https://jup.ag/swap/SOL-USDC"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ textDecoration: "none" }}
-            >
-              <Button variant="primary" size="sm">
-                Swap SOL for USDC
-              </Button>
-            </a>
-          ),
-          note: "Or send USDC here from an exchange.",
-        }
-      : {
-          icon: <ChipGlyph size={20} />,
-          line: (
-            <>
-              Turn your <span className="num">${(state.microUsdc / 1e6).toFixed(2)}</span> into chips
-            </>
-          ),
-          action: (
-            <Button variant="primary" size="sm" onClick={onDeposit}>
-              Buy chips
-            </Button>
-          ),
-          note: "A cent a chip, and the same rate back out.",
-        };
-
-  const marks = [gasOk, usdcOk, chipsOk];
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 12,
-        minHeight: 128,
-        padding: "26px 16px",
-        textAlign: "center",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 14,
-          flexWrap: "wrap",
-          color: "var(--c-ink-muted)",
-          fontSize: 15,
-        }}
-      >
-        {step.icon}
-        <span>{step.line}</span>
-        {step.action}
-      </div>
-
-      <span style={{ fontSize: "var(--t-label-size)", color: "var(--c-ink-faint)" }}>{step.note}</span>
-
-      {/* How much further, as a footnote. */}
-      <div
-        aria-label={`Step ${marks.filter(Boolean).length + 1} of 3`}
-        style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}
-      >
-        {marks.map((done, i) => (
-          <span
-            key={i}
-            style={{
-              width: done ? 14 : 6,
-              height: 6,
-              borderRadius: 3,
-              background: done ? "var(--c-win)" : "var(--c-rule-strong)",
-              opacity: done ? 0.55 : 1,
-              transition: "width var(--m-base) var(--m-ease)",
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 
 /**
  * What the wallet holds in SOL, and — when that is not enough — exactly how

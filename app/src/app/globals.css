@@ -3365,3 +3365,42 @@ input[type="range"]::-moz-range-thumb {
   letter-spacing: var(--t-label-tracking);
   text-transform: uppercase;
 }
+
+/* The buy step: the one gate stage that is an action rather than a wait. */
+.gate-buy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-4);
+}
+.gate-buy-mark {
+  display: inline-flex;
+  color: var(--c-green);
+}
+.gate-buy h3 {
+  font-size: var(--t-body-lg-size);
+}
+
+/* A table nobody may sit at yet. Deliberately identical to the link version:
+   the room stays inviting and legible, and pressing it explains rather than
+   refusing in silence. */
+.table-card-locked {
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+/* The refusal page for a table URL reached without being able to play. */
+.table-closed {
+  padding-top: 96px;
+  max-width: 640px;
+}
+.table-closed .hero-actions {
+  margin-top: var(--sp-8);
+}

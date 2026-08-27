@@ -6,8 +6,10 @@ import { WalletReadyState } from "@solana/wallet-adapter-base";
 import { motion, useReducedMotion } from "motion/react";
 import { usePlayer } from "@/hooks/use-player";
 import { useUiStore } from "@/stores/ui-store";
+import { READINESS_STEPS, useReadiness } from "@/hooks/use-readiness";
 import { shortKey } from "@/components/primitives/Avatar";
 import { ChipSpinner } from "@/components/primitives/ChipRing";
+import { ChipGlyph } from "@/components/primitives/Chip";
 import { CheckIcon, CopyIcon, UsdcMark } from "@/components/primitives/Icons";
 import { SolanaMark } from "@/components/primitives/StackCredit";
 import { Button } from "@/components/primitives/Button";
@@ -15,7 +17,7 @@ import {
   ONBOARD_FLOOR_MICRO_USDC,
   PLAY_FLOOR_LAMPORTS,
 } from "@/lib/constants";
-import { formatSol } from "@/lib/money";
+import { formatSol, microUsdcToChips } from "@/lib/money";
 
 /**
  * The readiness gate, straight off the ladder in the design system's
@@ -28,6 +30,7 @@ import { formatSol } from "@/lib/money";
  *   1. Connect wallet    — the only HARD gate. Nobody enters without it.
  *   2. Network fees      — a little SOL. PLAY_FLOOR_LAMPORTS is the floor.
  *   3. Gaming capital    — USDC for chips. $4 is the smallest buy-in.
+ *   4. Buy chips         — a seat is taken with chips, not with a balance.
  *
  * Steps 2 and 3 are skippable ("look around first"), because a connected
  * player browsing an empty balance harms nobody, and imprisoning them in a
@@ -45,64 +48,28 @@ import { formatSol } from "@/lib/money";
  */
 
 const POLL_MS = 4000;
-/** How long the gate will wait for the wallet and balances before committing. */
-const RESOLVE_CAP_MS = 5000;
-const SKIP_KEY = "pk-gate-skip";
-
-const STEPS = [
-  { title: "Connect wallet", short: "Phantom, Solflare, or any Solana wallet" },
-  { title: "Network fees", short: "a little SOL covers a session" },
-  { title: "Gaming capital", short: "USDC for chips, tables from $4" },
-] as const;
 
 const fmtUsdc = (micro: number) => `$${(micro / 1e6).toFixed(2)}`;
 
 export function LobbyGate() {
   const reduce = useReducedMotion();
   const toast = useUiStore((s) => s.toast);
+  const forced = useUiStore((s) => s.gateOpen);
+  const dismissed = useUiStore((s) => s.gateDismissed);
+  const dismissGate = useUiStore((s) => s.dismissGate);
   const { wallets, select, connecting, connected, wallet, publicKey } =
     useWallet();
-  const { state, refresh } = usePlayer();
+  const { refresh, buy, busy, buyBlocked } = usePlayer();
 
   const [mounted, setMounted] = useState(false);
-  const [skipped, setSkipped] = useState(false);
   const [pendingWallet, setPendingWallet] = useState<string | null>(null);
   const [declined, setDeclined] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  /*
-   * Whether an autoConnect is coming.
-   *
-   * WalletProvider records the chosen wallet under this key and reconnects to
-   * it on the next load. Reading it directly is what tells us, on the FIRST
-   * render, that "not connected" means "not connected YET" — the adapter
-   * cannot tell us that itself, because the reconnect is asynchronous and
-   * everything looks disconnected while it runs.
-   *
-   * Without this the gate flashed "Connect a wallet" at returning players for
-   * a second before deciding they were already connected.
-   */
-  const [expectAuto, setExpectAuto] = useState(false);
-
-  /*
-   * A hard cap on waiting. A locked wallet never finishes connecting and an
-   * unreachable RPC never returns balances; either would otherwise hold the
-   * gate closed forever behind an empty page. After this the gate commits to
-   * whatever is actually known.
-   */
-  const [settled, setSettled] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    setSkipped(sessionStorage.getItem(SKIP_KEY) === "1");
-    try {
-      setExpectAuto(!!localStorage.getItem("walletName"));
-    } catch {
-      // Storage blocked. Fall through to showing the gate promptly.
-    }
-    const t = setTimeout(() => setSettled(true), RESOLVE_CAP_MS);
-    return () => clearTimeout(t);
-  }, []);
+  // Nothing is decided before the client is running: the wallet adapter knows
+  // nothing on the server, so a server render would show step one to a player
+  // who is already connected.
+  useEffect(() => setMounted(true), []);
 
   // Selection IS the connect request. The provider runs with autoConnect,
   // and its own machinery connects the newly selected adapter after it has
@@ -128,35 +95,17 @@ export function LobbyGate() {
     wasConnecting.current = false;
   }, [connecting, connected, pendingWallet]);
 
-  const lamports = state?.lamports ?? 0;
-  const microUsdc = state?.microUsdc ?? 0;
-  const solOk = lamports >= PLAY_FLOOR_LAMPORTS;
-  const usdcOk = microUsdc >= ONBOARD_FLOOR_MICRO_USDC;
-
-  const done = [connected, connected && solOk, connected && usdcOk];
-  const active = done.indexOf(false);
+  const { active, done, resolving, lamports, microUsdc, chips } = useReadiness();
 
   /*
-   * Decide nothing until the answer is actually knowable.
-   *
-   * Three things can still be in flight on first paint, and each one would
-   * make the gate accuse a perfectly ready player of a step they have done:
-   *
-   *   connecting              the wallet is mid-handshake
-   *   expectAuto && !connected  a stored wallet is about to reconnect
-   *   connected && !state     balances have not been read yet, so "no SOL"
-   *                           is an absence of data, not a shortfall
-   *
-   * Past the cap, whatever is known wins, so nothing can hang.
+   * Shown while a step is unmet AND the player has not waved it away — or
+   * whenever something asks for it back, which is what trying to sit down
+   * does. Dismissing is deliberately cheap: a stranger should be able to look
+   * around a poker room without being held at the door. What they cannot do
+   * is take a seat, and that is enforced where the seat is, not here.
    */
-  const resolving =
-    !settled &&
-    (!mounted ||
-      connecting ||
-      (expectAuto && !connected) ||
-      (connected && state === null));
-
-  const open = mounted && !resolving && active !== -1 && !(connected && skipped);
+  const open =
+    mounted && !resolving && active !== -1 && (forced || !dismissed);
 
   // Deposits land from outside this tab; poll while a funding step shows.
   useEffect(() => {
@@ -179,10 +128,13 @@ export function LobbyGate() {
     if (open) dialogRef.current?.focus();
   }, [open, active]);
 
-  const skip = useCallback(() => {
-    sessionStorage.setItem(SKIP_KEY, "1");
-    setSkipped(true);
-  }, []);
+  // Escape closes it, like any other dialog.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && dismissGate();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, dismissGate]);
 
   if (!open) return null;
 
@@ -193,7 +145,10 @@ export function LobbyGate() {
   );
 
   return (
-    <div className="gate-scrim">
+    // Clicking the ground behind it closes it. The gate is a doorman, not a
+    // lock: looking around costs nothing, and the refusal that matters
+    // happens at the table.
+    <div className="gate-scrim" onClick={dismissGate}>
       <motion.div
         ref={dialogRef}
         role="dialog"
@@ -201,6 +156,7 @@ export function LobbyGate() {
         aria-labelledby="gate-title"
         tabIndex={-1}
         className="gate glass glass-blur"
+        onClick={(e) => e.stopPropagation()}
         initial={reduce ? false : { opacity: 0, y: 14, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
@@ -212,7 +168,7 @@ export function LobbyGate() {
 
         <div className="gate-body">
           <ol className="gate-rail" aria-label="Progress">
-            {STEPS.map((s, i) => (
+            {READINESS_STEPS.map((s, i) => (
               <li
                 key={s.title}
                 className={
@@ -339,16 +295,51 @@ export function LobbyGate() {
                 warn="USDC on Solana only. Other networks will not arrive."
               />
             )}
+
+            {/*
+              The last step, and the only one that is a button rather than a
+              wait. Holding USDC and holding chips are different states, and a
+              player stuck between them used to be told to go and fetch USDC
+              they already had.
+            */}
+            {active === 3 && (
+              <div className="gate-buy">
+                <span className="gate-buy-mark" aria-hidden>
+                  <ChipGlyph size={36} />
+                </span>
+                <h3>Turn USDC into chips</h3>
+                <p className="gate-note">
+                  A cent a chip, and the same rate back out. You hold{" "}
+                  <span className="num">{fmtUsdc(microUsdc)}</span>, enough for{" "}
+                  <span className="num">
+                    {microUsdcToChips(microUsdc).toLocaleString()}
+                  </span>{" "}
+                  chips.
+                </p>
+                <Button
+                  variant="gradient"
+                  size="lg"
+                  loading={busy === "buy"}
+                  disabled={buyBlocked !== null}
+                  onClick={() => void buy(microUsdcToChips(microUsdc))}
+                >
+                  Buy {microUsdcToChips(microUsdc).toLocaleString()} chips
+                </Button>
+                {buyBlocked && (
+                  <p className="gate-warn" role="status">
+                    {buyBlocked}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {connected && (
-          <footer className="gate-foot">
-            <button type="button" className="gate-skip" onClick={skip}>
-              Skip for now, I just want to look around
-            </button>
-          </footer>
-        )}
+        <footer className="gate-foot">
+          <button type="button" className="gate-skip" onClick={dismissGate}>
+            Close and look around
+          </button>
+        </footer>
       </motion.div>
     </div>
   );
