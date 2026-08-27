@@ -1,9 +1,21 @@
-import Link from "next/link";
 import type { Metadata } from "next";
-
+import { SiteHeader } from "@/components/chrome/SiteHeader";
+import { SiteFooter } from "@/components/chrome/SiteFooter";
+import { Orbs } from "@/components/chrome/Orbs";
+import { TrustFlow } from "@/components/trust/TrustFlow";
+import { RakeMeter } from "@/components/trust/RakeMeter";
 import { CLUSTER } from "@/lib/constants";
 
 const MAINNET = CLUSTER === "mainnet";
+
+/**
+ * The trust page. The interactive flow carries the lifecycle that used to be
+ * several screens of prose; the text that remains is the part a diagram must
+ * not soften: what is being trusted, what an attacker cannot do, the rake,
+ * and the summary table.
+ *
+ * The #shuffle and #rake anchors are load-bearing: the footer links to both.
+ */
 
 export const metadata: Metadata = {
   title: "Trust model | Pokerable",
@@ -13,253 +25,174 @@ export const metadata: Metadata = {
 
 export default function TrustPage() {
   return (
-    <main
-      style={{
-        maxWidth: 720,
-        margin: "0 auto",
-        padding: "56px 24px 96px",
-        lineHeight: 1.65,
-      }}
-    >
-      <Link
-        href="/"
-        style={{
-          fontSize: "var(--t-body-sm-size)",
-          color: "var(--c-ink-muted)",
-          textDecoration: "none",
-        }}
-      >
-        Back to the lobby
-      </Link>
+    <>
+      <SiteHeader />
 
-      <h1 style={{ fontSize: "var(--t-display-lg-size)", margin: "22px 0 10px" }}>Trust model</h1>
-      <p style={{ color: "var(--c-ink-muted)", marginTop: 0 }}>
-        Written for someone who does not want to be cheated and does not take
-        marketing copy at face value.
-      </p>
+      <main id="main" className="landing">
+        <Orbs />
+        <div className="landing-inner trust-page">
+          <header className="trust-head">
+            <h1 className="hero-title">Trust model</h1>
+            <p className="trust-lede">
+              Written for someone who does not want to be cheated and does not
+              take marketing copy at face value. The shuffle is provably fair
+              and you can check it yourself. Your hole cards are protected by
+              a hardware enclave, which is a hardware and operator assumption,
+              not a mathematical one.
+            </p>
+          </header>
 
-      <Callout>
-        <strong>Pokerable does not remove all trust.</strong> The shuffle is
-        provably fair and you can check it yourself. Your hole cards are
-        protected by Intel TDX and MagicBlock&apos;s TEE validator, which is a
-        hardware and operator assumption, not a mathematical one. The accurate
-        phrase is &quot;provably fair shuffle, TEE-protected hole cards&quot;.
-      </Callout>
+          <section id="shuffle" aria-labelledby="flow-head" className="trust-section">
+            <h2 id="flow-head">The life of one hand</h2>
+            <p className="trust-section-lede">
+              Click through the stages. Green ones anyone can recheck from
+              public data; the purple one is where trust actually lives.
+            </p>
+            <TrustFlow />
+          </section>
 
-      <H2>What you can check yourself</H2>
+          <section aria-labelledby="trusting-head" className="trust-section">
+            <h2 id="trusting-head">What you are trusting</h2>
+            <p className="trust-section-lede">
+              Three assumptions, each with its failure spelled out. Open one to
+              see exactly what breaks.
+            </p>
+            <div className="trust-cols">
+              {[
+                {
+                  t: "Intel TDX",
+                  p: "Hole cards are unreadable because the enclave refuses to serve them. That rests on Intel's hardware isolation, and TEEs have had real breaks.",
+                  b: "A TDX break exposes hole cards at every table, live. Nothing on chain would look wrong.",
+                },
+                {
+                  t: "The validator operator",
+                  p: "MagicBlock runs the enclave. The design denies them card access, but the hardware is in their racks.",
+                  b: "An operator who can extract enclave memory sees every card and the deck order before the deal. Shuffle verification does not detect it.",
+                },
+                {
+                  t: "Attestation scope",
+                  p: "The app verifies a genuine Intel TDX quote before trusting the endpoint. It does not check which code runs inside.",
+                  b: "A different build inside real TDX hardware would pass. Closing this needs a measurement allowlist that is not implemented.",
+                },
+              ].map((c) => (
+                <details key={c.t} className="trust-col glass trust-assume">
+                  <summary>
+                    <h3>{c.t}</h3>
+                    <span className="trust-assume-hint" aria-hidden>
+                      if it breaks
+                    </span>
+                  </summary>
+                  <p>{c.p}</p>
+                  <p className="trust-assume-break">{c.b}</p>
+                </details>
+              ))}
+            </div>
+          </section>
 
-      <H3>The shuffle</H3>
-      <P>
-        Every hand publishes the raw VRF output, every player&apos;s salt, each
-        player&apos;s prior commitment to that salt, and the final seed. The
-        verify button on any finished hand recomputes the deck from scratch in
-        your browser and checks all of it. If a deck were rigged, that check
-        fails.
-      </P>
-      <P>Why the deck cannot be steered:</P>
-      <ol style={{ color: "var(--c-ink-muted)", paddingLeft: 20 }}>
-        <li>Every player commits to a hash of their salt before anyone reveals anything.</li>
-        <li>Everyone reveals. The commitments bind them, so nobody can pick a salt after seeing another.</li>
-        <li>Only then is VRF drawn, with a seed derived from the salts, so nobody can re-request until they like the answer.</li>
-        <li>The shuffle seed is the VRF output XOR every salt.</li>
-      </ol>
-      <P>
-        Biasing it requires the VRF oracle <em>and every seated player</em> to
-        collude. One honest player is enough to keep it fair.
-      </P>
+          <section aria-labelledby="cannot-head" className="trust-section">
+            <h2 id="cannot-head">Try to cheat it</h2>
+            <p className="trust-section-lede">
+              The attacks a poker player actually worries about, and where each
+              one dies. Open any attempt.
+            </p>
+            <div className="trust-attacks">
+              {[
+                {
+                  a: "Read an opponent's hole cards",
+                  b: "Each card account answers only its seat's occupant. An authenticated request from any other wallet returns nothing. Measured, not assumed.",
+                },
+                {
+                  a: "Scrape the cards from Solana",
+                  b: "Card accounts are private during play, and the deck is wiped at hand end before anything public could carry it.",
+                },
+                {
+                  a: "Rig the shuffle as the operator",
+                  b: "The seed is the VRF output XOR every player's salt. Steering it needs the oracle and every seated player colluding; one honest player is enough.",
+                },
+                {
+                  a: "Steal a session key",
+                  b: "It can make bad bets at the one table it was scoped to, nothing else. Cashing out, moving chips and joining tables all need the wallet.",
+                },
+              ].map((x, i) => (
+                <details key={x.a} className="trust-attack glass">
+                  <summary>
+                    <span className="trust-attack-n num" aria-hidden>
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    {x.a}
+                    <span className="trust-attack-tag">blocked</span>
+                  </summary>
+                  <p>{x.b}</p>
+                </details>
+              ))}
+            </div>
+          </section>
 
-      <H3>Chip conservation</H3>
-      <P>
-        Chips only move between a player&apos;s balance and a seat stack on the
-        base layer, while the table is undelegated. During a hand the rollup can
-        move chips between seats but cannot change the table total, mint a chip,
-        or reach anyone&apos;s balance. Solana account ownership enforces this.
-      </P>
+          <section id="rake" aria-labelledby="rake-head" className="trust-section">
+            <h2 id="rake-head">The rake</h2>
+            <p className="trust-section-lede">
+              2.5% of flopped pots, capped at three big blinds. Drag the pot to
+              see it.
+            </p>
+            <RakeMeter />
+            {MAINNET && (
+              <p className="trust-body" style={{ marginTop: "var(--sp-6)" }}>
+                The USDC here is real money. That means the enclave assumptions
+                on this page bound custody of funds, not just the fairness of a
+                game; the attestation gap above is financially material; the
+                program&apos;s upgrade authority could replace the program that
+                holds the vault; and real-stakes poker is a licensed, regulated
+                activity in most places. None of that is solved here, and this
+                page will say so for as long as it is true.
+              </p>
+            )}
+          </section>
 
-      <H3>The rules</H3>
-      <P>
-        Hand evaluation, betting and side pots live in a separate crate with no
-        Solana dependencies, covered by property tests asserting chips are
-        conserved across any legal sequence of actions.
-      </P>
+          <section aria-labelledby="summary-head" className="trust-section">
+            <h2 id="summary-head">Summary</h2>
+            <table className="trust-table">
+              <tbody>
+                {[
+                  ["Shuffle fairness", "Verifiable by anyone, no trust needed", "verify"],
+                  ["Chip conservation", "Enforced by Solana account ownership", "verify"],
+                  ["Rules correctness", "Property tested, deterministic", "verify"],
+                  [
+                    "Cards hidden from opponents",
+                    "Trusts Intel TDX and the validator operator",
+                    "trust",
+                  ],
+                  [
+                    "Cards hidden from the operator",
+                    "Trusts TDX isolation, and attestation does not check the code",
+                    "trust",
+                  ],
+                  ["Hand completes if you disconnect", "Yes, auto-fold", "verify"],
+                  [
+                    "Funds at risk",
+                    MAINNET
+                      ? "Real USDC, plus trust in the program's upgrade authority"
+                      : "A test mint, which is valueless",
+                    "trust",
+                  ],
+                ].map(([k, v, kind]) => (
+                  <tr key={k}>
+                    <td>
+                      <span
+                        className={`trust-sum-dot trust-sum-dot--${kind}`}
+                        aria-hidden
+                      />
+                      {k}
+                    </td>
+                    <td>{v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </main>
 
-      <H2>What you are trusting</H2>
-
-      <H3>Intel TDX</H3>
-      <P>
-        Hole cards are unreadable because the TEE validator refuses to serve
-        them. That rests on Intel&apos;s hardware isolation. A TDX break, a side
-        channel, or a flaw in the enclave firmware would expose cards. TEEs have
-        had real breaks. This is a meaningful assumption, not a formality.
-      </P>
-
-      <H3>MagicBlock as validator operator</H3>
-      <P>
-        If the enclave is compromised, or the operator can extract memory from
-        it, they see every hole card at every table, live, and the deck order
-        before cards are dealt. That is total information. Nothing on chain
-        would look wrong, because the cards would still match the published
-        seed. <strong>Shuffle verification does not detect this.</strong>
-      </P>
-
-      <H3>Attestation proves hardware, not code</H3>
-      <P>
-        The app verifies a genuine Intel TDX quote bound to a fresh challenge
-        before trusting the endpoint. It does not compare the enclave&apos;s
-        measurements against an expected allowlist, so it does not prove which
-        code is running inside. Read it as &quot;this is real TDX
-        hardware&quot;, not &quot;this is the build I expect&quot;. Closing that
-        gap needs a measurement allowlist that is not implemented.
-      </P>
-
-      <H2>What an attacker cannot do</H2>
-      <ul style={{ color: "var(--c-ink-muted)", paddingLeft: 20 }}>
-        <li>
-          Another player cannot read your hole cards. Each hole-card account is
-          permissioned to that seat&apos;s occupant alone. Measured, not assumed:
-          an authenticated request from a different wallet returns nothing.
-        </li>
-        <li>
-          Anyone reading Solana sees no cards. Card accounts are private during
-          play, and the deck and all hole cards are wiped at hand end before
-          anything can carry them back.
-        </li>
-        <li>The operator cannot rig the deck without every player colluding.</li>
-        <li>
-          A leaked session key can make bad bets at the one table it was scoped
-          to. It cannot cash out, move chips to a balance, or join another
-          table, because those paths need your wallet.
-        </li>
-      </ul>
-
-      <H2>Why not mental poker</H2>
-      <P>
-        Mental poker removes the hardware assumption and is the
-        cryptographically honest answer. We are not using it, so here is why.
-        Every card reveal needs a multi-party decryption round trip, and a
-        player who disconnects mid-hand takes their key share with them, so the
-        hand stalls. Every shipped implementation bolts on timeouts and key
-        escrow, which quietly reintroduces trust anyway.
-      </P>
-      <P>
-        Making the enclave the dealer turns a disconnect into an ordinary
-        auto-fold. The hand continues without them, like a real table. We
-        swapped a cryptographic assumption for a hardware and operator
-        assumption, and got liveness in return.
-      </P>
-
-      <H2>Disconnects</H2>
-      <P>
-        Every hand carries a deadline. Once it passes, anyone may call the
-        timeout for the seat that owes an action. It is permissionless on
-        purpose, so the table does not depend on any one client staying online.
-        A player facing no bet is checked down rather than folded, so an
-        unattended player only loses a pot they had already put money into.
-      </P>
-
-      <H2>Chips and USDC</H2>
-      <P>
-        Chips are bought with USDC and sold back for USDC, at a rate fixed in
-        the program: one chip is one cent. The USDC sits in a token account
-        owned by a program vault, and chips only exist because someone paid that
-        rate, so every chip is backed the moment it is minted. Buying and
-        selling need your wallet; session keys cannot touch either.
-      </P>
-      <P>
-        The program accepts one mint and refuses every other, because opening a
-        token account is permissionless and a token anyone can print would
-        otherwise buy chips that cash out as real dollars. Solana still charges
-        its network fee in SOL, so a wallet needs a little of that too — but
-        what a chip is worth no longer moves while you are sitting at the table.
-      </P>
-      {MAINNET ? (
-        <P>
-          This build runs on mainnet, where the USDC is real money. That means
-          the enclave assumptions on this page bound custody of funds, not just
-          the fairness of a game; the attestation gap above is financially
-          material; the program&apos;s upgrade authority could replace the
-          program that holds the vault; and real-stakes poker is a licensed,
-          regulated activity in most places. None of that is solved here, and
-          this page will say so for as long as it is true.
-        </P>
-      ) : (
-        <P>
-          This build runs on devnet against a test mint we created ourselves,
-          which is valueless — so the architecture is real money and the stakes
-          are not. Be clear-eyed about what changes if that ever stops being
-          true: the enclave assumptions on this page stop bounding a spoiled
-          game and start bounding custody of funds, the attestation gap above
-          becomes financially material, and real-stakes poker is a licensed,
-          regulated activity in most places. None of that is solved here, and
-          this page will say so for as long as it is true.
-        </P>
-      )}
-
-      <H2>Summary</H2>
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: "var(--t-body-sm-size)",
-          marginTop: 12,
-        }}
-      >
-        <tbody>
-          {[
-            ["Shuffle fairness", "Verifiable by anyone, no trust needed"],
-            ["Chip conservation", "Enforced by Solana account ownership"],
-            ["Rules correctness", "Property tested, deterministic"],
-            ["Cards hidden from opponents", "Trusts Intel TDX and the validator operator"],
-            ["Cards hidden from the operator", "Trusts TDX isolation, and attestation does not check the code"],
-            ["Hand completes if you disconnect", "Yes, auto-fold"],
-            [
-              "Funds at risk",
-              MAINNET
-                ? "Real USDC, plus trust in the program's upgrade authority"
-                : "A devnet test mint, which is valueless",
-            ],
-          ].map(([k, v]) => (
-            <tr key={k} style={{ borderTop: "1px solid var(--c-rule)" }}>
-              <td style={{ padding: "9px 12px 9px 0", color: "var(--c-ink)" }}>{k}</td>
-              <td style={{ padding: "9px 0", color: "var(--c-ink-muted)" }}>{v}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </main>
-  );
-}
-
-function H2({ children }: { children: React.ReactNode }) {
-  return <h2 style={{ fontSize: "var(--t-display-md-size)", margin: "36px 0 8px" }}>{children}</h2>;
-}
-
-function H3({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 style={{ fontSize: "var(--t-body-lg-size)", margin: "22px 0 4px", color: "var(--c-green)" }}>
-      {children}
-    </h3>
-  );
-}
-
-function P({ children }: { children: React.ReactNode }) {
-  return <p style={{ color: "var(--c-ink-muted)", margin: "8px 0" }}>{children}</p>;
-}
-
-function Callout({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        background: "var(--c-felt-raised)",
-        border: "1px solid var(--c-rule)",
-        borderLeft: "2px solid var(--c-green)",
-        borderRadius: "var(--r-card)",
-        padding: "14px 18px",
-        margin: "24px 0",
-        color: "var(--c-ink-muted)",
-      }}
-    >
-      {children}
-    </div>
+      <SiteFooter />
+    </>
   );
 }
