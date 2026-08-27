@@ -66,6 +66,14 @@ export interface CrankSnapshot {
   seats: (SeatView | null)[];
   /** Hand number stamped on our own hole account, the deal-done signal. */
   myHoleHandNumber: number;
+  /**
+   * A seat mid-cash-out, which must not be re-secured.
+   *
+   * Sitting out is done by giving up the hole-card permission, and re-securing
+   * is exactly what this crank does for any unsecured occupied seat. Left to
+   * themselves the two undo each other every second until the cash-out is over.
+   */
+  leavingSeat?: number | null;
 }
 
 /** Base pause before acting on a shared step, plus a slot per occupied seat. */
@@ -295,6 +303,10 @@ export class Crank {
       for (let i = 0; i < MAX_SEATS; i++) {
         const s = seats[i];
         if (!s?.occupant || s.cardsSecured) continue;
+        // Except the one being cashed out of. That seat gave up its permission
+        // deliberately, to sit itself out for the last hand; putting it back
+        // would deal the player straight into the game they are leaving.
+        if (i === snap.leavingSeat) continue;
         // Through `armed`, so a transient failure retries with backoff
         // rather than being remembered as permanent. One TEE hiccup on the
         // single try this used to get meant the seat sat out the entire

@@ -8,7 +8,7 @@ import { useTableStore } from "@/stores/table-store";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeHistory } from "@/lib/decode";
 import { historyPda } from "@/lib/pdas";
-import { errorName, friendlyError } from "@/lib/net";
+import { errorName, friendlyError, isWrongLayer } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
 
 /** Raised by the session key program when a key can no longer act. */
@@ -87,6 +87,24 @@ export function useCrank(args: {
           args.onSessionInvalid?.();
           return;
         }
+        // A table in transit between the two layers refuses everything for a
+        // few seconds. That is not a fault, it is a cash-out in progress —
+        // possibly somebody else's, since every client cranks — and it used to
+        // fill the screen with "commit: This table is part-way between Solana
+        // and the game validator" for whoever happened to be watching.
+        if (isWrongLayer(e)) {
+          console.warn(`crank ${stepName} skipped mid-handover:`, e);
+          return;
+        }
+        // Securing a chair retries on its own and usually succeeds within a few
+        // seconds of somebody sitting down. Counted rather than announced: the
+        // status line escalates on its own if the retries never take.
+        if (stepName.startsWith("secure:")) {
+          const seat = Number(stepName.split(":")[1]);
+          if (Number.isInteger(seat)) useTableStore.getState().noteSecureFailure(seat);
+          console.warn(`crank ${stepName} failed, will retry:`, e);
+          return;
+        }
         // Losing a race is silent. Anything that reaches here is worth saying.
         toast(`${stepName.split(":")[0]}: ${friendlyError(e)}`, "bad");
       },
@@ -132,6 +150,7 @@ export function useCrank(args: {
           hand: s.hand,
           seats: s.seats,
           myHoleHandNumber: s.myHoleHandNumber,
+          leavingSeat: s.leavingSeat,
         };
         await c.tick(snap);
         await c.maybeCommit(snap, lastRecorded.current);

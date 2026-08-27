@@ -56,6 +56,38 @@ import { useTableLayout } from "@/hooks/use-viewport";
 import { isDelegated } from "@/lib/instructions";
 import { applyPending, applyPendingHand, pendingApplies } from "@/lib/optimistic";
 
+/**
+ * What the felt says while the table is busy, in the language of the game.
+ *
+ * Every busy phase is here on purpose. This used to be a ternary chain that
+ * covered six of the twelve, so the overlay blinked out in the middle of a
+ * cash-out and again during a rollback — the two moments a player most needs
+ * telling that something is still happening. Anything unmapped falls through to
+ * a plain line rather than to nothing.
+ *
+ * The words are the ones a dealer would use. A player does not need to know
+ * that their table is being delegated to an ephemeral rollup, or that a
+ * permission is being written to an enclave; they need to know the table is
+ * being set and their cards are coming. The machinery is real and it is
+ * explained on the fairness page, which is where somebody who wants it can go.
+ */
+const OVERLAY_COPY: Record<string, string> = {
+  start: "shuffling up",
+  "start:funding": "shuffling up",
+  "start:delegating": "setting the table",
+  "start:waiting": "setting the table",
+  "start:securing": "dealing you in",
+  "start:rollback": "putting things back — nothing was lost",
+  pause: "finishing up",
+  "pause:waiting": "letting the hand finish",
+  cashout: "finishing this hand",
+  "cashout:pausing": "cashing you out",
+  "cashout:leaving": "sending your chips home",
+  "cashout:resuming": "dealing the others back in",
+  leave: "sending your chips home",
+  delete: "putting the table away",
+};
+
 export default function TablePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const tableId = useMemo(() => new BN(id), [id]);
@@ -267,6 +299,22 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     wasBusy.current = actions.busy !== null;
   }, [actions.busy, refreshDelegation]);
 
+  /*
+   * Stop cranking while this client is taking the table apart.
+   *
+   * Undelegation is not instant — the accounts spend seconds owned by neither
+   * layer, and every send the crank makes in that window fails as a wrong-layer
+   * error. Silencing those was half the fix; not making them is the other half,
+   * and it also stops this client fighting its own cash-out.
+   *
+   * Deliberately not plain `cashout`. That phase is the wait for the current
+   * hand to end, up to three minutes, and heads-up it is this very crank that
+   * calls `force_timeout` on an opponent who has closed their tab. Stop there
+   * and the hand never ends, so the cash-out never starts. The teardown begins
+   * at `cashout:pausing`, and so does the quiet.
+   */
+  const crankQuiesced = /^(cashout:|pause|start:rollback)/.test(actions.busy ?? "");
+
   useCrank({
     connection: erConnection,
     program: erProgram,
@@ -277,7 +325,13 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     wallet: publicKey ?? null,
     mySeat,
     enabled: Boolean(
-      delegated && !outdated && session && sessionToken && erProgram && mySeat >= 0,
+      delegated &&
+        !outdated &&
+        session &&
+        sessionToken &&
+        erProgram &&
+        mySeat >= 0 &&
+        !crankQuiesced,
     ),
     captureReady: readyForNextHand,
     // A refused session key is a dead end otherwise: the authorise button only
@@ -403,8 +457,32 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   // A seat with no chips left cannot be dealt in, so it does not count toward
   // the two players a hand needs.
   const fundedCount = seats.filter((s) => s?.occupant && s.stack > 0).length;
+
+  /*
+   * Your chair, and whether its card lock is a wait or a problem.
+   *
+   * Sitting down clears the lock on chain — a permission still naming the last
+   * occupant would let them read your cards — and the crank puts it back within
+   * a few seconds. So "not secured" is the normal state of a chair you just
+   * took, and the table used to greet every new player by telling them to go
+   * and sit somewhere else. Only a lock that will not take, after time and
+   * repeated refusals, is the seat genuinely still held by whoever left it.
+   */
+  const mySeatView = mySeat >= 0 ? seats[mySeat] : null;
+  const chairUnsecured = Boolean(mySeatView?.occupant && !mySeatView.cardsSecured);
+  const secureFails = useTableStore((s) => s.secureFailures[mySeat] ?? 0);
+  const clearSecureFailures = useTableStore((s) => s.clearSecureFailures);
+  useEffect(() => {
+    if (!chairUnsecured && mySeat >= 0) clearSecureFailures(mySeat);
+  }, [chairUnsecured, mySeat, clearSecureFailures]);
+  const chair = useChairHeld(chairUnsecured, secureFails);
+
+  // While the table is being taken apart, the cash-out narrates and everything
+  // else holds its tongue. Chairs are meant to be unsecured at that point.
+  const quiescing = /^(cashout|pause|start:rollback)/.test(actions.busy ?? "");
+
   const status = useStalledStatus(
-    useStatusLine(delegated, tableView, hand, seats, fundedCount, mySeat),
+    useStatusLine(delegated, tableView, hand, seats, fundedCount, chair, quiescing),
   );
 
   // The table is doing invisible work: salts, the enclave drawing randomness,
@@ -431,22 +509,9 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const compact = tableLayout !== "desktop";
 
   // Long operations narrate themselves over the felt.
-  const overlay =
-    actions.busy === "start:funding"
-      ? "funding the session key"
-      : actions.busy === "start:delegating"
-        ? "moving the table into the enclave"
-        : actions.busy === "start:waiting"
-          ? "waiting for the enclave"
-          : actions.busy === "start:securing"
-            ? "locking the cards down"
-            : actions.busy === "start"
-              ? "starting"
-              : actions.busy === "pause"
-                ? "returning to Solana"
-                : actions.busy === "delete"
-                  ? "closing the table"
-                  : undefined;
+  const overlay = actions.busy && actions.busy !== "join"
+    ? OVERLAY_COPY[actions.busy] ?? "working on it"
+    : undefined;
 
   /*
    * The refusal has to live here too, not only on the lobby card.
@@ -1265,6 +1330,42 @@ function useStalledStatus(status: string | undefined): string | undefined {
   }
 }
 
+/** How long an unsecured chair is given before it is called stuck. */
+const CHAIR_PATIENCE_MS = 25_000;
+const CHAIR_GIVE_UP_MS = 60_000;
+
+/**
+ * Is your chair still being locked down, or is it genuinely held?
+ *
+ * Both look identical on chain — an occupied seat without `cards_secured` — and
+ * the difference is only time and the crank's luck. Two timers rather than a
+ * clock read in render, so this stays a pure function of state and does not
+ * need the page re-rendering every second to be right.
+ *
+ * The failure count is what separates a slow validator from a chair that will
+ * never take. Past a minute it stops mattering: whatever the reason, a player
+ * who has waited that long should be told to move rather than kept waiting.
+ */
+function useChairHeld(unsecured: boolean, failures: number): "securing" | "stuck" | null {
+  const [waited, setWaited] = useState<"briefly" | "a while" | "too long">("briefly");
+
+  useEffect(() => {
+    setWaited("briefly");
+    if (!unsecured) return;
+    const soft = setTimeout(() => setWaited("a while"), CHAIR_PATIENCE_MS);
+    const hard = setTimeout(() => setWaited("too long"), CHAIR_GIVE_UP_MS);
+    return () => {
+      clearTimeout(soft);
+      clearTimeout(hard);
+    };
+  }, [unsecured]);
+
+  if (!unsecured) return null;
+  if (waited === "too long") return "stuck";
+  if (waited === "a while" && failures >= 2) return "stuck";
+  return "securing";
+}
+
 /** A short line explaining what the table is waiting for. */
 function useStatusLine(
   delegated: boolean | null,
@@ -1272,7 +1373,8 @@ function useStatusLine(
   hand: HandView | null,
   seats: (SeatView | null)[],
   funded: number,
-  mySeat: number,
+  chair: "securing" | "stuck" | null,
+  quiescing: boolean,
 ): string | undefined {
   if (delegated === null) return "loading";
   if (!delegated) {
@@ -1285,19 +1387,27 @@ function useStatusLine(
   // Between hands. Say what is actually being waited on, and in particular
   // say when the table cannot continue at all, rather than showing a
   // reassuring "shuffling" forever.
-  // Your own seat could not be locked down, so the program will deal you out.
   //
-  // This is the one failure a player would otherwise experience as the game
-  // ignoring them: the hand starts, everyone else gets cards, and nothing
-  // explains why they did not. It happens when the previous occupant of the
-  // seat left without handing back their read right — a permission names one
-  // member, only that member may update it, and it outlives a pause. Sitting
-  // the seat out is the safe response (the alternative is dealing cards that
-  // player could read), but it has to be said out loud, and the way out is to
-  // take a different chair.
-  const mine = mySeat >= 0 ? seats[mySeat] : null;
-  if (mine?.occupant && !mine.cardsSecured) {
-    return "this chair is still held by whoever sat here last, so take a different one";
+  // Your own chair first, since nothing else matters if you are not being dealt
+  // in. Two different things wear the same face on chain, and only one of them
+  // is bad news:
+  //
+  //   securing  the ordinary few seconds after sitting down, while the lock
+  //             that makes your cards yours is written. Say what is happening
+  //             and stop there.
+  //   stuck     the lock will not take, which means the last player at this
+  //             chair left without handing it back. A permission names one
+  //             member, only that member may update it, and it outlives a
+  //             pause — so the chair really is theirs and the only way in is
+  //             another one. The program deals this seat out rather than
+  //             dealing cards somebody else could read.
+  //
+  // Silent during a cash-out, where the chair is unsecured because we asked for
+  // it to be, and the overlay is already saying so.
+  if (chair && !quiescing) {
+    return chair === "stuck"
+      ? "this chair still belongs to its last player, so take another seat to be dealt in"
+      : "locking your cards down";
   }
 
   if (funded < 2) return "not enough players with chips";

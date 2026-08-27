@@ -162,11 +162,26 @@ export function useTableActions(args: {
     [tableId, sendBase, publicKey],
   );
 
+  /**
+   * Whether an action is being run inside another one.
+   *
+   * `busy` is a single string and the whole table reads it — the overlay, the
+   * status line, the buttons. A sub-action that sets it for itself is telling
+   * the screen a story the player did not ask for: cashing out would announce
+   * "pausing", then "leaving", then blank itself in its own `finally` while the
+   * cash-out was still going. Nested calls narrate nothing, and the outermost
+   * action owns the phase from beginning to end.
+   */
+  type Nested = { nested?: boolean };
+
   /** Wallet only. This puts your seat stack back into your balance. */
   const leave = useCallback(
-    async (seatIndex: number) => {
+    async (seatIndex: number, opts: Nested = {}) => {
       if (!table) return;
-      setBusy("leave");
+      const phase = (s: string | null) => {
+        if (!opts.nested) setBusy(s);
+      };
+      phase("leave");
       try {
         await sendBase(
           async (program) =>
@@ -177,7 +192,7 @@ export function useTableActions(args: {
       } catch (e) {
         toast(friendlyError(e), "bad");
       } finally {
-        setBusy(null);
+        phase(null);
       }
     },
     [table, sendBase, publicKey],
@@ -253,8 +268,11 @@ export function useTableActions(args: {
    * payer on these instructions is unconstrained.
    */
   const startTable = useCallback(
-    async (occupiedSeats: number[]) => {
+    async (occupiedSeats: number[], opts: Nested = {}) => {
       if (!tableId || !table || !session || !publicKey) return;
+      const phase = (s: string | null) => {
+        if (!opts.nested) setBusy(s);
+      };
       // A silent return here left a button that did nothing. Say why instead.
       if (!erProgram || !erConnection) {
         toast(
@@ -263,12 +281,12 @@ export function useTableActions(args: {
         );
         return;
       }
-      setBusy("start");
+      phase("start");
       try {
         const conn = getBaseConnection();
         const program = makeProgram(conn);
 
-        setBusy("start:funding");
+        phase("start:funding");
         /*
          * The session key pays for everything below, and the old check here is
          * why NO fresh wallet could start a table on mainnet.
@@ -334,7 +352,7 @@ export function useTableActions(args: {
         // step. Now already-delegated accounts are skipped, a failed send of
         // an already-done step is tolerated, and the truth is checked at the
         // end: either the rollup serves the table or the start failed.
-        setBusy("start:delegating");
+        phase("start:delegating");
         const sendAsSession = async (ix: Awaited<ReturnType<typeof delegateCoreIx>>, label: string) => {
           const tx = new Transaction().add(ix);
           const bh = await conn.getLatestBlockhash();
@@ -428,7 +446,7 @@ export function useTableActions(args: {
             }
           }
         } catch (e) {
-          setBusy("start:rollback");
+          phase("start:rollback");
           console.error("delegation failed, returning the table to Solana:", e);
           await rollBack();
           throw new Error(
@@ -454,7 +472,7 @@ export function useTableActions(args: {
         // transaction as its seat, so a seat the rollup serves vouches for its
         // hole — which is what the old check was really after, from the one
         // account it is never allowed to see.
-        setBusy("start:waiting");
+        phase("start:waiting");
         const mustBeThere = [
           table,
           handPda(table),
@@ -477,7 +495,7 @@ export function useTableActions(args: {
           await sleep(750);
         }
         if (!allArrived) {
-          setBusy("start:rollback");
+          phase("start:rollback");
           console.error("the rollup never served every account; returning the table to Solana");
           await rollBack();
           throw new Error(
@@ -487,7 +505,7 @@ export function useTableActions(args: {
 
         // Lock the deck to nobody and each hand to its owner. Retried because
         // the rollup can serve reads a beat before it accepts writes.
-        setBusy("start:securing");
+        phase("start:securing");
         const secure = async (ix: Awaited<ReturnType<typeof secureDeckIx>>, label: string) => {
           let last: unknown;
           for (let attempt = 0; attempt < 4; attempt++) {
@@ -538,9 +556,9 @@ export function useTableActions(args: {
 
         if (unsecured.length) {
           toast(
-            `Table is live. ${unsecured.length === 1 ? "One chair is" : `${unsecured.length} chairs are`} ` +
-              `still held by whoever sat there last, so ${unsecured.length === 1 ? "it sits" : "they sit"} ` +
-              `out this hand. Everyone else can play.`,
+            `Table is live. ${unsecured.length === 1 ? "One chair" : `${unsecured.length} chairs`} ` +
+              `still ${unsecured.length === 1 ? "belongs" : "belong"} to whoever sat there last, so ` +
+              `${unsecured.length === 1 ? "it sits" : "they sit"} out this hand. Everyone else can play.`,
             "bad",
           );
         } else {
@@ -550,20 +568,23 @@ export function useTableActions(args: {
         console.error("start table failed:", e);
         toast(friendlyError(e), "bad");
       } finally {
-        setBusy(null);
+        phase(null);
       }
     },
     [tableId, table, session, erProgram, erConnection, publicKey, signTransaction],
   );
 
   /** Bring the table back to the base layer so people can cash out. */
-  const pauseTable = useCallback(async () => {
+  const pauseTable = useCallback(async (opts: Nested = {}) => {
     if (!table || !session) return;
     if (!erProgram || !erConnection) {
       toast("Not connected to the game validator. Retry the connection first.", "bad");
       return;
     }
-    setBusy("pause");
+    const phase = (s: string | null) => {
+      if (!opts.nested) setBusy(s);
+    };
+    phase("pause");
     try {
       const send = async (ix: Awaited<ReturnType<typeof undelegateCoreIx>>, label: string) => {
         const tx = new Transaction().add(ix);
@@ -664,7 +685,7 @@ export function useTableActions(args: {
           `The next hand's shuffle is still clearing. Closing the table in about ${waitFor + 5}s.`,
           "good",
         );
-        setBusy("pause:waiting");
+        phase("pause:waiting");
 
         // The shuffle clears itself once it is stale enough: any client may
         // call `reset_shuffle`, and this one will if nobody else does.
@@ -693,7 +714,7 @@ export function useTableActions(args: {
           );
           return;
         }
-        setBusy("pause");
+        phase("pause");
       }
 
       // Last resort, for a hand that can never settle. Undelegation refuses a
@@ -808,7 +829,7 @@ export function useTableActions(args: {
     } catch (e) {
       toast(friendlyError(e), "bad");
     } finally {
-      setBusy(null);
+      phase(null);
     }
   }, [table, session, erProgram, erConnection, sessionToken, publicKey]);
 
@@ -842,6 +863,11 @@ export function useTableActions(args: {
     async (seatIndex: number) => {
       if (!table || !publicKey) return;
       setBusy("cashout");
+      // Told to the crank before the release below, not after: the crank ticks
+      // twice a second and would otherwise re-secure the seat between the two
+      // statements. Written straight to the store rather than through React
+      // state because it has to be true for the very next tick.
+      useTableStore.getState().setLeavingSeat(seatIndex);
       try {
         const conn = getBaseConnection();
         let onRollup = await isDelegated(conn, table);
@@ -882,8 +908,13 @@ export function useTableActions(args: {
           }
 
           // 3. Bring the table home.
+          //
+          // Nested, here and below: this is one errand from the player's side,
+          // so it reads as one. The sub-actions would otherwise each announce
+          // themselves and then blank `busy` on the way out, flickering the
+          // overlay off three times in the middle of a cash-out.
           setBusy("cashout:pausing");
-          await pauseTable();
+          await pauseTable({ nested: true });
           onRollup = await isDelegated(conn, table);
         }
 
@@ -894,7 +925,7 @@ export function useTableActions(args: {
 
         // 4. Chips back into the balance.
         setBusy("cashout:leaving");
-        await leave(seatIndex);
+        await leave(seatIndex, { nested: true });
 
         // 4b. And the house's share, while the table is still on Solana.
         //
@@ -930,12 +961,13 @@ export function useTableActions(args: {
         if (remaining.length >= 2 && tableId) {
           try {
             setBusy("cashout:resuming");
-            await startTable(remaining.map((s) => s!.index));
+            await startTable(remaining.map((s) => s!.index), { nested: true });
           } catch {
             // They can press Start themselves.
           }
         }
       } finally {
+        useTableStore.getState().setLeavingSeat(null);
         setBusy(null);
       }
     },

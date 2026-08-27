@@ -71,6 +71,20 @@ export function errorName(e: unknown): string | null {
 const WRONG_LAYER =
   /ReadonlyDataModified|AccountOwnedByWrongProgram|ConstraintOwner|AccountNotInitialized/i;
 
+/**
+ * Is this the two layers mid-handover, rather than anything wrong?
+ *
+ * Every seated client cranks continuously, including through the seconds a
+ * table spends moving between Solana and the rollup. During those seconds every
+ * send fails this way — not because anything broke, but because the accounts are
+ * in transit and will be fine on the other side. It is the ordinary shape of a
+ * cash-out, and a player who starts one should not be handed a stack of red
+ * toasts for their trouble. The console still gets all of it.
+ */
+export function isWrongLayer(e: unknown): boolean {
+  return WRONG_LAYER.test(errorName(e) ?? "") || WRONG_LAYER.test(String(e));
+}
+
 /** Something a player should read, rather than a stack trace. */
 export function friendlyError(e: unknown): string {
   const name = errorName(e);

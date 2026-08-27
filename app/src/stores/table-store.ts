@@ -115,6 +115,26 @@ interface TableState {
 
   pending: PendingAction | null;
 
+  /**
+   * How many times securing each seat's hole cards has failed on this client.
+   *
+   * Re-securing a chair after somebody sits down is ordinary and takes a few
+   * seconds, so a chair that is merely unsecured says nothing. A chair that has
+   * refused the instruction repeatedly is a different story — that is the seat
+   * genuinely still held by its last occupant — and only that one is worth
+   * telling anybody about.
+   */
+  secureFailures: number[];
+  /**
+   * The seat being cashed out of, while that is happening.
+   *
+   * Cash-out deliberately releases its own hole permission to sit itself out,
+   * and the crank, whose whole job is to put that permission back, would
+   * immediately undo it — the two fighting over one account for the length of a
+   * cash-out. The crank skips this seat instead.
+   */
+  leavingSeat: number | null;
+
   setTable: (t: TableView | null) => void;
   setConfig: (c: ConfigView | null) => void;
   setHand: (h: HandView | null) => void;
@@ -125,10 +145,14 @@ interface TableState {
   setLink: (l: LinkState) => void;
   bumpEpoch: () => void;
   setPending: (p: PendingAction | null) => void;
+  noteSecureFailure: (i: number) => void;
+  clearSecureFailures: (i?: number) => void;
+  setLeavingSeat: (i: number | null) => void;
   reset: () => void;
 }
 
 const emptySeats = () => new Array<SeatView | null>(MAX_SEATS).fill(null);
+const noFailures = () => new Array<number>(MAX_SEATS).fill(0);
 
 export const useTableStore = create<TableState>((set) => ({
   table: null,
@@ -143,6 +167,8 @@ export const useTableStore = create<TableState>((set) => ({
   lastUpdate: 0,
   epoch: 0,
   pending: null,
+  secureFailures: noFailures(),
+  leavingSeat: null,
 
   setTable: (table) => set({ table, lastUpdate: Date.now() }),
   setConfig: (config) => set({ config }),
@@ -159,6 +185,21 @@ export const useTableStore = create<TableState>((set) => ({
   setLink: (link) => set({ link }),
   bumpEpoch: () => set((s) => ({ epoch: s.epoch + 1 })),
   setPending: (pending) => set({ pending }),
+  noteSecureFailure: (i) =>
+    set((s) => {
+      const secureFailures = [...s.secureFailures];
+      secureFailures[i] = (secureFailures[i] ?? 0) + 1;
+      return { secureFailures };
+    }),
+  clearSecureFailures: (i) =>
+    set((s) => {
+      if (i === undefined) return { secureFailures: noFailures() };
+      if (!s.secureFailures[i]) return {};
+      const secureFailures = [...s.secureFailures];
+      secureFailures[i] = 0;
+      return { secureFailures };
+    }),
+  setLeavingSeat: (leavingSeat) => set({ leavingSeat }),
 
   reset: () =>
     set({
@@ -171,6 +212,8 @@ export const useTableStore = create<TableState>((set) => ({
       mySeat: -1,
       link: "offline",
       pending: null,
+      secureFailures: noFailures(),
+      leavingSeat: null,
     }),
 }));
 
