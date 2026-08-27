@@ -3230,24 +3230,29 @@ input[type="range"]::-moz-range-thumb {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 1.5em;
-  height: 1.5em;
-  margin: -0.75em 0 0 -0.75em;
+  /* The chip is 0.8em. A hair over that keeps the light ON the chip: any
+     wider and it stops being a glow and starts being a wash across the P
+     and the K. */
+  width: 1.12em;
+  height: 1.12em;
+  margin: -0.56em 0 0 -0.56em;
   border-radius: var(--r-chip);
   pointer-events: none;
   z-index: 0;
-  opacity: 0.32;
-  filter: blur(8px);
+  opacity: 0.9;
+  filter: blur(4px);
   background:
     radial-gradient(
       circle at 36% 38%,
-      color-mix(in srgb, var(--c-purple) 60%, transparent) 0%,
-      transparent 55%
+      var(--c-purple) 0%,
+      color-mix(in srgb, var(--c-purple) 70%, transparent) 45%,
+      transparent 72%
     ),
     radial-gradient(
       circle at 64% 62%,
-      color-mix(in srgb, var(--c-green) 50%, transparent) 0%,
-      transparent 55%
+      var(--c-green) 0%,
+      color-mix(in srgb, var(--c-green) 60%, transparent) 45%,
+      transparent 72%
     );
   animation: wordmark-drift 7s ease-in-out infinite;
 }
@@ -3285,10 +3290,10 @@ input[type="range"]::-moz-range-thumb {
       height var(--m-ui-base) var(--m-ease);
   }
   .site-brand:hover .wordmark-glow {
-    opacity: 0.6;
-    width: 1.7em;
-    height: 1.7em;
-    margin: -0.85em 0 0 -0.85em;
+    opacity: 1;
+    width: 1.3em;
+    height: 1.3em;
+    margin: -0.65em 0 0 -0.65em;
     animation-duration: 3.2s;
   }
   .site-brand:hover .wordmark-chip {
