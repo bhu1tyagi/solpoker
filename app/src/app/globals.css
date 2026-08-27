@@ -3236,18 +3236,18 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--r-chip);
   pointer-events: none;
   z-index: 0;
-  opacity: 0.5;
-  filter: blur(6px);
+  opacity: 0.32;
+  filter: blur(8px);
   background:
     radial-gradient(
-      circle at 34% 36%,
-      color-mix(in srgb, var(--c-purple) 85%, transparent) 0%,
-      transparent 62%
+      circle at 36% 38%,
+      color-mix(in srgb, var(--c-purple) 60%, transparent) 0%,
+      transparent 55%
     ),
     radial-gradient(
-      circle at 66% 64%,
-      color-mix(in srgb, var(--c-green) 75%, transparent) 0%,
-      transparent 62%
+      circle at 64% 62%,
+      color-mix(in srgb, var(--c-green) 50%, transparent) 0%,
+      transparent 55%
     );
   animation: wordmark-drift 7s ease-in-out infinite;
 }
@@ -3285,10 +3285,10 @@ input[type="range"]::-moz-range-thumb {
       height var(--m-ui-base) var(--m-ease);
   }
   .site-brand:hover .wordmark-glow {
-    opacity: 0.85;
-    width: 1.85em;
-    height: 1.85em;
-    margin: -0.925em 0 0 -0.925em;
+    opacity: 0.6;
+    width: 1.7em;
+    height: 1.7em;
+    margin: -0.85em 0 0 -0.85em;
     animation-duration: 3.2s;
   }
   .site-brand:hover .wordmark-chip {
