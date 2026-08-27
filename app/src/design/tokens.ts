@@ -295,7 +295,7 @@ export const LAYOUT = {
   // room; on a landing page it left a third of a desktop viewport empty on
   // each side and the content read as a column floating in a void.
   pageMaxW: '1400px',
-  tableRatio: 2,            // landscape — long like the draft's 21:9, but with
+  tableRatio: 2.2,          // landscape — nearly the draft's 21:9 length, with
                             // enough height that the middle of the cloth is a
                             // playing surface rather than a strip
   tableRatioPortrait: 10 / 16,

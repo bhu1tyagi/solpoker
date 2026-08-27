@@ -63,19 +63,30 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
   }, [la, pot, hand?.currentBet]);
 
   return (
-    <AnimatePresence>
-      {myTurn && (
-        <motion.div
-          // The class carries the width: a corner panel on a desktop, the
-          // whole bottom edge on a phone.
-          className="action-bar"
-          initial={{ opacity: 0, y: 18 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 12 }}
-          transition={spring.gentle}
-        >
-          {la.canRaise && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <motion.div
+      // The class carries the width: a corner panel on a desktop, the
+      // whole bottom edge on a phone.
+      //
+      // Always mounted. The bar used to appear only on your turn, and the
+      // moment between turns read as the controls being gone rather than
+      // waiting — a player glancing down found nothing where fold had just
+      // been. The verbs now hold their ground and grey out; only the sizing
+      // row above them comes and goes, upward, where nothing else stands.
+      className="action-bar"
+      initial={false}
+      animate={{ opacity: myTurn ? 1 : 0.75 }}
+      transition={spring.gentle}
+    >
+      <AnimatePresence>
+        {myTurn && la.canRaise && (
+          <motion.div
+            key="sizing"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={spring.gentle}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
               {/* Sideways on a phone there is no row to spare; the slider
                   covers the same range the presets shortcut. */}
               <div
@@ -121,56 +132,58 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
                 style={{ width: "100%" }}
               />
             </div>
-          )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          <div style={{ display: "flex", gap: 10 }}>
-            <BigButton
-              tone="danger"
-              disabled={busy}
-              onClick={() => onAct("fold", 0)}
-              flex={1}
-            >
-              Fold
-            </BigButton>
+      <div style={{ display: "flex", gap: 10 }}>
+        <BigButton
+          tone="danger"
+          disabled={busy || !la.canFold}
+          onClick={() => onAct("fold", 0)}
+          flex={1}
+        >
+          Fold
+        </BigButton>
 
-            {la.canCheck ? (
-              <BigButton
-                tone="dark"
-                disabled={busy}
-                onClick={() => onAct("check", seat?.committedStreet ?? 0)}
-                flex={1}
-              >
-                Check
-              </BigButton>
-            ) : (
-              <BigButton
-                tone="dark"
-                disabled={busy || !la.canCall}
-                onClick={() => onAct("call", (seat?.committedStreet ?? 0) + la.callAmount)}
-                flex={1}
-              >
-                Call {la.callAmount.toLocaleString()}
-              </BigButton>
-            )}
+        {/* Check when it is legal, and also while it is not your turn: a
+            quiet "Call 0" there implied money where none was asked. */}
+        {la.canCheck || !myTurn ? (
+          <BigButton
+            tone="dark"
+            disabled={busy || !la.canCheck}
+            onClick={() => onAct("check", seat?.committedStreet ?? 0)}
+            flex={1}
+          >
+            Check
+          </BigButton>
+        ) : (
+          <BigButton
+            tone="dark"
+            disabled={busy || !la.canCall}
+            onClick={() => onAct("call", (seat?.committedStreet ?? 0) + la.callAmount)}
+            flex={1}
+          >
+            Call {la.callAmount.toLocaleString()}
+          </BigButton>
+        )}
 
-            {la.canRaise && (
-              <BigButton
-                tone="accent"
-                disabled={busy}
-                onClick={() => onAct(raiseTo >= la.maxRaiseTo ? "allin" : "raise", raiseTo)}
-                flex={1.35}
-              >
-                {raiseTo >= la.maxRaiseTo
-                  ? "All in"
-                  : hand?.currentBet
-                    ? `Raise ${raiseTo.toLocaleString()}`
-                    : `Bet ${raiseTo.toLocaleString()}`}
-              </BigButton>
-            )}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        <BigButton
+          tone="accent"
+          disabled={busy || !la.canRaise}
+          onClick={() => onAct(raiseTo >= la.maxRaiseTo ? "allin" : "raise", raiseTo)}
+          flex={1.35}
+        >
+          {!myTurn || !la.canRaise
+            ? "Raise"
+            : raiseTo >= la.maxRaiseTo
+              ? "All in"
+              : hand?.currentBet
+                ? `Raise ${raiseTo.toLocaleString()}`
+                : `Bet ${raiseTo.toLocaleString()}`}
+        </BigButton>
+      </div>
+    </motion.div>
   );
 }
 

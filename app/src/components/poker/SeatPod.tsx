@@ -477,11 +477,22 @@ function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" |
         </filter>
       </defs>
 
-      {/* The pool of shadow the chair stands in. */}
-      <ellipse cx="50" cy="56" rx="34" ry="26" fill="rgba(0,0,0,0.5)" filter="url(#chair-ground)" />
+      {/* The pool of shadow the chair stands in, thrown slightly toward the
+          viewer the way overhead light throws it. */}
+      <ellipse cx="50" cy="58" rx="35" ry="26" fill="rgba(0,0,0,0.55)" filter="url(#chair-ground)" />
 
       {/* Backrest and armrests: one horseshoe, arms reaching toward the
-          table. The rounded caps are the armrest pads. */}
+          table, built in three passes that give it a body. The dark copy
+          below is its own side wall; the gradient band is the upholstery;
+          the bright arc along the crown is the room's light landing on it. */}
+      <path
+        d="M 14 24 L 14 56 C 14 85, 86 85, 86 56 L 86 24"
+        fill="none"
+        stroke="color-mix(in srgb, #000 42%, var(--c-chair-back))"
+        strokeWidth="15"
+        strokeLinecap="round"
+        transform="translate(0 3.5)"
+      />
       <path
         d="M 14 24 L 14 56 C 14 85, 86 85, 86 56 L 86 24"
         fill="none"
@@ -489,17 +500,21 @@ function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" |
         strokeWidth="15"
         strokeLinecap="round"
       />
-      {/* The light along the horseshoe's crown, so it reads as rounded
-          upholstery rather than a flat band. */}
       <path
         d="M 14 24 L 14 56 C 14 85, 86 85, 86 56 L 86 24"
         fill="none"
-        stroke="color-mix(in srgb, var(--c-ink) 12%, transparent)"
-        strokeWidth="4.5"
+        stroke="color-mix(in srgb, var(--c-ink) 14%, transparent)"
+        strokeWidth="3.5"
         strokeLinecap="round"
+        transform="translate(0 -3.2)"
       />
+      {/* Armrest pads: a catch of light on each cap. */}
+      <circle cx="14" cy="24" r="4" fill="color-mix(in srgb, var(--c-ink) 16%, var(--c-chair-back))" />
+      <circle cx="86" cy="24" r="4" fill="color-mix(in srgb, var(--c-ink) 16%, var(--c-chair-back))" />
 
-      {/* The cushion, with its stitched seam. */}
+      {/* The cushion: a dark side wall first, then the seat itself on top of
+          it, so it reads as two inches of foam rather than a printed disc. */}
+      <ellipse cx="50" cy="45.5" rx="29" ry="28" fill="color-mix(in srgb, #000 50%, var(--c-chair-cushion))" />
       <circle
         cx="50"
         cy="42"
@@ -508,6 +523,7 @@ function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" |
         stroke="rgba(255,255,255,0.12)"
         strokeWidth="1"
       />
+      {/* The stitched seam, and the light pooling on the cushion's crown. */}
       <circle
         cx="50"
         cy="42"
@@ -516,6 +532,13 @@ function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" |
         stroke="rgba(255,255,255,0.13)"
         strokeWidth="1.3"
         strokeDasharray="2.8 3.8"
+      />
+      <path
+        d="M 31 32 A 24 24 0 0 1 62 24.5"
+        fill="none"
+        stroke="color-mix(in srgb, var(--c-ink) 10%, transparent)"
+        strokeWidth="5"
+        strokeLinecap="round"
       />
 
       {/* The invitation. A plus is symmetric, so it survives every turn of
