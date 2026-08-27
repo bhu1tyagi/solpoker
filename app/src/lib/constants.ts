@@ -228,8 +228,18 @@ export const GAS_FLOOR_LAMPORTS = 3_000_000;
  * nagged a wallet holding 0.0599 that could in fact have played, which is its
  * own kind of wrong: a warning that fires when nothing is wrong teaches people
  * to ignore warnings.
+ *
+ * Raised from 0.018 when delegation rent was finally measured on mainnet.
+ * Starting a table has the session key front buffer rent for every account it
+ * moves to the rollup — about 0.011 for the table, hand and deck together,
+ * plus ~0.004 per seated player — and startTable now tops the key up to that
+ * from the wallet before delegating. The old floor left a wallet able to
+ * authorise a session and then unable to start the game it had just sat down
+ * to, failing three CPIs deep as `custom program error: 0x1`. The rent is
+ * refunded when the table returns to Solana, so this parks SOL rather than
+ * spending it.
  */
-export const PLAY_FLOOR_LAMPORTS = 18_000_000;
+export const PLAY_FLOOR_LAMPORTS = 32_000_000;
 
 /**
  * SOL the creator of a table needs before starting.

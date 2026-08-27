@@ -269,16 +269,40 @@ export function useTableActions(args: {
         const program = makeProgram(conn);
 
         setBusy("start:funding");
-        // The session key pays for all of this, so it needs a balance.
+        /*
+         * The session key pays for everything below, and the old check here is
+         * why NO fresh wallet could start a table on mainnet.
+         *
+         * It refilled only under 0.004 SOL — but a fresh key holds its 0.012
+         * float, sails past that check, and then delegation drains it: the
+         * core group (table, hand, deck) costs about 0.011 in buffer rent and
+         * fees, and each occupied seat's buffer then asks for 1,600,800
+         * lamports the key no longer has. The failure surfaced as
+         * `custom program error: 0x1` from a CPI three levels down, read on
+         * chain from the failed transaction itself:
+         *
+         *   Transfer: insufficient lamports 1215920, need 1600800
+         *
+         * So the float is now sized to the start being paid for: the core
+         * group plus one allowance per occupied seat, with a cushion for a
+         * retry. Delegation rent is refunded on undelegation, so this money
+         * rides along rather than being spent — it comes back to the key when
+         * the table returns to Solana, and home to the wallet on sweep.
+         */
+        const CORE_LAMPORTS = 12_000_000;
+        const PER_SEAT_LAMPORTS = 4_000_000;
+        const CUSHION_LAMPORTS = 4_000_000;
+        const needed =
+          CORE_LAMPORTS + occupiedSeats.length * PER_SEAT_LAMPORTS + CUSHION_LAMPORTS;
         const bal = await conn.getBalance(session.publicKey);
-        if (bal < 0.004 * 1e9) {
+        if (bal < needed) {
           if (!signTransaction) throw new Error("connect a wallet first");
           const { SystemProgram } = await import("@solana/web3.js");
           const fund = new Transaction().add(
             SystemProgram.transfer({
               fromPubkey: publicKey,
               toPubkey: session.publicKey,
-              lamports: 0.010 * 1e9,
+              lamports: needed - bal + 1_000_000,
             }),
           );
           const bh = await conn.getLatestBlockhash();
