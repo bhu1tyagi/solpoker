@@ -289,7 +289,7 @@ export const LAYOUT = {
   // room; on a landing page it left a third of a desktop viewport empty on
   // each side and the content read as a column floating in a void.
   pageMaxW: '1400px',
-  tableRatio: 16 / 10,      // landscape
+  tableRatio: 21 / 9,       // landscape — the draft's own long-table aspect
   tableRatioPortrait: 10 / 16,
   seatSize: { phone: 68, laptop: 96 },
   cardSize: { phone: { w: 34, h: 48 }, laptop: { w: 46, h: 64 } },

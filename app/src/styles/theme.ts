@@ -70,45 +70,37 @@ export const stagger = {
 /**
  * Seat positions around the felt, as percentages of the table box.
  *
- * The table is an ellipse sitting on a rectangular panel, so the seats run
- * evenly around that ellipse rather than along the panel's edges. Seat 0 is
- * bottom centre because the local player is rotated into it, so the person you
- * are always sits nearest the action bar, and the rest run clockwise.
+ * The table is a long stadium, so the seats sit where chairs go at a real
+ * one: two along each long rail, one at each end. Placed by hand rather than
+ * by the old ellipse formula, because chairs at a stadium sit along its
+ * straights, not on an ellipse — the formula bunched them toward the corners
+ * the moment the table stretched to 21:9.
  *
- * The ring is a little tighter than the ellipse itself, which puts the plates
- * astride the rim the way players sit at a real table. Keeping it symmetric
- * matters: an uneven ring reads as a mistake even when nobody can say why.
+ * Seat 0 is on the bottom rail because the local player is rotated into it,
+ * so the person you are always sits nearest the action bar, and the rest run
+ * clockwise: bottom-left, left end, top-left, top-right, right end,
+ * bottom-right. Each straddles the rim the way players sit at a real table.
  */
-const RAIL_X = 40;
-const RAIL_Y = 40;
-const point = (deg: number) => ({
-  x: Math.round((50 + RAIL_X * Math.cos((deg * Math.PI) / 180)) * 10) / 10,
-  y: Math.round((50 + RAIL_Y * Math.sin((deg * Math.PI) / 180)) * 10) / 10,
-});
-
 export const SEAT_POSITIONS: { x: number; y: number }[] = [
-  point(90),
-  point(145),
-  point(215),
-  point(270),
-  point(325),
-  point(35),
+  { x: 35, y: 90 },
+  { x: 8, y: 50 },
+  { x: 35, y: 10 },
+  { x: 65, y: 10 },
+  { x: 92, y: 50 },
+  { x: 65, y: 90 },
 ];
 
-/** Where a seat's bet chips sit: the same ring, pulled in toward the pot. */
-const BET_PULL = 0.5;
-const betPoint = (deg: number) => ({
-  x: Math.round((50 + RAIL_X * BET_PULL * Math.cos((deg * Math.PI) / 180)) * 10) / 10,
-  y: Math.round((50 + RAIL_Y * BET_PULL * Math.sin((deg * Math.PI) / 180)) * 10) / 10,
-});
-
+/**
+ * Where a seat's bet chips sit: the clear band between the seats and the
+ * board, each spot pulled toward the middle from its own chair.
+ */
 export const BET_POSITIONS: { x: number; y: number }[] = [
-  betPoint(90),
-  betPoint(145),
-  betPoint(215),
-  betPoint(270),
-  betPoint(325),
-  betPoint(35),
+  { x: 42, y: 68 },
+  { x: 25, y: 50 },
+  { x: 42, y: 30 },
+  { x: 58, y: 30 },
+  { x: 75, y: 50 },
+  { x: 58, y: 68 },
 ];
 
 export const POT_POSITION = { x: 50, y: 56 };
@@ -152,10 +144,11 @@ export const POT_POSITION_PORTRAIT = { x: 50, y: 55 };
  * Everything about the table's shape that depends on which way it stands.
  * TableFelt picks one of these; nothing else needs to know there are two.
  *
- * Both ratios come from LAYOUT: 16:10 landscape up to --table-max-w, and the
+ * Both ratios come from LAYOUT: 21:9 landscape up to --table-max-w, and the
  * same table stood on end at 10:16 below the phone breakpoint. The portrait
  * variant exists rather than a scale transform because a shrunken landscape
- * table on a phone is unusable.
+ * table on a phone is unusable — and it keeps its own gentler ratio, because
+ * a phone screen has no room for a 9:21 tower.
  */
 const WIDE_W = parseInt(LAYOUT.tableMaxW, 10);
 const PORTRAIT_W = 430;

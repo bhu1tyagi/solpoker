@@ -561,12 +561,12 @@ input[type="range"]::-moz-range-thumb {
   padding: 76px var(--sp-6) 96px;
   container-type: size;
 }
-/* 16:10 landscape, capped at --table-max-w. The cqh coefficient is the aspect
-   ratio itself (1.6), so the table is limited by whichever of the stage's two
+/* 21:9 landscape, capped at --table-max-w. The cqh coefficient is the aspect
+   ratio itself (2.33), so the table is limited by whichever of the stage's two
    axes runs out first. Keep it in step with LAYOUT.tableRatio. */
 .felt-sizer {
-  width: min(1120px, 94vw, 160vh);
-  width: min(var(--table-max-w), 100cqw, 160cqh);
+  width: min(1120px, 94vw, 233vh);
+  width: min(var(--table-max-w), 100cqw, 233cqh);
 }
 
 /* The four corners of the room. On a desktop they are corners; on a phone
