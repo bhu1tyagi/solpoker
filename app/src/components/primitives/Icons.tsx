@@ -53,25 +53,42 @@ export function ClockIcon({ size = 20 }: Props) {
  * dashed ring, which is reserved for the turn clock, the loader and the
  * privacy indicator; the slab stack behind is what keeps the two apart.
  */
+/*
+ * The chips need a finer line than the rest of the set: three concentric
+ * rings at the shared 2px weight close into a blob by 20px.
+ */
+const chipFrame = (size: number) => ({ ...frame(size), strokeWidth: 1.7 });
+
+/**
+ * One chip, face toward the reader: rim, edge spots, and the hub.
+ *
+ * Filled with the page ground rather than left hollow, so whatever sits
+ * behind it is occluded; a chip you can see the stack through is a chip made
+ * of glass. The dashes are the chip's edge spots.
+ */
+function ChipFace({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+  return (
+    <>
+      <circle cx={cx} cy={cy} r={r} fill="var(--c-felt)" />
+      <circle cx={cx} cy={cy} r={r} />
+      <circle cx={cx} cy={cy} r={r - 1.5} strokeDasharray="2.5 2.1" />
+      <circle cx={cx} cy={cy} r={r * 0.42} />
+    </>
+  );
+}
+
 export function TableIcon({ size = 20 }: Props) {
   return (
-    <svg {...frame(size)}>
-      {/* The stack: five slabs seen edge-on, the lower ones set in slightly
-          so the pile reads as leaning back rather than as a ladder. */}
-      <rect x="10.5" y="2.5" width="11" height="2.4" rx="1.2" />
-      <rect x="10.5" y="5.9" width="11" height="2.4" rx="1.2" />
-      <rect x="12" y="9.3" width="9.5" height="2.4" rx="1.2" />
-      <rect x="12" y="12.7" width="9.5" height="2.4" rx="1.2" />
-      <rect x="12" y="16.1" width="9.5" height="2.4" rx="1.2" />
-      {/*
-          The chip in front, face toward the reader. It is filled with the
-          page ground rather than left hollow, so the slabs are occluded by it
-          instead of running through it; a chip you can see the stack through
-          is a chip made of glass.
-      */}
-      <circle cx="7.8" cy="14" r="6.2" fill="var(--c-felt)" />
-      <circle cx="7.8" cy="14" r="6.2" strokeDasharray="3.2 2.3" />
-      <circle cx="7.8" cy="14" r="2.8" />
+    <svg {...chipFrame(size)}>
+      {/* Five slabs, each nudged left or right of the one below it. A
+          perfectly aligned pile reads as a stack of paper; real chips never
+          land squarely on each other. */}
+      <rect x="11" y="2.2" width="10.5" height="2.3" rx="1.15" />
+      <rect x="12.4" y="5.5" width="9" height="2.3" rx="1.15" />
+      <rect x="10.6" y="8.8" width="10.6" height="2.3" rx="1.15" />
+      <rect x="12.6" y="12.1" width="8.8" height="2.3" rx="1.15" />
+      <rect x="11.2" y="15.4" width="10" height="2.3" rx="1.15" />
+      <ChipFace cx={7.6} cy={14.4} r={6.3} />
     </svg>
   );
 }
@@ -162,18 +179,14 @@ export function RefreshIcon({ size = 20 }: Props) {
 }
 
 /** A spade with a plus: open a new table. */
-/** One chip and a plus: opening a table rather than joining one. */
-export function NewTableIcon({ size = 20 }: Props) {
-  return (
-    <svg {...frame(size)}>
-      {/* The same chip, alone with a plus: the stack would make three shapes
-          fight for 16 pixels, and one chip is what a new table starts as. */}
-      <circle cx="9.5" cy="10.5" r="6.4" strokeDasharray="3.3 2.4" />
-      <circle cx="9.5" cy="10.5" r="2.8" />
-      <path d="M19 15v6M16 18h6" />
-    </svg>
-  );
-}
+/**
+ * Opening a table uses the same chips, with no plus.
+ *
+ * Kept as its own export rather than collapsing the two call sites onto
+ * TableIcon, so the places that mean "make one" stay distinguishable from
+ * the places that mean "here is one" if they ever need to diverge again.
+ */
+export const NewTableIcon = TableIcon;
 
 export function SoundIcon({ size = 20 }: Props) {
   return (
@@ -202,18 +215,34 @@ export function MutedIcon({ size = 20 }: Props) {
  */
 export function UsdcMark({ size = 20 }: Props) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      {/* USDC's own mark. A trademark is drawn in its own colours or it
-          is not that trademark, so this one is deliberately outside the
-          palette — the same exemption the MagicBlock lockup gets. */}
-      <circle cx="12" cy="12" r="10.5" fill="#2775ca" />
-      <path d="M12 6.1v11.8" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 2000 2000"
+      fill="none"
+      aria-hidden="true"
+      style={{ display: "block", flexShrink: 0 }}
+    >
+      {/*
+        Circle's own USDC mark, verbatim, at its native viewBox. A trademark
+        is drawn in its own colours or it is not that trademark, so this sits
+        outside the palette on purpose, the same exemption the MagicBlock
+        lockup gets.
+
+        What this replaced was drawn from memory and had no arcs at all,
+        which are most of what makes the mark recognisable at a glance.
+      */}
       <path
-        d="M14.75 9.2c0-1.1-1.23-1.85-2.75-1.85S9.25 8.1 9.25 9.3c0 1.1.9 1.62 2.75 2 1.97.42 2.85 1 2.85 2.15 0 1.25-1.27 2-2.85 2s-2.85-.8-2.85-1.95"
-        stroke="#fff"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M1000 2000c554.17 0 1000-445.83 1000-1000S1554.17 0 1000 0 0 445.83 0 1000s445.83 1000 1000 1000z"
+        fill="#2775ca"
+      />
+      <path
+        d="M1275 1158.33c0-145.83-87.5-195.83-262.5-216.66-125-16.67-150-50-150-108.34s41.67-95.83 125-95.83c75 0 116.67 25 137.5 87.5 4.17 12.5 16.67 20.83 29.17 20.83h66.66c16.67 0 29.17-12.5 29.17-29.16v-4.17c-16.67-91.67-91.67-162.5-187.5-170.83v-100c0-16.67-12.5-29.17-33.33-33.34h-62.5c-16.67 0-29.17 12.5-33.34 33.34v95.83c-125 16.67-204.16 100-204.16 204.17 0 137.5 83.33 191.66 258.33 212.5 116.67 20.83 154.17 45.83 154.17 112.5s-58.34 112.5-137.5 112.5c-108.34 0-145.84-45.84-158.34-108.34-4.16-16.66-16.66-25-29.16-25h-70.84c-16.66 0-29.16 12.5-29.16 29.17v4.17c16.66 104.16 83.33 179.16 220.83 200v100c0 16.66 12.5 29.16 33.33 33.33h62.5c16.67 0 29.17-12.5 33.34-33.33v-100c125-20.84 208.33-108.34 208.33-220.84z"
+        fill="#fff"
+      />
+      <path
+        d="M787.5 1595.83c-325-116.66-491.67-479.16-370.83-800 62.5-175 200-308.33 370.83-370.83 16.67-8.33 25-20.83 25-41.67V325c0-16.67-8.33-29.17-25-33.33-4.17 0-12.5 0-16.67 4.16-395.83 125-612.5 545.84-487.5 941.67 75 233.33 254.17 412.5 487.5 487.5 16.67 8.33 33.34 0 37.5-16.67 4.17-4.16 4.17-8.33 4.17-16.66v-58.34c0-12.5-12.5-29.16-25-37.5zM1229.17 295.83c-16.67-8.33-33.34 0-37.5 16.67-4.17 4.17-4.17 8.33-4.17 16.67v58.33c0 16.67 12.5 33.33 25 41.67 325 116.66 491.67 479.16 370.83 800-62.5 175-200 308.33-370.83 370.83-16.67 8.33-25 20.83-25 41.67V1700c0 16.67 8.33 29.17 25 33.33 4.17 0 12.5 0 16.67-4.16 395.83-125 612.5-545.84 487.5-941.67-75-237.5-258.34-416.67-487.5-491.67z"
+        fill="#fff"
       />
     </svg>
   );
