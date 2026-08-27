@@ -86,6 +86,7 @@ export function decodePlayer(d: Uint8Array) {
 export function decodeConfig(d: Uint8Array): ConfigView {
   return {
     tableId: u64(d, 8),
+    creator: pubkey(d, 16),
     smallBlind: u64(d, 48),
     bigBlind: u64(d, 56),
     minBuyIn: u64(d, 64),

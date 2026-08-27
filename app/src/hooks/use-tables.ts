@@ -10,6 +10,7 @@ import {
   DECK_ACCOUNT_SIZE,
   DELEGATION_PROGRAM,
   PROGRAM_ID,
+  TREASURY_AUTHORITY,
 } from "@/lib/constants";
 import { deckPda, holePda } from "@/lib/pdas";
 import type { ConfigView, TableView } from "@/stores/table-store";
@@ -68,6 +69,14 @@ export interface LobbyTable {
   outdated: boolean;
   /** Empty long enough that anyone may sweep it away. */
   abandoned: boolean;
+  /**
+   * Opened by the treasury, so a newcomer always has somewhere to sit.
+   *
+   * Sitting empty is the point of one, so it is exempt from `abandoned` and
+   * `stale` — the two rules that exist to hide tables nobody is coming back
+   * to.
+   */
+  house: boolean;
   /**
    * Created, sat at, and then left without a single hand ever being played,
    * long enough ago that nobody is coming back.
@@ -205,16 +214,35 @@ export function useTables() {
             const emptyFor = d.table.emptySince
               ? Math.floor(Date.now() / 1000) - d.table.emptySince
               : 0;
+            /*
+             * A house table, opened by the treasury so somebody arriving has
+             * somewhere to sit without opening one themselves.
+             *
+             * Sitting empty is its JOB, so the two rules that hide a deserted
+             * table do not apply to it. Without this exemption every house
+             * table vanishes from the lobby an hour after the last player
+             * leaves, which is exactly when a newcomer most needs to find one.
+             *
+             * It changes nothing on chain: the sweep is permissionless and
+             * still reaches these, so the keeper that opens them has to be
+             * able to open them again.
+             */
+            const house = config?.creator === TREASURY_AUTHORITY.toBase58();
             return {
               table: d.table,
               delegated: d.delegated,
               config,
               seated,
+              house,
               outdated:
                 !deck || deck.data.length < DECK_ACCOUNT_SIZE || !hasCardSlots,
               abandoned:
-                !d.delegated && seated === 0 && emptyFor >= ABANDONED_AFTER_SECS,
+                !house &&
+                !d.delegated &&
+                seated === 0 &&
+                emptyFor >= ABANDONED_AFTER_SECS,
               stale:
+                !house &&
                 !d.delegated &&
                 d.table.handNumber === 0 &&
                 Date.now() - createdAt(d.table.tableId) > NEVER_PLAYED_GRACE_MS,

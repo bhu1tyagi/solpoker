@@ -74,6 +74,12 @@ export interface TableView {
 
 export interface ConfigView {
   tableId: number;
+  /**
+   * Who paid to open the table. Already on chain since the first build; it
+   * simply was not read until house tables needed telling apart from a
+   * player's own.
+   */
+  creator: string;
   smallBlind: number;
   bigBlind: number;
   minBuyIn: number;

@@ -3350,3 +3350,18 @@ input[type="range"]::-moz-range-thumb {
     animation: none !important;
   }
 }
+
+/* A house table: always here, so a newcomer never has to open one. Bordered
+   rather than filled, so it sits below the live badge in the hierarchy. */
+.table-card-house {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border: 1px solid var(--c-glass-border);
+  border-radius: var(--r-pill);
+  color: var(--c-ink-faint);
+  font-size: var(--t-label-size);
+  font-weight: var(--t-label-weight);
+  letter-spacing: var(--t-label-tracking);
+  text-transform: uppercase;
+}

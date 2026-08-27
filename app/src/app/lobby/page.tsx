@@ -478,6 +478,11 @@ function TableCard({
               <span className="tnum table-card-id"> #{String(t.table.tableId)}</span>
             </p>
           </div>
+          {t.house && !live && (
+            <span className="table-card-house" title="Opened by the house, always here">
+              house
+            </span>
+          )}
           {live && (
             <span className="table-card-live">
               <span className="table-card-live-dot animate-badge-pulse" aria-hidden />
