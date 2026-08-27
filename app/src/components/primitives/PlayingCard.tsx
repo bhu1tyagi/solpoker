@@ -7,13 +7,18 @@ import { spring } from "@/styles/theme";
 type Size = "sm" | "md" | "lg";
 
 /**
- * Card geometry. The rank is set large and low with the suit above it, so a
- * fanned hand reads from the top corner.
+ * Card geometry, laid out the way a real card is: an index in the top-left
+ * corner — rank over suit — its mirror in the bottom-right, and one large pip
+ * in the middle. The corner is what reads in a fanned or partly covered hand;
+ * the pip is what reads across the table.
  */
-const SIZES: Record<Size, { w: number; h: number; rank: number; suit: number }> = {
-  sm: { w: 40, h: 57, rank: 24, suit: 11 },
-  md: { w: 56, h: 80, rank: 32, suit: 14 },
-  lg: { w: 72, h: 102, rank: 40, suit: 17 },
+const SIZES: Record<
+  Size,
+  { w: number; h: number; rank: number; suit: number; pip: number; pad: number }
+> = {
+  sm: { w: 40, h: 57, rank: 13, suit: 9, pip: 21, pad: 3 },
+  md: { w: 56, h: 80, rank: 17, suit: 12, pip: 30, pad: 5 },
+  lg: { w: 72, h: 102, rank: 21, suit: 14, pip: 40, pad: 6 },
 };
 
 /**
@@ -121,6 +126,33 @@ function Face({
   const rank = known ? RANK_CHARS[rankOf(card)].replace("T", "10") : "";
   const suit = known ? SUIT_SYMBOLS[suitOf(card)] : "";
 
+  // The index column: rank over suit, tight as print. "10" is the one
+  // two-character rank, so it drops a size to hold the same column width.
+  const index = (
+    <span
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        lineHeight: 1,
+        gap: Math.max(1, Math.round(s.rank * 0.08)),
+      }}
+    >
+      <span
+        className="num"
+        style={{
+          fontSize: rank === "10" ? s.rank * 0.8 : s.rank,
+          fontWeight: 700,
+          lineHeight: 1,
+          letterSpacing: rank === "10" ? "-0.06em" : undefined,
+        }}
+      >
+        {rank}
+      </span>
+      <span style={{ fontSize: s.suit, lineHeight: 1 }}>{suit}</span>
+    </span>
+  );
+
   return (
     <div
       style={{
@@ -140,26 +172,41 @@ function Face({
           ? "0 0 0 2px var(--c-green), inset 0 -1px 0 var(--c-card-face-edge)"
           : "inset 0 -1px 0 var(--c-card-face-edge)",
         color,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: s.rank * 0.06,
-        lineHeight: 1,
         userSelect: "none",
       }}
     >
-      <span style={{ fontSize: s.suit, lineHeight: 1 }}>{suit}</span>
-      <span
-        className="num"
-        style={{
-          fontSize: rank === "10" ? s.rank * 0.78 : s.rank,
-          fontWeight: 700,
-          lineHeight: 1.08,
-        }}
-      >
-        {rank}
-      </span>
+      {known && (
+        <>
+          <span style={{ position: "absolute", top: s.pad, left: s.pad + 1 }}>{index}</span>
+          {/* The mirror index: the same column turned through 180°, so the
+              card reads the same whichever way it lands. */}
+          <span
+            style={{
+              position: "absolute",
+              bottom: s.pad,
+              right: s.pad + 1,
+              transform: "rotate(180deg)",
+            }}
+          >
+            {index}
+          </span>
+          {/* The pip, seated just below centre the way weight sits on printed
+              stock — dead centre reads high once the corners are inked. */}
+          <span
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "grid",
+              placeItems: "center",
+              fontSize: s.pip,
+              lineHeight: 1,
+              paddingTop: s.pad,
+            }}
+          >
+            {suit}
+          </span>
+        </>
+      )}
     </div>
   );
 }

@@ -153,64 +153,57 @@ export function TableFelt({
         margin: "0 auto",
       }}
     >
-      {/* The table: an ellipse lit from above centre, so the board is the
-          brightest thing on it and the rim falls away into the room. The room
-          itself is the page background, not a panel drawn in here. */}
+      {/* The table: a stadium — straight rails, semicircular ends, the pill of
+          a real card room — with a raised rail running around a sunken cloth.
+          A 999px radius clamps to half the short side, which is what makes the
+          ends true semicircles at any width. The room itself is the page
+          background, not a panel drawn in here. */}
       <div
         style={{
           position: "absolute",
           inset: geo.ellipseInset,
-          borderRadius: "50% / 50%",
-          /*
-           * The felt. Dark and slightly blue, lit from above centre so the
-           * board is the brightest part of the cloth and the rim falls away
-           * into the room.
-           *
-           * It is not a green oval. The surface of this product is felt in the
-           * sense the design system means — the near-black ground the whole
-           * interface is built on — and an emerald table sitting on it would
-           * be the one object in the room that belongs to a different palette.
-           * Depth comes from the rim-light below, not from a drop shadow,
-           * which is very nearly invisible against #0B0E14.
-           */
+          borderRadius: 999,
+          // The rail: the one raised object in the room. It reads as an edge
+          // because it is lighter than both the room and the cloth it holds.
           background:
-            "radial-gradient(ellipse at 50% 34%, var(--c-felt-edge) 0%, var(--c-felt-raised) 62%, color-mix(in srgb, var(--c-felt-raised) 70%, var(--c-felt)) 100%)",
-          // The rail: a hairline where the cloth stops. On near-black, a border
-          // does the work a shadow does on light UI, and without one the table
-          // and the room it stands in are the same object.
+            "linear-gradient(180deg, var(--c-felt-edge) 0%, var(--c-felt-raised) 55%, var(--c-felt-edge) 100%)",
           border: "1px solid var(--c-rule)",
-          boxShadow:
-            "var(--e-raised), inset 0 -28px 64px color-mix(in srgb, var(--c-felt) 62%, transparent)",
+          boxShadow: "var(--e-raised), 0 28px 80px rgba(0, 0, 0, 0.5)",
         }}
       >
+        {/* The cloth, sunk inside the rail. Percentages track each axis of the
+            box, so the vertical inset is scaled by the aspect ratio to keep the
+            rail the same thickness all the way round.
+
+            It is not a green oval. The surface of this product is felt in the
+            sense the design system means — the near-black ground the whole
+            interface is built on — and an emerald table sitting on it would
+            be the one object in the room that belongs to a different palette.
+            Lit from above centre so the board is the brightest part of the
+            cloth, with an inset shadow where it dips below the rail. */}
         <div
           style={{
             position: "absolute",
-            inset: "5% 3.5%",
-            borderRadius: "50% / 50%",
+            inset: "6.5% 4%",
+            borderRadius: 999,
+            background:
+              "radial-gradient(ellipse at 50% 34%, var(--c-felt-edge) 0%, var(--c-felt-raised) 62%, color-mix(in srgb, var(--c-felt-raised) 70%, var(--c-felt)) 100%)",
             border: "1px solid var(--c-rule)",
-            pointerEvents: "none",
-          }}
-        />
-        {/* The house mark, printed into the cloth. Low enough contrast that
-            cards and chips always beat it, present enough that an empty table
-            still says whose room this is. It sits in the lower half so the
-            board and pot never cover it. */}
-        <svg
-          aria-hidden
-          viewBox="0 0 100 100"
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "68%",
-            transform: "translate(-50%, -50%)",
-            width: "13%",
-            opacity: 0.07,
-            pointerEvents: "none",
+            boxShadow:
+              "inset 0 3px 22px rgba(0, 0, 0, 0.5), inset 0 -28px 64px color-mix(in srgb, var(--c-felt) 62%, transparent)",
           }}
         >
-          <path d={SPADE_PATH} fill="var(--c-ink)" />
-        </svg>
+          {/* The betting line: a hairline printed into the cloth. */}
+          <div
+            style={{
+              position: "absolute",
+              inset: "7% 4.5%",
+              borderRadius: 999,
+              border: "1px solid var(--c-rule)",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
         <div
           aria-hidden
           style={{
@@ -230,6 +223,42 @@ export function TableFelt({
           Pokerable
         </div>
       </div>
+
+      {/* The house mark, diffused into the cloth behind the board — the full
+          chip-and-spade, not just the spade, so the felt carries the same
+          identity as the header. Low contrast and softly blurred: cards and
+          chips always beat it, and an empty table still says whose room this
+          is. Drawn before the board in the tree, so the cards land on top. */}
+      <svg
+        aria-hidden
+        viewBox="0 0 100 100"
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: geo.boardTop,
+          transform: "translate(-50%, -50%)",
+          width: "17%",
+          opacity: 0.055,
+          filter: "blur(2px)",
+          color: "var(--c-ink)",
+          pointerEvents: "none",
+        }}
+      >
+        <circle
+          cx="50"
+          cy="50"
+          r="42"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="10"
+          strokeDasharray="20.3 12.7"
+          strokeDashoffset="10.15"
+        />
+        <circle cx="50" cy="50" r="33" fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.7" />
+        <g transform="translate(50 51) scale(0.5) translate(-50 -50)">
+          <path d={SPADE_PATH} fill="currentColor" />
+        </g>
+      </svg>
 
       {/* Board and pot, centred. Absolute centring shrink-wraps to half the
           felt, so the column takes its content's width or the status line

@@ -78,8 +78,31 @@ const EMPTY: LobbyMeta = {
 
 const POLL_MS = 60_000;
 
+/**
+ * The last totals that arrived, kept across navigations. The stat row used to
+ * blank out on every return to the lobby until the route answered; yesterday's
+ * totals for one round trip beat an empty band, and the fetch replaces them.
+ */
+const META_CACHE_KEY = "solpoker:lobby-meta";
+
+function readMetaCache(): LobbyMeta | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(META_CACHE_KEY) ?? "") as LobbyMeta;
+    return parsed && parsed.stored === true ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useLobbyMeta(): LobbyMeta {
   const [meta, setMeta] = useState<LobbyMeta>(EMPTY);
+
+  // In an effect rather than the initialiser: the server renders this too,
+  // and hydration has to agree with what it rendered.
+  useEffect(() => {
+    const cached = readMetaCache();
+    if (cached) setMeta((cur) => (cur.stored ? cur : cached));
+  }, []);
 
   useEffect(() => {
     let dead = false;
@@ -89,7 +112,7 @@ export function useLobbyMeta(): LobbyMeta {
         if (!res.ok) return;
         const body = (await res.json()) as Partial<LobbyMeta>;
         if (!dead) {
-          setMeta({
+          const next: LobbyMeta = {
             names: body.names ?? {},
             stored: body.stored === true,
             handsDealt: body.handsDealt ?? null,
@@ -100,7 +123,15 @@ export function useLobbyMeta(): LobbyMeta {
             avgPotChips: body.avgPotChips ?? null,
             biggestPotChips: body.biggestPotChips ?? null,
             tables: body.tables ?? {},
-          });
+          };
+          setMeta(next);
+          if (next.stored) {
+            try {
+              localStorage.setItem(META_CACHE_KEY, JSON.stringify(next));
+            } catch {
+              // Storage being unavailable only costs the warm start.
+            }
+          }
         }
       } catch {
         // The chain-derived lobby needs nothing from this route to work.

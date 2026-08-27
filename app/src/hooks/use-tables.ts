@@ -95,6 +95,35 @@ export interface LobbyTable {
 /** A table id is `Date.now() * 1000 + random`, so it carries its own birthday. */
 export const createdAt = (tableId: number) => Math.floor(tableId / 1000);
 
+/**
+ * The last listing that succeeded, kept across navigations.
+ *
+ * Coming back to the lobby used to mean a blank room until the first RPC
+ * round trip finished — and a blank room with an error if that trip failed,
+ * which after a session of play it often did, the moment the connection was
+ * busiest. The previous list is almost always still true seconds later, so it
+ * goes up immediately and the refresh corrects it. Everything in a LobbyTable
+ * is plain data, which is what makes the JSON round trip safe.
+ */
+const LIST_CACHE_KEY = "solpoker:lobby-tables";
+
+function readListCache(): LobbyTable[] | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LIST_CACHE_KEY) ?? "") as LobbyTable[];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeListCache(tables: LobbyTable[]) {
+  try {
+    localStorage.setItem(LIST_CACHE_KEY, JSON.stringify(tables));
+  } catch {
+    // Storage being unavailable only costs the warm start.
+  }
+}
+
 const NEVER_PLAYED_GRACE_MS = 60 * 60 * 1000;
 
 /**
@@ -198,8 +227,7 @@ export function useTables() {
         ? await batched(decoded.map((d) => deckPda(new PublicKey(d.table.address))))
         : [];
 
-      setTables(
-        decoded
+      const list = decoded
           .map((d, i) => {
             let config: ConfigView | null = null;
             try {
@@ -252,8 +280,9 @@ export function useTables() {
                 Date.now() - createdAt(d.table.tableId) > NEVER_PLAYED_GRACE_MS,
             };
           })
-          .sort((a, b) => b.table.tableId - a.table.tableId),
-      );
+          .sort((a, b) => b.table.tableId - a.table.tableId);
+      setTables(list);
+      writeListCache(list);
       hadTables.current = true;
       failures.current = 0;
     } catch (e) {
@@ -271,6 +300,18 @@ export function useTables() {
         setError(e instanceof Error ? e.message : String(e));
       }
     } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Warm start: the previous visit's list, up before the first round trip
+  // even begins. In an effect rather than the state initialiser on purpose —
+  // the server renders this component too, and hydration must agree with it.
+  useEffect(() => {
+    const cached = readListCache();
+    if (cached) {
+      hadTables.current = true;
+      setTables((cur) => (cur.length > 0 ? cur : cached));
       setLoading(false);
     }
   }, []);

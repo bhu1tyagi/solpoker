@@ -412,7 +412,12 @@ export function SeatPod({
             gap: 5,
             marginBottom: cardsOn === "above" ? 4 : 0,
             marginTop: cardsOn === "below" ? 4 : 0,
-            zIndex: 1,
+            // Offset exactly as the cards row is, so the claim sits under the
+            // cards it is about — centred on the pod it slid beneath the
+            // avatar tile, which clipped it mid-word.
+            marginLeft: avatarOn === "left" ? d.avatar + (compact ? 4 : 8) : 0,
+            marginRight: avatarOn === "right" ? d.avatar + (compact ? 4 : 8) : 0,
+            zIndex: 3,
           }}
         >
           <PrivacyRing secured={!!secured} size={13} />

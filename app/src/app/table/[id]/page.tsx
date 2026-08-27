@@ -477,16 +477,21 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           position: "fixed",
           inset: 0,
           overflow: "hidden",
-          // The room is plain felt, so the cloth in the middle of it is the
-          // lit object. A gradient here as well left the table and the room in
-          // the same narrow band of near-black and the table stopped reading
-          // as a table.
+          // The same ground the rest of the site stands on. The ambience comes
+          // from the orb layer below, exactly as it does in the lobby, so
+          // walking from one room to the other never changes the light. The
+          // raised rail is what keeps the table reading as a table against it.
           background: "var(--c-felt)",
           // A long press on a phone must not start selecting the table.
           userSelect: "none",
           WebkitUserSelect: "none",
         }}
       >
+        {/* The lobby's ambient glow, unchanged: same classes, same colours. */}
+        <div className="landing-orbs" aria-hidden>
+          <div className="orb orb-purple" />
+          <div className="orb orb-green" />
+        </div>
         <div className="felt-stage">
           <div className="felt-sizer">
             <TableFelt
