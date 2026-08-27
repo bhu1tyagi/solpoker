@@ -128,6 +128,19 @@ async function usdcBalance(owner) {
  * whole stack every run, and drained the treasury to pay for chips that were
  * already on the felt.
  */
+async function chipBalance(owner) {
+  const program = new PublicKey(
+    JSON.parse(readFileSync(new URL("../src/lib/idl/solpoker.json", import.meta.url), "utf8"))
+      .address,
+  );
+  const pda = PublicKey.findProgramAddressSync(
+    [new TextEncoder().encode("player"), owner.toBytes()],
+    program,
+  )[0];
+  const info = await conn.getAccountInfo(pda);
+  return info ? Number(info.data.readBigUInt64LE(40)) : 0;
+}
+
 async function stackAtTable(owner) {
   const enc = (x) => new TextEncoder().encode(x);
   const idBuf = Buffer.alloc(8);
@@ -169,10 +182,20 @@ async function fund(players) {
   }
   const funderAta = getAssociatedTokenAddressSync(USDC_MINT, funder.publicKey);
   for (const p of players) {
-    // Already sitting with a stack: nothing to buy.
+    /*
+     * Chips live in three places and a wallet is stocked if ANY of them adds
+     * up: on the seat while seated, in the Player balance after leaving a
+     * table, and as USDC before ever buying in. Counting only the first two
+     * meant that emptying a table — which moves the stack from the seat back
+     * to the balance — made both wallets look broke, and the run then tried to
+     * re-buy $11 of chips each that were sitting in their balances already.
+     */
     const inPlay = await stackAtTable(p.publicKey);
-    if (inPlay >= BUYIN) {
-      notes.push(`${p.publicKey.toBase58().slice(0, 6)} already in play (${inPlay} chips)`);
+    const banked = await chipBalance(p.publicKey);
+    if (inPlay + banked >= BUYIN) {
+      notes.push(
+        `${p.publicKey.toBase58().slice(0, 6)} stocked (${inPlay} on seat, ${banked} banked)`,
+      );
       continue;
     }
     const held = await usdcBalance(p.publicKey);
