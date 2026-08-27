@@ -27,7 +27,12 @@ import { usePlayer } from "@/hooks/use-player";
 import { useLeaderboard, type LeaderRow } from "@/hooks/use-leaderboard";
 import { isJoinable, useTables, type LobbyTable } from "@/hooks/use-tables";
 import { spring, stagger } from "@/styles/theme";
-import { MAX_SEATS, PLAY_FLOOR_LAMPORTS } from "@/lib/constants";
+import {
+  MAX_SEATS,
+  PLAY_FLOOR_LAMPORTS,
+  RAKE_CAP_BIG_BLINDS,
+  RAKE_PERCENT,
+} from "@/lib/constants";
 import { formatUsd, formatUsdRange } from "@/lib/money";
 import { displayName } from "@/lib/table-names";
 import { useLobbyMeta, type TableTotals } from "@/hooks/use-lobby-meta";
@@ -43,16 +48,14 @@ const TIERS = [
   { key: "high", label: "High", sub: "$2.50 / $5", bb: 500 },
 ] as const;
 
+/* The ends of the ladder, read off TIERS rather than written out again, so
+   adding a tier cannot leave the lobby advertising a range it no longer
+   offers. Small blinds, since that is what the range is quoted from. */
+const lowest = formatUsd(Math.min(...TIERS.map((t) => t.bb)) / 2);
+const highest = formatUsd(Math.max(...TIERS.map((t) => t.bb)) / 2);
+
 /** A stat tile: its name, its figure, and the window the figure covers. */
 type Tile = [label: string, value: string, window?: string];
-
-/**
- * Stands in for a figure nobody can answer yet. An en dash, not a zero and
- * not an em dash: it has to read as "no number here" without looking like a
- * number, and without becoming a piece of punctuation this product does not
- * use anywhere else.
- */
-const DASH = "–";
 
 export default function Lobby() {
   const { connected, publicKey } = useWallet();
@@ -118,25 +121,45 @@ export default function Lobby() {
    * question nobody has answered yet.
    */
   const tiles = useMemo<Tile[]>(() => {
-    if (!meta.stored) {
-      return [
-        ["Players seated", String(stats.players)],
-        ["Active tables", String(stats.tables)],
-        ["Open seats", String(stats.seats)],
-        ["Hands live", String(stats.live)],
-      ];
+    const row: Tile[] = [];
+    const add = (t: Tile) => {
+      if (row.length < 4) row.push(t);
+    };
+
+    // 1. What has been played, when it is known. The program's own hand
+    //    counter comes first and is never windowed: it has no timestamps
+    //    behind it, so it says "all time" even when the money beside it is
+    //    showing a day. Each tile names its own window rather than the row
+    //    naming one for all of them.
+    if (meta.stored) {
+      const dealt = meta.handsDealt ?? meta.hands ?? 0;
+      if (dealt > 0) add(["Hands", dealt.toLocaleString(), "all time"]);
+      if (meta.volumeChips !== null) add(["Volume", formatUsd(meta.volumeChips), since]);
+      if (meta.avgPotChips !== null) add(["Average pot", formatUsd(meta.avgPotChips), since]);
+      if (meta.biggestPotChips !== null) {
+        add(["Biggest pot", formatUsd(meta.biggestPotChips), since]);
+      }
     }
-    const money = (chips: number | null) => (chips === null ? DASH : formatUsd(chips));
-    return [
-      // The program's own counter, so this covers hands played before any of
-      // the reporting existed. It carries no timestamps, so unlike the money
-      // beside it there is no honest way to window it: it says "all time" even
-      // when the rest of the row is showing a day.
-      ["Hands", (meta.handsDealt ?? meta.hands ?? 0).toLocaleString(), "all time"],
-      ["Volume", money(meta.volumeChips), since],
-      ["Average pot", money(meta.avgPotChips), since],
-      ["Biggest pot", money(meta.biggestPotChips), since],
-    ];
+
+    // 2. What is happening this second, when any of it is happening. A zero
+    //    here is true but says nothing, and four true zeroes read as a room
+    //    that has failed rather than one that has not opened.
+    if (stats.players > 0) add(["Players seated", String(stats.players)]);
+    if (stats.tables > 0) add(["Active tables", String(stats.tables)]);
+    if (stats.seats > 0) add(["Open seats", String(stats.seats)]);
+    if (stats.live > 0) add(["Hands live", String(stats.live)]);
+
+    // 3. What the room IS. These are the terms of play, they are true on the
+    //    first day and the thousandth, and they are what someone deciding
+    //    whether to sit down actually needs before there is any history to
+    //    read. A new room has nothing to say about its traffic; it has plenty
+    //    to say about its rules, and saying that beats an empty band or a
+    //    number nobody can stand behind.
+    add(["Rake", `${RAKE_PERCENT}%`, `capped at ${RAKE_CAP_BIG_BLINDS} BB`]);
+    add(["Stakes", `${lowest} to ${highest}`, "blinds"]);
+    add(["Chips", formatUsd(1), "each, and the same back"]);
+    add(["Seats", String(MAX_SEATS), "a table"]);
+    return row;
   }, [meta, since, stats]);
 
   const filtered = useMemo(
@@ -245,18 +268,7 @@ export default function Lobby() {
                   {label}
                   {note && <em className="lobby-stat-when">{note}</em>}
                 </span>
-                {/* A placeholder must not carry a real figure's weight, or
-                    the row reads as four answers when one of them is a
-                    shrug. */}
-                <span
-                  className={
-                    value === DASH
-                      ? "num lobby-stat-fig is-unknown"
-                      : "num lobby-stat-fig"
-                  }
-                >
-                  {value}
-                </span>
+                <span className="num lobby-stat-fig">{value}</span>
               </div>
             ))}
           </section>

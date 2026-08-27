@@ -165,6 +165,18 @@ export const SESSION_PROGRAM = new PublicKey(
 );
 
 export const MAX_SEATS = 6;
+
+/**
+ * What the house takes, mirroring `RAKE_BPS`, `RAKE_CAP_BIG_BLINDS` and
+ * `RAKE_FREE_BIG_BLINDS` in the program's state.rs.
+ *
+ * Here so the lobby can state the terms rather than leave a player to find
+ * them out from a settled pot. Copied rather than derived because the program
+ * publishes no view of them; if they ever change there, they change here, and
+ * quoting a stale rate is worse than quoting none.
+ */
+export const RAKE_PERCENT = 2.5;
+export const RAKE_CAP_BIG_BLINDS = 3;
 export const NO_SEAT = 0xff;
 export const NO_CARD = 0xff;
 
