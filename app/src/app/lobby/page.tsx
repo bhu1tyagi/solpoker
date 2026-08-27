@@ -132,36 +132,25 @@ export default function Lobby() {
       ];
     }
     /*
-     * Observed first, then the floor the rake proves, then a dash.
-     *
-     * A pot is only observed when a client stayed open long enough to report
-     * it, so early on there are none — while the rake sitting on chain
-     * already proves money went through. Falling back to that bound puts a
-     * real figure where a dash was, and the "at least" is carried in the tile
-     * rather than assumed away: a bound printed as a total would be an
-     * invented number with arithmetic in front of it.
+     * Observed pots or a dash. Volume here means the money that actually went
+     * through the pots — every pot of every reported hand, blinds-only steals
+     * included — and a pot is only known when a client stayed open long
+     * enough to report it. There used to be a rake-derived floor behind these
+     * ("at least $X"), but a figure that moves only when the house gets paid
+     * is a statement about rake wearing volume's label, so it is gone: the
+     * tile says what was seen or says nothing.
      */
-    const money = (observed: number | null, floor?: number): [string, boolean] => {
-      if (observed !== null) return [formatUsd(observed), false];
-      if (floor !== undefined && floor > 0) return [formatUsd(floor), true];
-      return [DASH, false];
-    };
-    const [volume, volumeIsFloor] = money(meta.volumeChips, meta.rakeFloor?.volumeChips);
-    const [avg, avgIsFloor] = money(meta.avgPotChips, meta.rakeFloor?.avgPotChips);
-    const [biggest, biggestIsFloor] = money(
-      meta.biggestPotChips,
-      meta.rakeFloor?.biggestPotChips,
-    );
-    const AT_LEAST = `at least, ${since}`;
+    const money = (observed: number | null): string =>
+      observed !== null ? formatUsd(observed) : DASH;
     return [
       // The program's own counter, so this covers hands played before any of
       // the reporting existed. It carries no timestamps, so unlike the money
       // beside it there is no honest way to window it: it says "all time" even
       // when the rest of the row is showing a day.
       ["Hands", (meta.handsDealt ?? meta.hands ?? 0).toLocaleString(), "all time"],
-      ["Volume", volume, volumeIsFloor ? AT_LEAST : since],
-      ["Average pot", avg, avgIsFloor ? AT_LEAST : since],
-      ["Biggest pot", biggest, biggestIsFloor ? AT_LEAST : since],
+      ["Volume", money(meta.volumeChips), since],
+      ["Average pot", money(meta.avgPotChips), since],
+      ["Biggest pot", money(meta.biggestPotChips), since],
     ];
   }, [meta, since, stats]);
 

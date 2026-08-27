@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { CLUSTER_TAG, db, ensureSchema } from "@/lib/server/db";
-import { readChain, volumeFloorChips } from "@/lib/server/chain";
+import { readChain } from "@/lib/server/chain";
 
 export const runtime = "nodejs";
 
@@ -17,8 +17,6 @@ type Sql = NonNullable<ReturnType<typeof db>>;
 let syncedAt = 0;
 const SYNC_EVERY_MS = 60_000;
 
-let rakeChipsSeen = 0;
-
 async function syncChainHands(s: Sql, now: number) {
   if (now - syncedAt < SYNC_EVERY_MS) return;
   const live = await readChain();
@@ -26,10 +24,6 @@ async function syncChainHands(s: Sql, now: number) {
   // unreachable endpoint is not a room where nothing has been played.
   if (!live) return;
   syncedAt = now;
-  // Rake the house has already cashed out is no longer on chain, so this can
-  // fall. Keeping the high-water mark stops the volume it implies from
-  // sliding backwards every time the treasury is emptied.
-  rakeChipsSeen = Math.max(rakeChipsSeen, live.rakeChips);
   const seen = live.tables.filter((t) => t.hands > 0);
   if (seen.length === 0) return;
   await s`
@@ -210,33 +204,12 @@ export async function GET() {
       // are best effort. They are kept apart in the payload so the gap between
       // them stays visible rather than being averaged away.
       handsDealt: Number(dealt.hands),
-      /*
-       * The least volume the rake proves, and the pot figures that follow
-       * from it.
-       *
-       * These exist because the pot is never written to chain, so the only
-       * hands with an observed pot are the ones a client stayed open long
-       * enough to report. The rake is on chain, it is a fixed fraction of the
-       * pot, and inverting it therefore bounds the volume from below without
-       * anyone's word for it.
-       *
-       * Bounds, and labelled as bounds. `biggest` uses the fact that the
-       * largest pot cannot be smaller than the mean, which is true and weak;
-       * it is a floor to put a real number where a dash was, not a claim
-       * about the biggest pot anyone actually won.
-       */
-      ...(() => {
-        const floor = volumeFloorChips(rakeChipsSeen);
-        const hands = Number(dealt.hands);
-        if (floor <= 0 || hands <= 0) return { rakeFloor: null };
-        return {
-          rakeFloor: {
-            volumeChips: floor,
-            avgPotChips: Math.floor(floor / hands),
-            biggestPotChips: Math.floor(floor / hands),
-          },
-        };
-      })(),
+      // There is no rake-derived fallback for the money figures any more.
+      // Volume means the money that went through the pots, and the pot is
+      // never written to chain — so it comes from verified hand reports, and
+      // until those exist the figure is unknown rather than bounded. A floor
+      // built by inverting the rake moved only when the house got paid, which
+      // made "volume" a statement about rake wearing volume's label.
       tables,
     },
     { headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=60" } },

@@ -25,31 +25,7 @@ import idl from "@/lib/idl/solpoker.json";
 const TABLE_ID_AT = 8;
 // 8 discriminator + 8 table_id + 32 config + 6 x 32 seats + 1 button
 const HAND_NUMBER_AT = 241;
-// state(249) + bump(250) + empty_since(251..259), then rake_accrued.
-const RAKE_AT = 259;
-const NEEDED = RAKE_AT + 8;
-
-/** Player: 8 discriminator + 32 authority, then chips. */
-const PLAYER_CHIPS_AT = 40;
-
-/**
- * The house's own `Player`. Rake lands in it and leaves through the same
- * `sell_chips` everyone uses, so its balance is rake that has been swept off
- * the tables and not yet cashed out. Matches `TREASURY_AUTHORITY` in the
- * program, which is the only account `sweep_rake` will credit.
- */
-const TREASURY = new PublicKey("FWRvqaezac9noSy2WsPSNoZZs2Vc2peA4TRLkjziS7Vq");
-
-/**
- * Pot per chip of rake.
- *
- * The program takes `RAKE_BPS` (250) of a flopped pot, so rake is
- * `floor(pot / 40)` and therefore `pot >= 40 * rake`. Inverting it gives a
- * FLOOR on the pot and never an estimate of it: rake is capped at three big
- * blinds, and a hand that never saw a flop is not raked at all, so both of
- * those push the true pot above this and neither pushes it below.
- */
-const POT_PER_RAKE_CHIP = 10_000 / 250;
+const NEEDED = HAND_NUMBER_AT + 8;
 
 const PROGRAM = new PublicKey(idl.address);
 const TABLE_DISCRIMINATOR = new Uint8Array(
@@ -76,21 +52,7 @@ export interface TableHands {
 
 export interface ChainRead {
   tables: TableHands[];
-  /**
-   * Every chip of rake the program has taken and still holds: unswept on the
-   * tables, plus swept into the treasury and not yet cashed out.
-   *
-   * A floor, not a total. Rake the house has already sold back for USDC is
-   * gone from here, which can only make the volume derived from it smaller.
-   */
-  rakeChips: number;
 }
-
-const PLAYER_DISCRIMINATOR = new Uint8Array(
-  (idl.accounts as { name: string; discriminator: number[] }[]).find(
-    (a) => a.name === "Player",
-  )!.discriminator,
-);
 
 /**
  * Everything the base layer will say about how much poker has been played.
@@ -98,33 +60,29 @@ const PLAYER_DISCRIMINATOR = new Uint8Array(
  * Returns null when the chain cannot be reached, which the caller must treat
  * as "no news" rather than as "no tables" — the difference between the two is
  * a hand count that quietly resets to zero.
+ *
+ * This used to also total up the rake so the lobby could invert it into a
+ * volume floor. That read as clever and displayed as wrong: volume derived
+ * from rake ignores every pot that folded before the flop, which is most of
+ * them, and moves only when the house gets paid. Volume is the money that
+ * went through the pots, and the pot is never written to chain — so it comes
+ * from verified hand reports or it is honestly unknown.
  */
 export async function readChain(): Promise<ChainRead | null> {
   const url = rpc();
   if (!url) return null;
   try {
     const conn = new Connection(url, "confirmed");
-    const [tableAccounts, treasury] = await Promise.all([
-      conn.getProgramAccounts(PROGRAM, {
-        commitment: "confirmed",
-        // Only Table accounts, and only the prefix carrying the fields read
-        // below. The lobby makes this same call unfiltered every few seconds;
-        // no reason for the server to pull more than it uses.
-        filters: [{ memcmp: { offset: 0, bytes: bs58(TABLE_DISCRIMINATOR) } }],
-        dataSlice: { offset: 0, length: NEEDED },
-      }),
-      conn.getProgramAccounts(PROGRAM, {
-        commitment: "confirmed",
-        filters: [
-          { memcmp: { offset: 0, bytes: bs58(PLAYER_DISCRIMINATOR) } },
-          { memcmp: { offset: 8, bytes: TREASURY.toBase58() } },
-        ],
-        dataSlice: { offset: 0, length: PLAYER_CHIPS_AT + 8 },
-      }),
-    ]);
+    const tableAccounts = await conn.getProgramAccounts(PROGRAM, {
+      commitment: "confirmed",
+      // Only Table accounts, and only the prefix carrying the fields read
+      // below. The lobby makes this same call unfiltered every few seconds;
+      // no reason for the server to pull more than it uses.
+      filters: [{ memcmp: { offset: 0, bytes: bs58(TABLE_DISCRIMINATOR) } }],
+      dataSlice: { offset: 0, length: NEEDED },
+    });
 
     const tables: TableHands[] = [];
-    let rakeChips = 0;
     for (const { account } of tableAccounts) {
       const d = account.data;
       if (d.length < NEEDED) continue;
@@ -132,31 +90,13 @@ export async function readChain(): Promise<ChainRead | null> {
         tableId: d.readBigUInt64LE(TABLE_ID_AT).toString(),
         hands: Number(d.readBigUInt64LE(HAND_NUMBER_AT)),
       });
-      rakeChips += Number(d.readBigUInt64LE(RAKE_AT));
     }
-    for (const { account } of treasury) {
-      const d = account.data;
-      if (d.length >= PLAYER_CHIPS_AT + 8) {
-        rakeChips += Number(d.readBigUInt64LE(PLAYER_CHIPS_AT));
-      }
-    }
-    return { tables, rakeChips };
+    return { tables };
   } catch {
     // An RPC that is down must not be reported as an empty poker room.
     return null;
   }
 }
-
-/**
- * The least volume consistent with the rake the program actually took.
- *
- * Every raked chip implies at least forty chips of pot behind it. Hands that
- * folded before the flop, and pots small enough to be rake-free, contributed
- * volume this cannot see at all — so the true figure is above this and never
- * below it.
- */
-export const volumeFloorChips = (rakeChips: number) =>
-  Math.floor(rakeChips * POT_PER_RAKE_CHIP);
 
 /** base58, for the memcmp filter. Small enough not to warrant a dependency. */
 function bs58(bytes: Uint8Array): string {
