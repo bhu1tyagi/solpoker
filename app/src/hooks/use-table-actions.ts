@@ -439,18 +439,33 @@ export function useTableActions(args: {
         // Delegation takes a moment to reach the rollup, and the base layer
         // cannot say when: it flips owners the moment the transaction lands.
         // Ask the rollup itself whether it serves the last seat yet.
+        //
+        // Public accounts only. This used to demand all six hole accounts too,
+        // and that check can never pass with players seated: the validator
+        // serves a permission-gated account to its member and to nobody else —
+        // that is the whole privacy design — so the starter polling another
+        // player's hole reads null forever. Measured on mainnet: a start that
+        // had delegated every account cleanly still waited out all thirty
+        // seconds staring at the two occupied seats' holes and then rolled
+        // itself back, every time. The deck stays off the list for the same
+        // reason: securing locks it to nobody, and the lock outlives a pause.
+        //
+        // The holes are not unguarded by this. Each hole delegates in the same
+        // transaction as its seat, so a seat the rollup serves vouches for its
+        // hole — which is what the old check was really after, from the one
+        // account it is never allowed to see.
         setBusy("start:waiting");
         const mustBeThere = [
           table,
+          handPda(table),
           ...Array.from({ length: MAX_SEATS }, (_, i) => seatPda(table, i)),
-          ...Array.from({ length: MAX_SEATS }, (_, i) => holePda(table, i)),
         ];
         let allArrived = false;
         for (let t = 0; t < 40; t++) {
           try {
-            // Every account, not just the last seat. Waiting on one and
-            // assuming the rest is how a table with a missing hole account got
-            // as far as being declared live, and then dealt nobody in.
+            // Every public account, not just the last seat. Waiting on one
+            // and assuming the rest is how a table with a missing hole account
+            // got as far as being declared live, and then dealt nobody in.
             const infos = await erConnection.getMultipleAccountsInfo(mustBeThere);
             if (infos.every((i) => i !== null)) {
               allArrived = true;
