@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeConfig, decodeTable } from "@/lib/decode";
+import { isTransient } from "@/lib/net";
 import {
   ABANDONED_AFTER_SECS,
   DECK_ACCOUNT_SIZE,
@@ -115,6 +116,9 @@ export function useTables() {
   const [tables, setTables] = useState<LobbyTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Whether at least one listing has succeeded, and how many have failed since. */
+  const hadTables = useRef(false);
+  const failures = useRef(0);
 
   /**
    * Reload the list.
@@ -250,11 +254,22 @@ export function useTables() {
           })
           .sort((a, b) => b.table.tableId - a.table.tableId),
       );
+      hadTables.current = true;
+      failures.current = 0;
     } catch (e) {
-      // Loud on purpose: a failed listing looked exactly like an empty lobby,
-      // and a player who had just created a table concluded it was gone.
-      console.error("table listing failed:", e);
-      setError(e instanceof Error ? e.message : String(e));
+      // Loud only when it matters. This used to console.error every failure,
+      // and with a poll every six seconds, one network blip put the dev
+      // overlay over a lobby that was fine: the last good list was still on
+      // screen and the next tick replaced it. A transient with a good list
+      // showing is weather, not news. Loud is reserved for failing with
+      // nothing to show — the case that once read as an empty lobby to a
+      // player who had just created a table — and for failures that repeat
+      // or are not network-shaped, which are real and worth a stack trace.
+      failures.current += 1;
+      if (!hadTables.current || failures.current >= 3 || !isTransient(e)) {
+        console.error("table listing failed:", e);
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setLoading(false);
     }
