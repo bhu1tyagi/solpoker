@@ -12,10 +12,16 @@ export const runtime = "nodejs";
  * Two rules run through all of it:
  *
  *   1. Absence, never a fabricated zero. Every figure is null when it is
- *      unknowable — no database, no verified hands, no hand carrying a pot —
- *      and the lobby renders a tile only for a non-null value. A poker room
- *      reporting $0 of volume is a lie about liveness; reporting nothing is
- *      the truth about what is known.
+ *      unknowable, and the lobby renders a tile only for a non-null value. A
+ *      poker room reporting $0 of volume is a lie about liveness; reporting
+ *      nothing is the truth about what is known.
+ *
+ *      `stored` is what makes that rule usable rather than paralysing. There
+ *      is a real difference between "no database is attached, so nobody knows
+ *      anything" and "the database answered and this room has played nothing
+ *      yet", and a payload of bare nulls collapses the two. With the flag,
+ *      the lobby can say a truthful zero in the second case and fall back to
+ *      chain figures in the first.
  *
  *   2. One window for the whole row. The totals are the last 24 hours while
  *      the last 24 hours had play, and all time otherwise. A quiet night
@@ -26,7 +32,15 @@ export const runtime = "nodejs";
  */
 
 interface Totals {
+  /** Hands stored. Zero is a fact once a database has answered. */
   hands: number | null;
+  /**
+   * Of those, how many carried a pot anyone observed. The money figures below
+   * are computed over these and no others, so this is what says whether they
+   * can be trusted — and, when it is short of `hands`, that volume is a floor
+   * rather than a total.
+   */
+  potted: number | null;
   volumeChips: number | null;
   avgPotChips: number | null;
   biggestPotChips: number | null;
@@ -34,6 +48,7 @@ interface Totals {
 
 const NOTHING: Totals = {
   hands: null,
+  potted: null,
   volumeChips: null,
   avgPotChips: null,
   biggestPotChips: null,
@@ -42,17 +57,18 @@ const NOTHING: Totals = {
 /**
  * One row of counts into the shape the lobby renders.
  *
- * `potted` is separate from `hands` on purpose: a hand can be verified and
- * stored without anyone having watched its pot, and summing over those would
- * produce a real-looking volume that is short by however many went unwatched.
- * So the money figures live or die on `potted`, and the hand count on `hands`.
+ * `potted` gates the money figures, and `hands` does not gate itself. A hand
+ * can be verified and stored without anyone having watched its pot, and
+ * summing over those would produce a real-looking volume short by however
+ * many went unwatched — so an average over no pots is null, while a count of
+ * no hands is simply zero.
  */
 function totals(row: Record<string, unknown>, w: "24h" | "all"): Totals {
   const n = (k: string) => Number(row[`${k}_${w}`] ?? 0);
-  const hands = n("hands");
   const potted = n("potted");
   return {
-    hands: hands > 0 ? hands : null,
+    hands: n("hands"),
+    potted,
     volumeChips: potted > 0 ? n("volume") : null,
     avgPotChips: potted > 0 ? Math.round(n("avg")) : null,
     biggestPotChips: potted > 0 ? n("max") : null,
@@ -63,7 +79,7 @@ export async function GET() {
   const s = db();
   if (!s) {
     return NextResponse.json(
-      { names: {}, window: "24h", ...NOTHING, tables: {} },
+      { names: {}, window: "24h", stored: false, ...NOTHING, tables: {} },
       { headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=60" } },
     );
   }
@@ -123,8 +139,8 @@ export async function GET() {
   for (const r of perTable) {
     const t = totals(r as Record<string, unknown>, window);
     // A table with nothing in the chosen window has nothing to say about
-    // itself; an entry of all-nulls would only make the client check them.
-    if (t.hands === null) continue;
+    // itself; an entry of zeroes would only make the client check them.
+    if (!t.hands) continue;
     tables[String(r.table_id)] = {
       ...t,
       lastHandAt: r.last_hand_at ? Math.round(Number(r.last_hand_at)) : null,
@@ -135,6 +151,7 @@ export async function GET() {
     {
       names,
       window,
+      stored: true,
       ...totals(all as Record<string, unknown>, window),
       tables,
     },

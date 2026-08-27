@@ -46,6 +46,14 @@ const TIERS = [
 /** A stat tile: its name, its figure, and the window the figure covers. */
 type Tile = [label: string, value: string, window?: string];
 
+/**
+ * Stands in for a figure nobody can answer yet. An en dash, not a zero and
+ * not an em dash: it has to read as "no number here" without looking like a
+ * number, and without becoming a piece of punctuation this product does not
+ * use anywhere else.
+ */
+const DASH = "–";
+
 export default function Lobby() {
   const { connected, publicKey } = useWallet();
   const { state, buy, sell, busy, affordable, buyBlocked, sellBlocked } = usePlayer();
@@ -98,34 +106,33 @@ export default function Lobby() {
    * next hand starts. They come from hands clients reported and the server
    * re-verified.
    *
-   * The chain figures are the fallback rather than the headline. They fill
-   * whatever the database cannot answer, in order, so the row is always four
-   * tiles: a brand-new room with nothing stored still says how many seats are
-   * open instead of showing an empty band, and a room with a day behind it
-   * leads with the day. Nothing is ever padded with a zero — a tile appears
-   * because some source genuinely knows its number.
+   * `meta.stored` is the switch, not the figures. Once a database has
+   * answered, a count of zero hands is a fact about this room and gets said
+   * out loud. Until then nothing is known at all, and the row falls back to
+   * the live chain counts rather than inventing a zero or showing an empty
+   * band. The two states look identical in the numbers and are completely
+   * different claims, which is the whole reason the flag exists.
+   *
+   * A figure that stays unknowable inside a room that HAS been counted shows
+   * a dash. An average pot over no observed pots is not zero, it is a
+   * question nobody has answered yet.
    */
-  const tiles = useMemo(() => {
-    const played: Tile[] = [];
-    if (meta.hands !== null) {
-      played.push(["Hands", meta.hands.toLocaleString(), since]);
+  const tiles = useMemo<Tile[]>(() => {
+    if (!meta.stored) {
+      return [
+        ["Players seated", String(stats.players)],
+        ["Active tables", String(stats.tables)],
+        ["Open seats", String(stats.seats)],
+        ["Hands live", String(stats.live)],
+      ];
     }
-    if (meta.volumeChips !== null) {
-      played.push(["Volume", formatUsd(meta.volumeChips), since]);
-    }
-    if (meta.avgPotChips !== null) {
-      played.push(["Average pot", formatUsd(meta.avgPotChips), since]);
-    }
-    if (meta.biggestPotChips !== null) {
-      played.push(["Biggest pot", formatUsd(meta.biggestPotChips), since]);
-    }
-    const now: Tile[] = [
-      ["Players seated", String(stats.players)],
-      ["Active tables", String(stats.tables)],
-      ["Open seats", String(stats.seats)],
-      ["Hands live", String(stats.live)],
+    const money = (chips: number | null) => (chips === null ? DASH : formatUsd(chips));
+    return [
+      ["Hands", (meta.hands ?? 0).toLocaleString(), since],
+      ["Volume", money(meta.volumeChips), since],
+      ["Average pot", money(meta.avgPotChips), since],
+      ["Biggest pot", money(meta.biggestPotChips), since],
     ];
-    return [...played, ...now.slice(0, Math.max(0, 4 - played.length))];
   }, [meta, since, stats]);
 
   const filtered = useMemo(
@@ -234,7 +241,18 @@ export default function Lobby() {
                   {label}
                   {note && <em className="lobby-stat-when">{note}</em>}
                 </span>
-                <span className="num lobby-stat-fig">{value}</span>
+                {/* A placeholder must not carry a real figure's weight, or
+                    the row reads as four answers when one of them is a
+                    shrug. */}
+                <span
+                  className={
+                    value === DASH
+                      ? "num lobby-stat-fig is-unknown"
+                      : "num lobby-stat-fig"
+                  }
+                >
+                  {value}
+                </span>
               </div>
             ))}
           </section>

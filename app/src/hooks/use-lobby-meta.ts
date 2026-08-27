@@ -15,8 +15,10 @@ import { useEffect, useState } from "react";
 
 /** Play totals over whichever window the server chose. */
 export interface Totals {
-  /** Hands verified and stored. */
+  /** Hands verified and stored. Zero is a fact; null means nobody knows. */
   hands: number | null;
+  /** How many of those carried a pot anyone saw. The money figures use only these. */
+  potted: number | null;
   /** Chips that moved through pots. Null until hands carry an observed pot. */
   volumeChips: number | null;
   avgPotChips: number | null;
@@ -31,6 +33,16 @@ export interface TableTotals extends Totals {
 export interface LobbyMeta extends Totals {
   names: Record<string, string>;
   /**
+   * A database answered.
+   *
+   * This is the difference between "this room has played nothing yet" and
+   * "nobody is keeping track", which look identical in the figures and are
+   * not the same claim at all. False keeps the lobby on chain-derived tiles;
+   * true lets it state a zero, because a zero is then something known rather
+   * than something assumed.
+   */
+  stored: boolean;
+  /**
    * Which stretch of time every figure above covers. The server picks the
    * last 24 hours while there was play in it and all time otherwise, so a
    * quiet night reads as history rather than as an empty room. Labels have to
@@ -43,8 +55,10 @@ export interface LobbyMeta extends Totals {
 
 const EMPTY: LobbyMeta = {
   names: {},
+  stored: false,
   window: "24h",
   hands: null,
+  potted: null,
   volumeChips: null,
   avgPotChips: null,
   biggestPotChips: null,
@@ -66,8 +80,10 @@ export function useLobbyMeta(): LobbyMeta {
         if (!dead) {
           setMeta({
             names: body.names ?? {},
+            stored: body.stored === true,
             window: body.window === "all" ? "all" : "24h",
             hands: body.hands ?? null,
+            potted: body.potted ?? null,
             volumeChips: body.volumeChips ?? null,
             avgPotChips: body.avgPotChips ?? null,
             biggestPotChips: body.biggestPotChips ?? null,

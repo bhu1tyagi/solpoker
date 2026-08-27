@@ -2728,6 +2728,14 @@ input[type="range"]::-moz-range-thumb {
   font-weight: 700;
   line-height: 1;
 }
+/* The stand-in for a figure nobody can answer yet. Dimmed and lightened so
+   it reads as a held space rather than as an answer. */
+.lobby-stat-fig.is-unknown {
+  color: var(--c-ink-faint);
+  opacity: 0.55;
+  font-weight: 400;
+}
+
 /* Which window a stored figure covers, said quietly beside its name. The
    label is already uppercase and tracked out, so this only needs to step
    back in weight and colour to read as a qualifier rather than a second
