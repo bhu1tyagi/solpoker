@@ -2,19 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { motion } from "motion/react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { CreateTableModal } from "@/components/chrome/CreateTableModal";
+import { SiteHeader } from "@/components/chrome/SiteHeader";
+import { Orbs } from "@/components/chrome/Orbs";
+import { SolanaMark } from "@/components/primitives/StackCredit";
+import { LobbyGate } from "@/components/onboarding/LobbyGate";
 import { Button } from "@/components/primitives/Button";
 import { Modal, Skeleton } from "@/components/primitives/Surface";
 import { ChipGlyph } from "@/components/primitives/Chip";
-import { ChipO, Logo } from "@/components/primitives/Logo";
-import { SolanaMark, StackCredit } from "@/components/primitives/StackCredit";
 import { Avatar, shortKey } from "@/components/primitives/Avatar";
 import {
   CashOutIcon,
-  InfoIcon,
   NewTableIcon,
   PlayersIcon,
   PlusIcon,
@@ -29,11 +29,19 @@ import { isJoinable, useTables, type LobbyTable } from "@/hooks/use-tables";
 import { spring, stagger } from "@/styles/theme";
 import { MAX_SEATS, PLAY_FLOOR_LAMPORTS } from "@/lib/constants";
 import { formatUsd, formatUsdRange } from "@/lib/money";
+import { displayName } from "@/lib/table-names";
+import { useLobbyMeta } from "@/hooks/use-lobby-meta";
 
-const WalletMultiButton = dynamic(
-  () => import("@solana/wallet-adapter-react-ui").then((m) => m.WalletMultiButton),
-  { ssr: false, loading: () => <div style={{ width: 150, height: 48 }} /> },
-);
+/**
+ * Stake tiers, mirrored from CreateTableModal's STAKES by big blind. A table
+ * made outside these tiers (an older build, a custom config) still shows; it
+ * simply matches only "All stakes".
+ */
+const TIERS = [
+  { key: "micro", label: "Micro", sub: "$0.10 / $0.20", bb: 20 },
+  { key: "low", label: "Low", sub: "$0.50 / $1", bb: 100 },
+  { key: "high", label: "High", sub: "$2.50 / $5", bb: 500 },
+] as const;
 
 export default function Lobby() {
   const { connected, publicKey } = useWallet();
@@ -42,6 +50,10 @@ export default function Lobby() {
   const { tables, loading, error, refresh: refreshTables } = useTables();
   const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<"players" | "mine">("players");
+  const [tier, setTier] = useState<"all" | (typeof TIERS)[number]["key"]>("all");
+  const meta = useLobbyMeta();
+  const [openOnly, setOpenOnly] = useState(false);
+  const [liveOnly, setLiveOnly] = useState(false);
 
   const me = publicKey?.toBase58();
   const visible = useMemo(
@@ -60,6 +72,37 @@ export default function Lobby() {
     [tables, me],
   );
 
+  /*
+   * The stat row. Every figure is computed from the same on-chain listing the
+   * grid renders, refreshed on the listing's own 6-second poll. Nothing here
+   * is fetched separately, so the tiles can never disagree with the cards
+   * below them — and nothing here is invented. Volume and average pot stay
+   * absent until the settle-indexer backend exists to actually know them.
+   */
+  const stats = useMemo(() => {
+    const live = visible.filter((t) => t.delegated).length;
+    const players = visible.reduce((n, t) => n + t.seated, 0);
+    const seats = visible.reduce(
+      (n, t) => n + (t.outdated ? 0 : MAX_SEATS - t.seated),
+      0,
+    );
+    return { players, tables: visible.length, seats, live };
+  }, [visible]);
+
+  const filtered = useMemo(
+    () =>
+      visible.filter((t) => {
+        if (tier !== "all") {
+          const wanted = TIERS.find((x) => x.key === tier)?.bb;
+          if (!t.config || t.config.bigBlind !== wanted) return false;
+        }
+        if (openOnly && !isJoinable(t)) return false;
+        if (liveOnly && !t.delegated) return false;
+        return true;
+      }),
+    [visible, tier, openOnly, liveOnly],
+  );
+
   // Whether this wallet can actually sit down. Drives what the table area
   // shows: a room list is no use to someone who cannot join one yet.
   const notReady =
@@ -69,106 +112,41 @@ export default function Lobby() {
 
   return (
     <>
-      {/* The class carries the shape: content beside the side column on a
-          desktop, one column on anything narrower. */}
-      <main className="lobby-shell">
-        <section>
-          {/* The name, then what you carry with the wallet beside it, then the
-              things you can do, on their own line underneath. */}
-          <header style={{ marginBottom: 44 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 16,
-                flexWrap: "wrap",
-                marginBottom: 20,
-              }}
-            >
-              <div style={{ marginRight: "auto" }}>
-                <h1
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    // The mark scales with the name rather than sitting at a
-                    // fixed size, so the pair holds together from a phone to a
-                    // desktop.
-                    gap: "clamp(10px, 1.2vw, 16px)",
-                    fontSize: "clamp(34px, 4vw, 52px)",
-                    color: "var(--c-green)",
-                    // Dela Gothic sets very tight at display size and the name
-                    // was reading as one dense block. A little air lets the
-                    // letters — and the chip standing in for the 'o' — be read
-                    // as separate shapes.
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  <span className="wordmark-solana" style={{ whiteSpace: "nowrap" }}>
-                    P
-                    <ChipO />
-                    kerable
-                  </span>
-                </h1>
-                <p
-                  style={{
-                    margin: "4px 0 0",
-                    fontSize: "var(--t-body-sm-size)",
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    color: "var(--c-ink-muted)",
-                  }}
-                >
-                  Play poker with stablecoins
-                </p>
-                <StackCredit />
-              </div>
+      {/* Nobody enters without a wallet. The gate renders itself only while
+          a step is unmet, so the ready path costs one null render. */}
+      <LobbyGate />
+      <SiteHeader />
 
+      <main id="main" className="landing lobby-main">
+        <Orbs />
+        <div className="landing-inner">
+          <header className="lobby-head">
+            <div className="lobby-head-copy">
+              <h1>Game lobby</h1>
+              <p>Six-max no-limit hold&rsquo;em. Sit anywhere with an open seat.</p>
+            </div>
+
+            <div className="lobby-tools">
               {connected && (
                 <>
                   {/* Your chips, with the way to get more built into the same
-                      control, then the way to take them out, then the wallet. */}
-                  <div
-                    className="m-pill"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      background: "var(--c-felt-raised)",
-                      borderRadius: "var(--r-lg)",
-                      padding: "0 5px 0 12px",
-                      height: 44,
-                    }}
-                  >
-                    <ChipGlyph size={22} />
-                    <span
-                      className="num"
-                      style={{ fontWeight: 700, fontSize: 16, color: "var(--c-ink-muted)" }}
-                    >
+                      control, then the way to take them out. */}
+                  <div className="lobby-chips glass">
+                    <ChipGlyph size={20} />
+                    <span className="num">
                       {state ? state.chips.toLocaleString() : "..."}
                     </span>
                     <motion.button
-                      className="m-plus"
+                      className="lobby-chips-add"
                       title="Buy chips"
                       aria-label="Buy chips"
                       onClick={() => setExchange("buy")}
                       whileTap={{ scale: 0.94 }}
                       transition={spring.snappy}
-                      style={{
-                        width: 34,
-                        height: 34,
-                        display: "grid",
-                        placeItems: "center",
-                        border: "none",
-                        borderRadius: "var(--r-lg)",
-                        background: "var(--c-green)",
-                        color: "var(--c-felt)",
-                        cursor: "pointer",
-                      }}
                     >
-                      <PlusIcon size={16} />
+                      <PlusIcon size={15} />
                     </motion.button>
                   </div>
-
                   <IconButton
                     title="Cash out"
                     disabled={!state || state.chips === 0}
@@ -176,144 +154,188 @@ export default function Lobby() {
                   >
                     <CashOutIcon />
                   </IconButton>
+                  {state && <SolGauge lamports={state.lamports} />}
+                  <Button variant="primary" size="lg" onClick={() => setCreating(true)}>
+                    <NewTableIcon size={16} />
+                    Open a table
+                  </Button>
                 </>
               )}
-
-              {/* SOL is not what a chip is made of, but it is what every
-                  transaction costs, and a wallet can hold plenty of dollars and
-                  still be unable to sit down.
-
-                  Two states, and they say different things on purpose. When
-                  there is enough, the balance is a quiet fact and gets out of
-                  the way. When there is not, the balance is the wrong number to
-                  show — what you need is the shortfall, because that is the
-                  amount you are about to go and send. "Top up to play" made
-                  someone work that out for themselves. */}
-              {connected && state && <SolGauge lamports={state.lamports} />}
-
-              <WalletMultiButton />
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              {connected && (
-                <LabelButton
-                  title="Create a table"
-                  icon={<NewTableIcon size={16} />}
-                  onClick={() => setCreating(true)}
-                />
-              )}
-              <Link href="/trust" style={{ textDecoration: "none" }}>
-                <LabelButton title="How this works" icon={<InfoIcon size={16} />} />
-              </Link>
-
-              {/* Chips left on a seat are the one thing worth interrupting the
-                  layout for, so a table you are sitting at says so here rather
-                  than waiting to be found under a tab. */}
-              {myTables.map((t) => (
-                <Link
-                  key={t.table.address}
-                  href={`/table/${t.table.tableId}`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <LabelButton title="Return to table" icon={<TableIcon size={16} />} solid />
-                </Link>
-              ))}
-
-              <div style={{ marginLeft: "auto" }}>
-                <LabelButton
-                  title="Refresh"
-                  icon={<RefreshIcon size={16} />}
-                  onClick={() => void refreshTables(true)}
-                />
-              </div>
+              <IconButton title="Refresh" onClick={() => void refreshTables(true)}>
+                <RefreshIcon />
+              </IconButton>
             </div>
           </header>
 
-          {/* Column headings, then a row per room. On a phone the buy-in folds
-              under the stakes and the seat count goes without saying. */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "var(--lobby-cols)",
-              gap: "var(--lobby-gap)",
-              padding: "0 8px 14px",
-              color: "var(--c-ink-muted)",
-              opacity: 0.64,
-              fontSize: 14,
-              letterSpacing: "0.02em",
-            }}
-          >
-            <span>Stakes</span>
-            <span className="m-hide">Buy-in</span>
-            <span className="m-hide">Seats</span>
-            <span>Players</span>
-            <span style={{ textAlign: "right" }}>Action</span>
-          </div>
-
-          {loading ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <Skeleton height={64} />
-              <Skeleton height={64} />
-              <Skeleton height={64} />
-            </div>
-          ) : error ? (
-            <EmptyRow tone="var(--c-loss)">
-              <span>Could not reach the network.</span>
-              <Button variant="ghost" size="sm" onClick={() => void refreshTables()}>
-                Try again
-              </Button>
-            </EmptyRow>
-          ) : notReady && state ? (
-            <GetReady state={state} onDeposit={() => setExchange("buy")} />
-          ) : visible.length === 0 ? (
-            <EmptyRow>
-              <TableIcon size={22} />
-              <span>No rooms yet.</span>
-              {connected && (
-                <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
-                  Open one
-                </Button>
-              )}
-            </EmptyRow>
-          ) : (
-            <div>
-              {visible.slice(0, 25).map((t, i) => (
-                <motion.div
+          {/* Chips left on a seat are worth interrupting the layout for. */}
+          {myTables.length > 0 && (
+            <div className="lobby-return">
+              {myTables.map((t) => (
+                <Button
                   key={t.table.address}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ ...spring.gentle, delay: i * stagger.list }}
+                  href={`/table/${t.table.tableId}`}
+                  variant="sol"
+                  size="md"
                 >
-                  <TableRow t={t} />
-                </motion.div>
+                  <TableIcon size={15} />
+                  Return to {displayName(t.table.tableId, meta.names[String(t.table.tableId)])}
+                </Button>
               ))}
             </div>
           )}
 
-        </section>
+          <section className="lobby-stats" aria-label="Right now">
+            {(
+              [
+                ["Players seated", String(stats.players)],
+                ["Active tables", String(stats.tables)],
+                ["Open seats", String(stats.seats)],
+                ["Hands live", String(stats.live)],
+                // Backend-fed, verified-hands aggregates. Rendered only when
+                // they exist: a missing indexer must read as absence, never
+                // as a zero-volume poker room.
+                ...(meta.hands24h !== null
+                  ? [["Hands, 24h", meta.hands24h.toLocaleString()]]
+                  : []),
+                ...(meta.volume24hChips !== null
+                  ? [["Volume, 24h", formatUsd(meta.volume24hChips)]]
+                  : []),
+              ] as [string, string][]
+            ).map(([label, value]) => (
+              <div key={label} className="lobby-stat glass">
+                <span className="label">{label}</span>
+                <span className="num lobby-stat-fig">{value}</span>
+              </div>
+            ))}
+          </section>
 
-        {/* Who is winning, and where you are sitting. The panel lifts away from
-            the page on its left edge and sinks into it on the right, so the
-            column reads as its own surface without needing a border. */}
-        <aside style={{ alignSelf: "stretch" }}>
-          <div style={{ display: "flex", gap: 0 }}>
-            <Tab active={tab === "players"} onClick={() => setTab("players")} title="Leaderboard">
-              <TrophyIcon size={16} />
-              Leaderboard
-            </Tab>
-            <Tab active={tab === "mine"} onClick={() => setTab("mine")} title="Your tables">
-              <TableIcon size={16} />
-              Your tables
-            </Tab>
+          <div className="lobby-grid">
+            <aside className="lobby-filters" aria-label="Filters">
+              <div className="lobby-filter-group glass">
+                <h3 className="label">Stakes</h3>
+                <label className="lobby-radio">
+                  <input
+                    type="radio"
+                    name="tier"
+                    checked={tier === "all"}
+                    onChange={() => setTier("all")}
+                  />
+                  <span>All stakes</span>
+                </label>
+                {TIERS.map((s) => (
+                  <label key={s.key} className="lobby-radio">
+                    <input
+                      type="radio"
+                      name="tier"
+                      checked={tier === s.key}
+                      onChange={() => setTier(s.key)}
+                    />
+                    <span>
+                      {s.label}
+                      <em className="num">{s.sub}</em>
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="lobby-filter-group glass">
+                <h3 className="label">Status</h3>
+                <label className="lobby-check">
+                  <input
+                    type="checkbox"
+                    checked={openOnly}
+                    onChange={(e) => setOpenOnly(e.target.checked)}
+                  />
+                  <span>With open seats</span>
+                </label>
+                <label className="lobby-check">
+                  <input
+                    type="checkbox"
+                    checked={liveOnly}
+                    onChange={(e) => setLiveOnly(e.target.checked)}
+                  />
+                  <span>Hand in progress</span>
+                </label>
+              </div>
+            </aside>
+
+            <section className="lobby-tables" aria-label="Tables">
+              {loading ? (
+                <div className="lobby-cards">
+                  <Skeleton height={190} />
+                  <Skeleton height={190} />
+                  <Skeleton height={190} />
+                  <Skeleton height={190} />
+                </div>
+              ) : error ? (
+                <EmptyRow tone="var(--c-loss)">
+                  <span>Could not reach the network.</span>
+                  <Button variant="ghost" size="sm" onClick={() => void refreshTables()}>
+                    Try again
+                  </Button>
+                </EmptyRow>
+              ) : notReady && state ? (
+                <GetReady state={state} onDeposit={() => setExchange("buy")} />
+              ) : visible.length === 0 ? (
+                <EmptyRow>
+                  <TableIcon size={22} />
+                  <span>Quiet right now.</span>
+                  {connected && (
+                    <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+                      Open the first table
+                    </Button>
+                  )}
+                </EmptyRow>
+              ) : filtered.length === 0 ? (
+                // Filtered-to-nothing is NOT the first-run void; say which
+                // it is and how to get back.
+                <EmptyRow>
+                  <span>Nothing matches those filters.</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setTier("all");
+                      setOpenOnly(false);
+                      setLiveOnly(false);
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                </EmptyRow>
+              ) : (
+                <div className="lobby-cards">
+                  {filtered.slice(0, 24).map((t, i) => (
+                    <motion.div
+                      key={t.table.address}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ ...spring.gentle, delay: i * stagger.list }}
+                    >
+                      <TableCard t={t} registered={meta.names[String(t.table.tableId)]} />
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* Who is winning, and where you are sitting. */}
+            <aside className="lobby-side" aria-label="Standings">
+              <div style={{ display: "flex", gap: 0 }}>
+                <Tab active={tab === "players"} onClick={() => setTab("players")} title="Leaderboard">
+                  <TrophyIcon size={16} />
+                  Leaderboard
+                </Tab>
+                <Tab active={tab === "mine"} onClick={() => setTab("mine")} title="Your tables">
+                  <TableIcon size={16} />
+                  Your tables
+                </Tab>
+              </div>
+              <div style={{ height: 1, background: "var(--c-rule)" }} />
+              {tab === "players" ? <Leaderboard me={me} /> : <MyTables tables={myTables} />}
+            </aside>
           </div>
-          <div style={{ height: 1, background: "var(--c-felt-edge)", opacity: 0.48 }} />
-
-          {tab === "players" ? (
-            <Leaderboard me={me} />
-          ) : (
-            <MyTables tables={myTables} />
-          )}
-        </aside>
+        </div>
       </main>
 
       <ExchangeModal
@@ -338,142 +360,73 @@ export default function Lobby() {
   );
 }
 
-function TableRow({ t }: { t: LobbyTable }) {
+/**
+ * A table as a place, not a row: generated name over real facts. Everything
+ * on the card is read from chain except the name, which is deterministic
+ * from the id (see table-names.ts) — labelling, never invented liveness.
+ */
+function TableCard({ t, registered }: { t: LobbyTable; registered?: string }) {
   const joinable = isJoinable(t);
   const live = t.delegated;
 
   return (
     <Link href={`/table/${t.table.tableId}`} style={{ textDecoration: "none" }}>
-      <motion.div
-        className="lobby-row"
-        whileHover={{ backgroundColor: "var(--c-felt-raised)" }}
+      <motion.article
+        className="table-card glass glow-hover"
+        whileHover={{ y: -2 }}
         transition={spring.snappy}
-        style={{
-          display: "grid",
-          gridTemplateColumns: "var(--lobby-cols)",
-          gap: "var(--lobby-gap)",
-          alignItems: "center",
-          padding: "0 8px",
-          borderRadius: "var(--r-lg)",
-        }}
       >
-        <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-          <span
-            className="num"
-            style={{ fontWeight: 500, fontSize: 18, color: "var(--c-ink-muted)" }}
-          >
-            {t.config ? `${t.config.smallBlind} / ${t.config.bigBlind}` : "-"}
-          </span>
-          <span
-            className="tnum m-hide"
-            style={{ fontSize: 11, color: "var(--c-ink-faint)" }}
-          >
-            {t.table.tableId}
-          </span>
-          {/* The phone's buy-in line, standing in for the hidden column. */}
-          <span
-            className="num m-only"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              fontSize: 12,
-              color: "var(--c-green)",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <ChipGlyph size={12} />
-            {t.config
-              ? `${t.config.minBuyIn.toLocaleString()} - ${t.config.maxBuyIn.toLocaleString()}`
-              : "-"}
-          </span>
-        </span>
-
-        {/* Chips are the unit at the table, but nobody arrives knowing what a
-            chip is worth. The money goes underneath, quietly, so the row can
-            still be read at a glance. */}
-        <span className="m-hide" style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          <span
-            className="num"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              fontWeight: 500,
-              fontSize: 18,
-              color: "var(--c-green)",
-            }}
-          >
-            <ChipGlyph size={17} />
-            {t.config
-              ? `${t.config.minBuyIn.toLocaleString()} - ${t.config.maxBuyIn.toLocaleString()}`
-              : "-"}
-          </span>
-          {t.config && (
-            <span
-              className="num"
-              style={{ fontSize: "var(--t-label-size)", color: "var(--c-ink-muted)", paddingLeft: 25 }}
-            >
-              {formatUsdRange(t.config.minBuyIn, t.config.maxBuyIn)}
+        <header className="table-card-head">
+          <div>
+            <h3>{displayName(t.table.tableId, registered)}</h3>
+            <p className="table-card-kind">
+              NL Hold&rsquo;em <span aria-hidden>&middot;</span> six-max
+              <span className="tnum table-card-id"> #{String(t.table.tableId)}</span>
+            </p>
+          </div>
+          {live && (
+            <span className="table-card-live">
+              <span className="table-card-live-dot animate-badge-pulse" aria-hidden />
+              live
             </span>
           )}
-        </span>
+        </header>
 
-        <span
-          className="m-hide"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 10,
-            color: "var(--c-green)",
-            fontWeight: 500,
-            fontSize: 18,
-          }}
-        >
-          <span style={{ color: "var(--c-ink-muted)", opacity: 0.8 }}>
-            <TableIcon size={22} />
+        <dl className="table-card-facts">
+          <div>
+            <dt className="label">Blinds</dt>
+            <dd className="num">
+              {t.config
+                ? `${formatUsd(t.config.smallBlind)} / ${formatUsd(t.config.bigBlind)}`
+                : "-"}
+            </dd>
+          </div>
+          <div>
+            <dt className="label">Buy-in</dt>
+            <dd className="num">
+              {t.config ? formatUsdRange(t.config.minBuyIn, t.config.maxBuyIn) : "-"}
+            </dd>
+          </div>
+        </dl>
+
+        <div className="table-card-foot">
+          <span className="table-card-seats" aria-label={`${t.seated} of ${MAX_SEATS} seats taken`}>
+            {Array.from({ length: MAX_SEATS }, (_, i) => (
+              <i key={i} className={i < t.seated ? "is-taken" : undefined} />
+            ))}
+            <span className="num">
+              {t.seated}/{MAX_SEATS}
+            </span>
           </span>
-          {MAX_SEATS}
-        </span>
-
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 10,
-            color: "var(--c-green)",
-            fontWeight: 500,
-            fontSize: 18,
-          }}
-        >
-          <span style={{ color: "var(--c-ink-muted)", opacity: 0.8 }}>
-            <PlayersIcon size={22} />
+          <span
+            className={
+              joinable && !live ? "table-card-cta is-join" : "table-card-cta"
+            }
+          >
+            {live ? "Watch" : joinable ? "Join table" : "View"}
           </span>
-          {t.seated}
-        </span>
-
-        <span
-          className="row-cta"
-          style={{
-            justifySelf: "stretch",
-            height: 48,
-            display: "grid",
-            placeItems: "center",
-            borderRadius: "var(--r-lg)",
-            background:
-              joinable && !live
-                ? "var(--c-green)"
-                : "color-mix(in srgb, var(--c-green) 8%, transparent)",
-            color: joinable && !live ? "var(--c-felt)" : "var(--c-green)",
-            fontWeight: 700,
-            fontSize: 14,
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-          }}
-        >
-          {live ? "Watch" : joinable ? "Join" : "View"}
-        </span>
-      </motion.div>
+        </div>
+      </motion.article>
     </Link>
   );
 }
@@ -783,67 +736,6 @@ function Tab({
  *
  * The icon alone was a guessing game for anything that is not universal, so
  * everything outside the balance strip says what it does.
- */
-function LabelButton({
-  title,
-  icon,
-  onClick,
-  solid = false,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  onClick?: () => void;
-  solid?: boolean;
-}) {
-  return (
-    <motion.button
-      className="m-btn"
-      title={title}
-      aria-label={title}
-      onClick={onClick}
-      whileHover={{ y: -1 }}
-      whileTap={{ scale: 0.97 }}
-      transition={spring.snappy}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        height: 40,
-        padding: "0 14px",
-        border: "none",
-        borderRadius: "var(--r-lg)",
-        background: solid ? "var(--c-green)" : "var(--c-felt-raised)",
-        color: solid ? "var(--c-felt)" : "var(--c-green)",
-        fontWeight: 700,
-        fontSize: 12,
-        letterSpacing: "0.04em",
-        textTransform: "uppercase",
-        whiteSpace: "nowrap",
-        cursor: "pointer",
-      }}
-    >
-      {icon}
-      {title}
-    </motion.button>
-  );
-}
-
-/**
- * What to do before you can sit down, in the place the lobby already puts
- * prompts.
- *
- * This used to be a stepper floating above the room list, and it never sat
- * right: a checkout wizard is a pattern for walking through pages, and it was
- * occupying a region the lobby does not otherwise have, restating balances the
- * header pills already show. So it stopped being a region. A room list is no
- * use to someone who cannot join a room, so when the wallet is not ready this
- * *is* the table area — same centred shape, same icon-sentence-button rhythm
- * as "No rooms yet", which is the lobby's own way of saying "nothing here, do
- * this".
- *
- * The three marks survive as a footnote underneath rather than the headline.
- * They answer "how much further" for anyone who wonders; the sentence above
- * answers "what now", which is what almost everyone actually wants.
  */
 function GetReady({
   state,

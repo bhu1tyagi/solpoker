@@ -56,6 +56,11 @@ const browser = await chromium.launch();
   }
 
   // Every number that changes while the player watches must be tabular.
+  // Checked in the LOBBY, not on the landing page: since the marketing hero
+  // stopped rendering chip amounts, the root page legitimately has no
+  // changing numbers, and probing it reported "unverified" against a page
+  // with nothing to verify. The lobby always carries money.
+  await page.goto(`${base}/lobby`, { waitUntil: "networkidle" });
   const nums = await page.$$eval(".num", (els) =>
     els.slice(0, 40).map((el) => ({
       text: el.textContent.trim().slice(0, 16),
@@ -132,6 +137,24 @@ const browser = await chromium.launch();
     // fires there; wait for the room to actually paint instead.
     await page.goto(`${base}${path}`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(path === "/" ? "h1" : "[aria-label^='Seat ']");
+
+    /*
+     * Wait for the emulated viewport to actually settle before measuring.
+     *
+     * Chromium applies mobile emulation asynchronously. On the FIRST
+     * navigation in a fresh context, DOMContentLoaded can arrive while
+     * window.innerWidth is still 413 — Chromium's default mobile fallback —
+     * even though the page has already laid out correctly at 390. Measuring
+     * there reports a phantom overflow of exactly 413 - 390 = 23px, and the
+     * emulation assertion below fires on the same race. The second navigation
+     * in the same context never sees it, which is why /table/1 always passed
+     * and / did not.
+     *
+     * This measured a real page as broken for as long as it has existed.
+     */
+    await page
+      .waitForFunction(() => window.innerWidth === 390, null, { timeout: 5000 })
+      .catch(() => {}); // fall through to the explicit assertion below
 
     // Nothing may scroll the page sideways at a supported width.
     const overflow = await page.evaluate(

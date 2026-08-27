@@ -86,12 +86,12 @@ async function openBrowser(browser, kp, name) {
 
 async function connectWallet(b) {
   await b.page.goto(BASE, { waitUntil: "networkidle", timeout: 60_000 });
-  await b.page.getByRole("button", { name: /select wallet/i }).click();
+  // The onboarding gate now fronts the lobby: the wallet list lives in it,
+  // so connecting means clicking the gate's own wallet row. Funded test
+  // wallets pass the SOL and USDC steps automatically and the gate closes
+  // itself; "Open a table" appearing is what proves the whole ladder passed.
   await b.page.getByRole("button", { name: /test wallet/i }).first().click();
-  // Connected means the lobby's own controls appear. Waiting for the word
-  // "chips" worked by accident: it matched the leaderboard's column header,
-  // which a virgin cluster with no ranked players never renders.
-  await b.page.getByRole("button", { name: /create a table/i }).waitFor({ timeout: 30_000 });
+  await b.page.getByRole("button", { name: /open a table/i }).waitFor({ timeout: 30_000 });
   log(`  ${b.name}: connected`);
 }
 
@@ -285,7 +285,7 @@ async function main() {
     await shot(A, "1-lobby");
 
     log("\n3. A creates a table");
-    await A.page.getByRole("button", { name: /create a table/i }).click();
+    await A.page.getByRole("button", { name: /open a table/i }).click();
     // The modal springs in; clicking mid-animation can miss.
     await A.page.waitForTimeout(1200);
     // One transient RPC error inside create() resets the modal in under a

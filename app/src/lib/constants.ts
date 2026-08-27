@@ -248,6 +248,14 @@ export const PLAY_FLOOR_LAMPORTS = 18_000_000;
  */
 export const CREATE_TABLE_LAMPORTS = 45_000_000;
 
+/**
+ * USDC the onboarding gate treats as "funded", in base units: the Micro
+ * table's minimum buy-in. Less than this can buy chips but cannot sit
+ * anywhere, so prompting for a deposit below it would declare a wallet ready
+ * for a room it cannot enter.
+ */
+export const ONBOARD_FLOOR_MICRO_USDC = 4_000_000;
+
 /** Salt protocol states, on Seat. */
 export const SALT_NONE = 0;
 export const SALT_COMMITTED = 1;
