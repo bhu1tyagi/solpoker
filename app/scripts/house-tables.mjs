@@ -56,6 +56,17 @@ const HOUSE_TABLES = [
   { label: "Micro", sb: 10, bb: 20, min: 400, max: 2_000 },
   { label: "Micro", sb: 10, bb: 20, min: 400, max: 2_000 },
   { label: "Low", sb: 50, bb: 100, min: 2_000, max: 10_000 },
+  /*
+   * The big table, sized to what the treasury can actually seat.
+   *
+   * The published High tier is $2.50/$5 with a $100 minimum, which needs $200
+   * to sit two players down and is therefore out of reach. This is the
+   * largest game the bankroll supports: twenty big blinds at the minimum,
+   * a hundred at the top, so a pot here can reach a hundred times what a
+   * Micro pot can. Stakes are set from the bankroll rather than the bankroll
+   * being pretended into the stakes.
+   */
+  { label: "Mid", sb: 25, bb: 50, min: 1_000, max: 10_000 },
 ];
 
 const args = process.argv.slice(2);
