@@ -3204,3 +3204,104 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--r-chip);
   background: var(--c-rule-strong);
 }
+
+/* ------------------------------------------------------------------ */
+/* The wordmark's chip, and the light coming off it.                   */
+/* ------------------------------------------------------------------ */
+
+.wordmark-o {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  /* The glow must not widen the word or push the letters around. */
+  isolation: isolate;
+}
+.wordmark-chip {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * The glow: two colours drifting behind the chip on their own slow cycle, so
+ * the mark looks lit rather than decorated. Sized past the chip and blurred,
+ * with pointer-events off, so it can never widen the word or catch a click.
+ */
+.wordmark-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.5em;
+  height: 1.5em;
+  margin: -0.75em 0 0 -0.75em;
+  border-radius: var(--r-chip);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  filter: blur(6px);
+  background:
+    radial-gradient(
+      circle at 34% 36%,
+      color-mix(in srgb, var(--c-purple) 85%, transparent) 0%,
+      transparent 62%
+    ),
+    radial-gradient(
+      circle at 66% 64%,
+      color-mix(in srgb, var(--c-green) 75%, transparent) 0%,
+      transparent 62%
+    );
+  animation: wordmark-drift 7s ease-in-out infinite;
+}
+
+/*
+ * The drift: the two lobes rotate around the chip and breathe. Kept under a
+ * full turn per cycle so it never reads as a spinner.
+ *
+ * Transform ONLY, deliberately. Animating opacity here silently beat the
+ * hover rule, because a running animation outranks a plain declaration in
+ * the cascade: the glow kept breathing at its own opacity and hovering the
+ * brand did visibly nothing. Opacity is left to the rules below so the
+ * pointer can actually change it.
+ */
+@keyframes wordmark-drift {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.12);
+  }
+}
+
+/*
+ * Interactive: hovering the brand pushes the light up and speeds the drift.
+ * Behind a fine pointer, because on touch :hover sticks after a tap and the
+ * mark would stay lit for the rest of the session.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .site-brand .wordmark-glow {
+    transition:
+      opacity var(--m-ui-base) var(--m-ease),
+      width var(--m-ui-base) var(--m-ease),
+      height var(--m-ui-base) var(--m-ease);
+  }
+  .site-brand:hover .wordmark-glow {
+    opacity: 0.85;
+    width: 1.85em;
+    height: 1.85em;
+    margin: -0.925em 0 0 -0.925em;
+    animation-duration: 3.2s;
+  }
+  .site-brand:hover .wordmark-chip {
+    transform: rotate(-8deg);
+  }
+  .wordmark-chip {
+    transition: transform var(--m-ui-base) var(--m-ease);
+  }
+}
+
+/* A light that never stops moving is a light nobody can read past. */
+@media (prefers-reduced-motion: reduce) {
+  .wordmark-glow {
+    animation: none !important;
+  }
+}

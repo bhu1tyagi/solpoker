@@ -176,7 +176,16 @@ export function Wordmark({ size = "1.75rem" }: { size?: string }) {
     <span className="wordmark" style={{ fontSize: size }}>
       P
       <span className="sr-only-o">o</span>
-      <img src="/logo-96.png" alt="" className="wordmark-chip" />
+      {/*
+        The chip sits in a positioned shell so a glow can live behind it. The
+        glow is a sibling, never a filter on the image: a drop-shadow filter
+        would trace the chip's own edges and read as a halo stuck to it,
+        while a blurred disc behind it reads as light coming off the chip.
+      */}
+      <span className="wordmark-o">
+        <span className="wordmark-glow" aria-hidden />
+        <img src="/logo-96.png" alt="" className="wordmark-chip" />
+      </span>
       KERABLE
     </span>
   );

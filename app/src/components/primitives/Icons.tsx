@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 /**
  * The icon set.
  *
@@ -46,49 +48,73 @@ export function ClockIcon({ size = 20 }: Props) {
  * recognised database glyph.
  *
  * A slab stack with one chip standing in front is the shape people already
- * read as poker chips, and it survives 16px: the slabs stay separate and the
- * chip keeps its inner ring.
+ * read as poker chips. It is drawn at two levels of detail, chosen by size.
+ *
+ * The chip occludes the stack with a MASK, not an opaque fill. A fill has to
+ * name a colour, and the moment this icon sat on a green button that colour
+ * was wrong and the chip turned into a black blob. A hole is correct on
+ * every surface.
  *
  * The rim dashes are the chip's edge spots. They sit close to the mark's
  * dashed ring, which is reserved for the turn clock, the loader and the
  * privacy indicator; the slab stack behind is what keeps the two apart.
  */
-/*
- * The chips need a finer line than the rest of the set: three concentric
- * rings at the shared 2px weight close into a blob by 20px.
- */
+/* A finer line for the detailed cut: three concentric rings at the set's
+   shared 2px weight close into a blob. */
 const chipFrame = (size: number) => ({ ...frame(size), strokeWidth: 1.7 });
 
-/**
- * One chip, face toward the reader: rim, edge spots, and the hub.
- *
- * Filled with the page ground rather than left hollow, so whatever sits
- * behind it is occluded; a chip you can see the stack through is a chip made
- * of glass. The dashes are the chip's edge spots.
- */
-function ChipFace({ cx, cy, r }: { cx: number; cy: number; r: number }) {
-  return (
-    <>
-      <circle cx={cx} cy={cy} r={r} fill="var(--c-felt)" />
-      <circle cx={cx} cy={cy} r={r} />
-      <circle cx={cx} cy={cy} r={r - 1.5} strokeDasharray="2.5 2.1" />
-      <circle cx={cx} cy={cy} r={r * 0.42} />
-    </>
-  );
-}
-
 export function TableIcon({ size = 20 }: Props) {
+  // Unique per instance: several render on one page, and a shared mask id
+  // would have them all resolve against whichever mounted first.
+  const id = useId();
+
+  // Below 24px the edge spots and the fifth slab close into a smudge, so the
+  // small cut drops them and keeps the set's normal stroke. Scaling one
+  // drawing to every size is how a 16px button icon becomes a blot.
+  if (size < 24) {
+    return (
+      <svg {...frame(size)}>
+        <defs>
+          <mask id={id}>
+            <rect x="0" y="0" width="24" height="24" fill="white" />
+            <circle cx="8" cy="14.5" r="8" fill="black" />
+          </mask>
+        </defs>
+        <g mask={`url(#${id})`}>
+          <rect x="11" y="3" width="10.5" height="2.6" rx="1.3" />
+          <rect x="12.5" y="7.4" width="9" height="2.6" rx="1.3" />
+          <rect x="10.8" y="11.8" width="10.7" height="2.6" rx="1.3" />
+          <rect x="12.3" y="16.2" width="9.2" height="2.6" rx="1.3" />
+        </g>
+        <circle cx="8" cy="14.5" r="6.4" />
+        <circle cx="8" cy="14.5" r="2.6" />
+      </svg>
+    );
+  }
+
   return (
     <svg {...chipFrame(size)}>
+      <defs>
+        <mask id={id}>
+          <rect x="0" y="0" width="24" height="24" fill="white" />
+          {/* A shade wider than the chip, so the slab ends stop clear of its
+              rim instead of kissing it. */}
+          <circle cx="7.6" cy="14.4" r="7.5" fill="black" />
+        </mask>
+      </defs>
       {/* Five slabs, each nudged left or right of the one below it. A
           perfectly aligned pile reads as a stack of paper; real chips never
           land squarely on each other. */}
-      <rect x="11" y="2.2" width="10.5" height="2.3" rx="1.15" />
-      <rect x="12.4" y="5.5" width="9" height="2.3" rx="1.15" />
-      <rect x="10.6" y="8.8" width="10.6" height="2.3" rx="1.15" />
-      <rect x="12.6" y="12.1" width="8.8" height="2.3" rx="1.15" />
-      <rect x="11.2" y="15.4" width="10" height="2.3" rx="1.15" />
-      <ChipFace cx={7.6} cy={14.4} r={6.3} />
+      <g mask={`url(#${id})`}>
+        <rect x="11" y="2.2" width="10.5" height="2.3" rx="1.15" />
+        <rect x="12.4" y="5.5" width="9" height="2.3" rx="1.15" />
+        <rect x="10.6" y="8.8" width="10.6" height="2.3" rx="1.15" />
+        <rect x="12.6" y="12.1" width="8.8" height="2.3" rx="1.15" />
+        <rect x="11.2" y="15.4" width="10" height="2.3" rx="1.15" />
+      </g>
+      <circle cx="7.6" cy="14.4" r="6.3" />
+      <circle cx="7.6" cy="14.4" r="4.8" strokeDasharray="2.5 2.1" />
+      <circle cx="7.6" cy="14.4" r="2.65" />
     </svg>
   );
 }
