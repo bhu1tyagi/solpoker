@@ -558,15 +558,18 @@ input[type="range"]::-moz-range-thumb {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 76px var(--sp-6) 96px;
+  /* Heavier below than above: the decision row lives in a band directly
+     under the table, so the felt rides high and the space it gives up is
+     exactly where the buttons go. */
+  padding: 60px var(--sp-6) 172px;
   container-type: size;
 }
-/* 21:9 landscape, capped at --table-max-w. The cqh coefficient is the aspect
-   ratio itself (2.33), so the table is limited by whichever of the stage's two
+/* 2:1 landscape, capped at --table-max-w. The cqh coefficient is the aspect
+   ratio itself (2.0), so the table is limited by whichever of the stage's two
    axes runs out first. Keep it in step with LAYOUT.tableRatio. */
 .felt-sizer {
-  width: min(1120px, 94vw, 233vh);
-  width: min(var(--table-max-w), 100cqw, 233cqh);
+  width: min(1120px, 94vw, 200vh);
+  width: min(var(--table-max-w), 100cqw, 200cqh);
 }
 
 /* The four corners of the room. On a desktop they are corners; on a phone
@@ -602,14 +605,18 @@ input[type="range"]::-moz-range-thumb {
   align-items: center;
   gap: 10px;
 }
+/* The decision, centred in the band directly under the table — the draft's
+   own arrangement — rather than tucked into a corner. The felt-stage padding
+   above is what holds this band open. */
 .hud-br {
-  bottom: 22px;
-  right: 26px;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: 10px;
-  max-width: min(560px, 52vw);
+  max-width: min(760px, 92vw);
   z-index: var(--z-action-bar);
 }
 .hud-fields {
@@ -656,6 +663,10 @@ input[type="range"]::-moz-range-thumb {
   .hud-br {
     bottom: 10px;
     right: 14px;
+    /* Back to the corner: a sideways phone has no band under the table. */
+    left: auto;
+    transform: none;
+    align-items: flex-end;
     max-width: min(720px, 82vw);
   }
   .action-bar {
@@ -735,6 +746,8 @@ input[type="range"]::-moz-range-thumb {
     grid-row: 4;
     max-width: none;
     align-items: stretch;
+    /* Static in the grid; the desktop centring transform must not follow. */
+    transform: none;
   }
   .action-bar {
     max-width: none;

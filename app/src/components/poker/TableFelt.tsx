@@ -350,6 +350,9 @@ export function TableFelt({
               secured={isMe ? secured : undefined}
               avatarOn={pos.x > 50 ? "left" : "right"}
               cardsOn={pos.y < 50 ? "below" : "above"}
+              // Which rail the chair waits at, so an empty one turns its back
+              // to the room. The end seats are the ones at mid-height.
+              side={pos.y >= 60 ? "bottom" : pos.y <= 40 ? "top" : pos.x < 50 ? "left" : "right"}
               winner={awardBySeat.has(i)}
               compact={compact}
               onSit={onSit}

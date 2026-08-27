@@ -75,6 +75,11 @@ interface Props {
    * cards toward the felt, or the cards would run off the top of the screen.
    */
   cardsOn?: "above" | "below";
+  /**
+   * Which rail this seat sits at. The empty chair turns so its back faces
+   * away from the table, the way a real chair waits at its rail.
+   */
+  side?: "bottom" | "top" | "left" | "right";
   /** This seat just won something, so the seat celebrates briefly. */
   winner?: boolean;
   /** The phone-sized seat. */
@@ -98,6 +103,7 @@ export function SeatPod({
   secured,
   avatarOn = "left",
   cardsOn = "above",
+  side = "bottom",
   winner = false,
   compact = false,
   onSit,
@@ -128,22 +134,10 @@ export function SeatPod({
           gap: 6,
         }}
       >
-        {/* An open chair is an outline, not a green slab: the dashes say
-            nothing is here yet, the plus says it could be you. */}
-        <span
-          style={{
-            width: d.avatar,
-            height: d.avatar,
-            borderRadius: "50%",
-            border: "2px dashed color-mix(in srgb, var(--c-green) 45%, transparent)",
-            background: "rgba(0, 0, 0, 0.25)",
-            color: "var(--c-green)",
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          <PlusMark small={compact} />
-        </span>
+        {/* An open seat is an actual chair waiting at the rail, its back
+            turned away from the table. The green plus on the cushion is the
+            whole invitation. */}
+        <Chair size={d.avatar + (compact ? 10 : 16)} side={side} />
         <span
           className="label"
           style={{
@@ -445,36 +439,92 @@ function CircleAvatar({ pubkey, size }: { pubkey: string; size: number }) {
   );
 }
 
-/** The invitation on an open seat. */
-function PlusMark({ small = false }: { small?: boolean }) {
-  const len = small ? 12 : 16;
-  const thick = small ? 2.5 : 3;
+/** How the chair turns so its back faces away from the table. */
+const CHAIR_TURN = { bottom: 0, top: 180, left: 90, right: -90 } as const;
+
+/**
+ * The empty chair, seen from above: a leather horseshoe of backrest and
+ * armrests wrapped around a round cushion, standing in its own pool of
+ * shadow. Drawn with the back at the bottom — the pose of a chair on the
+ * near rail — and turned to face whichever rail it actually waits at.
+ *
+ * The materials are deliberate. The horseshoe takes its light along the top
+ * edge the way upholstery catches the room's light; the cushion is darker
+ * where a body would sit and carries a stitched seam; the green plus in the
+ * middle is the only interface object on it, and the only invitation needed.
+ */
+function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" | "right" }) {
   return (
-    <span
+    <svg
       aria-hidden
-      style={{ position: "relative", width: len, height: len, display: "inline-block" }}
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      style={{ transform: `rotate(${CHAIR_TURN[side]}deg)`, display: "block" }}
     >
-      <span
-        style={{
-          position: "absolute",
-          left: (len - thick) / 2,
-          top: 0,
-          width: thick,
-          height: len,
-          background: "currentColor",
-        }}
+      <defs>
+        <radialGradient id="chair-cushion" cx="50%" cy="42%" r="65%">
+          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 9%, var(--c-chair-cushion))" />
+          <stop offset="55%" stopColor="var(--c-chair-cushion)" />
+          <stop offset="100%" stopColor="color-mix(in srgb, var(--c-chair-cushion) 78%, #000)" />
+        </radialGradient>
+        <linearGradient id="chair-back" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 10%, var(--c-chair-back))" />
+          <stop offset="100%" stopColor="var(--c-chair-back)" />
+        </linearGradient>
+        <filter id="chair-ground" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="4" />
+        </filter>
+      </defs>
+
+      {/* The pool of shadow the chair stands in. */}
+      <ellipse cx="50" cy="56" rx="34" ry="26" fill="rgba(0,0,0,0.5)" filter="url(#chair-ground)" />
+
+      {/* Backrest and armrests: one horseshoe, arms reaching toward the
+          table. The rounded caps are the armrest pads. */}
+      <path
+        d="M 14 24 L 14 56 C 14 85, 86 85, 86 56 L 86 24"
+        fill="none"
+        stroke="url(#chair-back)"
+        strokeWidth="15"
+        strokeLinecap="round"
       />
-      <span
-        style={{
-          position: "absolute",
-          left: 0,
-          top: (len - thick) / 2,
-          width: len,
-          height: thick,
-          background: "currentColor",
-        }}
+      {/* The light along the horseshoe's crown, so it reads as rounded
+          upholstery rather than a flat band. */}
+      <path
+        d="M 14 24 L 14 56 C 14 85, 86 85, 86 56 L 86 24"
+        fill="none"
+        stroke="color-mix(in srgb, var(--c-ink) 12%, transparent)"
+        strokeWidth="4.5"
+        strokeLinecap="round"
       />
-    </span>
+
+      {/* The cushion, with its stitched seam. */}
+      <circle
+        cx="50"
+        cy="42"
+        r="29"
+        fill="url(#chair-cushion)"
+        stroke="rgba(255,255,255,0.12)"
+        strokeWidth="1"
+      />
+      <circle
+        cx="50"
+        cy="42"
+        r="22"
+        fill="none"
+        stroke="rgba(255,255,255,0.13)"
+        strokeWidth="1.3"
+        strokeDasharray="2.8 3.8"
+      />
+
+      {/* The invitation. A plus is symmetric, so it survives every turn of
+          the chair without a counter-rotation. */}
+      <g stroke="var(--c-green)" strokeWidth="3.4" strokeLinecap="round">
+        <path d="M 50 35 L 50 49" />
+        <path d="M 43 42 L 57 42" />
+      </g>
+    </svg>
   );
 }
 

@@ -86,6 +86,12 @@ export const COLOR = {
   suitTwoColorRed: '#C2143C',
   suitTwoColorBlack: '#15202B',
 
+  // The empty chair. Upholstery, not interface: a leather back a shade above
+  // the room and a darker cushion sunk inside it, so an open seat reads as
+  // furniture waiting at the rail rather than as a control.
+  chairBack: '#34343E',
+  chairCushion: '#222229',
+
   // Chip denominations. Casino convention, so the colours are already learned.
   chip1: '#F5F3EE',
   chip5: '#D6455B',
@@ -289,7 +295,9 @@ export const LAYOUT = {
   // room; on a landing page it left a third of a desktop viewport empty on
   // each side and the content read as a column floating in a void.
   pageMaxW: '1400px',
-  tableRatio: 21 / 9,       // landscape — the draft's own long-table aspect
+  tableRatio: 2,            // landscape — long like the draft's 21:9, but with
+                            // enough height that the middle of the cloth is a
+                            // playing surface rather than a strip
   tableRatioPortrait: 10 / 16,
   seatSize: { phone: 68, laptop: 96 },
   cardSize: { phone: { w: 34, h: 48 }, laptop: { w: 46, h: 64 } },
