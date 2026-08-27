@@ -48,13 +48,15 @@ for (const [k, v] of Object.entries(MOTION)) {
   if (typeof v === 'number') lines.push(`  --m-${kebab(k)}: ${v}ms;`);
 }
 lines.push(`  --m-ease: cubic-bezier(${MOTION.ease.join(', ')});`);
-lines.push(`  --m-ease-in: cubic-bezier(${MOTION.easeIn.join(', ')});`);
+lines.push(`  --m-ease-in-out: cubic-bezier(${MOTION.easeInOut.join(', ')});`);
+lines.push(`  --m-ease-drawer: cubic-bezier(${MOTION.easeDrawer.join(', ')});`);
 
 lines.push('\n  /* breakpoints — mirrored in use-viewport from the same source */');
 for (const [k, v] of Object.entries(BREAKPOINTS)) lines.push(`  --bp-${k}: ${v}px;`);
 
 lines.push('\n  /* layout */');
 lines.push(`  --table-max-w: ${LAYOUT.tableMaxW};`);
+lines.push(`  --page-max-w: ${LAYOUT.pageMaxW};`);
 lines.push(`  --touch-target: ${LAYOUT.touchTarget}px;`);
 
 lines.push('}');

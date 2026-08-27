@@ -35,11 +35,28 @@ export function ClockIcon({ size = 20 }: Props) {
 }
 
 /** Spade: the suit, standing for a poker table. */
+/*
+ * A poker table, not a suit.
+ *
+ * These two were spades, which say "cards" but never "room". A racetrack
+ * with seats around it is what a lobby is actually listing, and it is
+ * unambiguous at a glance beside a row of them. Drawn to Lucide's grid and
+ * stroke so it sits with the rest of the set; no icon library ships a poker
+ * table, and a generic grid or panel glyph would have meant less.
+ *
+ * The seat pips are filled rather than stroked: at 16px a 1px ring closes up
+ * into a smudge, while a solid dot stays a dot.
+ */
 export function TableIcon({ size = 20 }: Props) {
   return (
     <svg {...frame(size)}>
-      <path d="M5 9c-1.5 1.5-3 3.2-3 5.5A5.5 5.5 0 0 0 7.5 20c1.8 0 3-.5 4.5-2 1.5 1.5 2.7 2 4.5 2a5.5 5.5 0 0 0 5.5-5.5c0-2.3-1.5-4-3-5.5l-7-7-7 7Z" />
-      <path d="M12 18v4" />
+      <rect x="2" y="6" width="20" height="12" rx="6" />
+      <circle cx="8" cy="9" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="8.4" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="9" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="15" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="15.6" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="15" r="1.15" fill="currentColor" stroke="none" />
     </svg>
   );
 }
@@ -130,13 +147,23 @@ export function RefreshIcon({ size = 20 }: Props) {
 }
 
 /** A spade with a plus: open a new table. */
+/**
+ * Opening a new one: a whole table, plus.
+ *
+ * The first attempt broke the table's outline to make room for the plus, and
+ * an incomplete racetrack reads as a rendering bug rather than a table. A
+ * narrower table with the plus beside it keeps both shapes intact and stays
+ * legible at 16px, which is the size it is actually used at.
+ */
 export function NewTableIcon({ size = 20 }: Props) {
   return (
     <svg {...frame(size)}>
-      <path d="M4.5 10.5c-1.2 1.2-2.5 2.6-2.5 4.5A4.5 4.5 0 0 0 6.5 19.5c1.5 0 2.5-.4 3.7-1.6 1.2 1.2 2.2 1.6 3.7 1.6" />
-      <path d="M10.2 17.9V21" />
-      <path d="M4.5 10.5 10.2 4.8l4 4" />
-      <path d="M18.5 3v6M15.5 6h6" />
+      <rect x="1.5" y="6" width="14" height="11" rx="5.5" />
+      <circle cx="5.5" cy="9" r="1.05" fill="currentColor" stroke="none" />
+      <circle cx="9.5" cy="8.6" r="1.05" fill="currentColor" stroke="none" />
+      <circle cx="5.5" cy="14" r="1.05" fill="currentColor" stroke="none" />
+      <circle cx="9.5" cy="14.4" r="1.05" fill="currentColor" stroke="none" />
+      <path d="M19 14v6M16 17h6" />
     </svg>
   );
 }
@@ -190,6 +217,129 @@ export function WalletIcon({ size = 20 }: Props) {
     <svg {...frame(size)}>
       <path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2" />
       <path d="M21 12a2 2 0 0 0-2-2h-4a2 2 0 0 0 0 4h4a2 2 0 0 0 2-2Z" />
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Landing page.                                                       */
+/*                                                                     */
+/* The Superdesign draft pulls these from the Iconify CDN as a web     */
+/* component. That is a render-blocking third-party request whose      */
+/* glyphs hydrate after paint, so every icon pops in late. Same shapes, */
+/* inlined, no runtime, no layout shift.                               */
+/* ------------------------------------------------------------------ */
+
+/** Zap: instant settlement. */
+export function ZapIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" />
+    </svg>
+  );
+}
+
+/** Shield with a check: the shuffle proof. */
+export function ShieldCheckIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+/** Users: the room. */
+export function UsersIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+/** Play in a circle: watch the demo. */
+export function PlayCircleIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="m10 8 6 4-6 4V8Z" />
+    </svg>
+  );
+}
+
+/** Arrow right: onward. */
+export function ArrowRightIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M5 12h14M12 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+/** Chevron right: a quieter onward, inside a link. */
+export function ChevronRightIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+/*
+ * The three socials. Brand glyphs are solid shapes rather than outlines, so
+ * they take `fill` and ignore the shared stroke frame.
+ */
+const brandFrame = (size: number) => ({
+  width: size,
+  height: size,
+  viewBox: "0 0 24 24",
+  fill: "currentColor",
+  "aria-hidden": true,
+  style: { display: "block" as const, flexShrink: 0 },
+});
+
+export function XIcon({ size = 20 }: Props) {
+  return (
+    <svg {...brandFrame(size)}>
+      <path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-6.4L6.3 22H3.2l7.3-8.3L2.5 2h6.4l4.4 5.9L18.9 2Zm-1.1 18h1.7L7.3 3.7H5.5L17.8 20Z" />
+    </svg>
+  );
+}
+
+export function DiscordIcon({ size = 20 }: Props) {
+  return (
+    <svg {...brandFrame(size)}>
+      <path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.2.4a15.7 15.7 0 0 1 3.7 1.2 12.6 12.6 0 0 0-9.2 0A15.7 15.7 0 0 1 13.1 4l-.2-.4a17 17 0 0 0-4.2 1.4C6 9.4 5.2 13.3 5.6 17.1A17 17 0 0 0 10.8 20l.9-1.3a11 11 0 0 1-1.8-.9l.5-.3a12 12 0 0 0 10.3 0l.5.3a11 11 0 0 1-1.8.9l.9 1.3a17 17 0 0 0 5.2-2.9c.4-4.4-.8-8.3-2.9-11.7ZM9.7 14.8c-1 0-1.9-.9-1.9-2.1s.8-2.1 1.9-2.1c1 0 1.9 1 1.9 2.1s-.9 2.1-1.9 2.1Zm4.6 0c-1 0-1.9-.9-1.9-2.1s.8-2.1 1.9-2.1c1 0 1.9 1 1.9 2.1s-.9 2.1-1.9 2.1Z" />
+    </svg>
+  );
+}
+
+export function GithubIcon({ size = 20 }: Props) {
+  return (
+    <svg {...brandFrame(size)}>
+      <path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.4-3.4-1.4-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.4 9.4 0 0 1 5 0c2-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7 1 .7 2v2.9c0 .3.2.6.7.5A10 10 0 0 0 12 2Z" />
+    </svg>
+  );
+}
+
+/** Copy: put the address on the clipboard. */
+export function CopyIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+/** Check: a completed step, a successful copy. */
+export function CheckIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M20 6 9 17l-5-5" />
     </svg>
   );
 }

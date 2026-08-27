@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { Archivo, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Analytics } from "@vercel/analytics/next";
 import { COLOR } from "@/design/tokens";
 import "./globals.css";
@@ -9,24 +10,32 @@ import { Providers } from "./providers";
 // FONT.display / FONT.body / FONT.mono; these are the loaded instances, bound
 // to those tokens in globals.css.
 //
-// Space Grotesk carries the wordmark, the headings, and every amount. Money in
-// the display face is a deliberate reversal of the previous rule, which set
-// amounts in a mono face because the old display face — Dela Gothic One — had
-// no tabular figures, so the `tnum` request on it silently did nothing and the
-// pot, the stacks and the bet field each re-measured themselves as they ticked.
-// Space Grotesk does carry a `tnum` feature (checked in the shipped Google
-// subset, not assumed), so the amounts can be a headline and still hold their
-// column. Anything that counts must still ask for it: see `.num` in globals.
-const display = Space_Grotesk({
+// Archivo carries headings, h1 and h2, and it is loaded WITH its width axis:
+// the brand direction wants headings that spend more space horizontally than
+// vertically, and globals.css sets font-stretch on them to use that axis.
+// Requesting the axis here is what makes font-stretch real — without `axes`,
+// next/font ships the default-width cut and the stretch silently synthesises.
+//
+// Money still does not follow the display face. It is pinned to Satoshi via
+// --font-num, because tabular figures were verified there and a heading face
+// can change with the brand; see tokens.ts FONT.num.
+const display = Archivo({
   subsets: ["latin"],
-  variable: "--font-space-grotesk",
+  axes: ["wdth"],
+  variable: "--font-archivo",
   display: "swap",
 });
 
-// The interface. Neutral on purpose — the display face carries the personality.
-const body = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
+// The interface, and everything below h2. Self-hosted rather than pulled from
+// api.fontshare.com: a third-party stylesheet on the critical path defeats the
+// preloading and CLS protection next/font exists to provide.
+const satoshi = localFont({
+  src: [
+    { path: "../fonts/Satoshi-400.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/Satoshi-500.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/Satoshi-700.woff2", weight: "700", style: "normal" },
+  ],
+  variable: "--font-satoshi",
   display: "swap",
 });
 
@@ -60,7 +69,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${display.variable} ${body.variable} ${mono.variable}`}
+      className={`${display.variable} ${satoshi.variable} ${mono.variable}`}
     >
       <body>
         <Providers>{children}</Providers>

@@ -15,20 +15,32 @@
 // ---------------------------------------------------------------- COLOR
 
 export const COLOR = {
-  // The felt. Near-black with a blue cast, never pure #000 — pure black kills
-  // the rim-light borders that carry depth on this surface.
-  felt: '#0B0E14',
-  feltRaised: '#141924',
-  feltEdge: '#1A2030',
+  // The ground. Near-black, never pure #000 — pure black gives no depth, strobes
+  // on OLED during scroll, and kills the hairlines that define the glass edges.
+  felt: '#0A0A0B',
+  feltRaised: '#101013',
+  feltEdge: '#17171A',
+
+  // The table itself, and only the table. Deep poker green — the one place the
+  // product stops being a dark UI and becomes a physical object.
+  bgFelt: '#071a12',
+
+  // Glass. The default panel is the SOLID fill with the translucent wash and the
+  // blur layered over it. The solid is not decoration: backdrop-filter composites
+  // whatever happens to be behind the panel, so a card scrolling over the orbs
+  // would silently lose text contrast. Contrast is measured against glassSolid.
+  glassSolid: '#101013',
+  glassFill: 'rgba(255,255,255,0.03)',
+  glassBorder: 'rgba(255,255,255,0.08)',
 
   // Hairlines. On near-black, borders do the work shadows do on light UI.
   rule: '#232B3D',
   ruleStrong: '#2F3A52',
 
   // Text. Contrast measured against --felt.
-  ink: '#E8ECF4',        // 16.31:1
-  inkMuted: '#A8B2C6',   //  9.06:1  default secondary text
-  inkFaint: '#8A93A6',   //  6.26:1  timestamps, units, disabled labels
+  ink: '#FFFFFF',        // 20.4:1
+  inkMuted: '#A8B2C6',   //  9.0:1  default secondary text
+  inkFaint: '#9CA3AF',   //  7.3:1  timestamps, units, disabled labels
   // Nothing dimmer than inkFaint carries meaning. If it needs to be dimmer,
   // it does not need to be on screen.
 
@@ -105,11 +117,22 @@ export const AVATAR = {
 // ---------------------------------------------------------------- TYPE
 
 export const FONT = {
-  // Display: Space Grotesk. Slightly odd letterforms, reads as engineered
-  // rather than corporate. Used only for the wordmark, headings, and money.
-  display: "'Space Grotesk', system-ui, sans-serif",
-  // Body: Inter. Neutral on purpose — the display face carries the personality.
-  body: "'Inter', system-ui, sans-serif",
+  // Display: Archivo, run WIDE — globals.css sets font-stretch 125% on h1/h2,
+  // using the variable font's width axis. The brand direction wants headings
+  // that spend more space horizontally than vertically, which is the opposite
+  // of a condensed face. Unlike the Bebas Neue experiment this replaced, it
+  // has real weights and a lowercase, so nothing downstream has to work
+  // around a missing bold.
+  display: "'Archivo', system-ui, sans-serif",
+  // Body: Satoshi. Everything from h3 down.
+  body: "'Satoshi', system-ui, sans-serif",
+  // Money. Deliberately pinned to Satoshi rather than following the display
+  // face. The display face is a branding decision and may change again; money
+  // needs `tnum` or every stack, pot and bet re-measures itself as it ticks.
+  // Satoshi's GSUB carries `tnum` — verified with fontTools against the
+  // shipped woff2 files in src/fonts, not assumed from a specimen — so the
+  // one face the numbers depend on is the one we host ourselves.
+  num: "'Satoshi', system-ui, sans-serif",
   // Mono: chain data only. Addresses, seeds, hashes, tx signatures.
   mono: "'JetBrains Mono', ui-monospace, 'SF Mono', monospace",
 } as const;
@@ -121,10 +144,13 @@ export const FONT = {
  */
 export const NUMERIC = "font-variant-numeric: 'tabular-nums'; font-feature-settings: 'tnum' 1;";
 
+// Sizes are tuned for a WIDE face: an expanded font eats horizontal room fast,
+// so the display sizes sit lower than they would for a condensed one and the
+// tracking is slightly negative to pull the widened letters back together.
 export const TYPE = {
-  displayXl: { size: '3.5rem', line: '1.02', weight: 700, tracking: '-0.03em' },
-  displayLg: { size: '2.5rem', line: '1.06', weight: 700, tracking: '-0.025em' },
-  displayMd: { size: '1.75rem', line: '1.15', weight: 700, tracking: '-0.02em' },
+  displayXl: { size: '3.75rem', line: '1.04', weight: 800, tracking: '-0.015em' },
+  displayLg: { size: '2.5rem',  line: '1.08', weight: 800, tracking: '-0.01em' },
+  displayMd: { size: '1.75rem', line: '1.15', weight: 700, tracking: '-0.01em' },
   money:     { size: '1.25rem', line: '1.1',  weight: 700, tracking: '-0.01em' },
   bodyLg:    { size: '1.0625rem', line: '1.55', weight: 400, tracking: '0' },
   body:      { size: '0.9375rem', line: '1.55', weight: 400, tracking: '0' },
@@ -164,8 +190,15 @@ export const ELEVATION = {
   raised:  'inset 0 1px 0 rgba(255,255,255,0.06)',
   overlay: 'inset 0 1px 0 rgba(255,255,255,0.08), 0 12px 32px rgba(0,0,0,0.55)',
   lifted:  'inset 0 1px 0 rgba(255,255,255,0.10), 0 20px 48px rgba(0,0,0,0.65)',
-  // The one glow in the system. Reserved for the seat that is to act.
-  toAct:   '0 0 0 2px rgba(20,241,149,0.55), 0 0 24px rgba(20,241,149,0.25)',
+
+  // Glow. The hover and liveness language, and the fastest thing in this system
+  // to overuse: only green, and only one glowing element per region. A glow is
+  // NOT a focus ring — it vanishes in forced-colours mode and does not read as
+  // keyboard state, so focus is always the solid green ring as well.
+  glowHover: '0 0 30px rgba(20,241,149,0.20)',
+  glowCta:   '0 0 40px rgba(20,241,149,0.30)',
+  // The seat that is to act. The only glow permitted on the table surface.
+  toAct:     '0 0 0 2px rgba(20,241,149,0.55), 0 0 24px rgba(20,241,149,0.25)',
 } as const;
 
 // ---------------------------------------------------------------- MOTION
@@ -191,10 +224,31 @@ export const MOTION = {
   boardReveal: 380,
   seatPulse: 1600,   // to-act breathing loop
 
-  ease:      [0.22, 0.61, 0.36, 1],    // default, decelerating
-  easeIn:    [0.55, 0.06, 0.68, 0.19],
+  // UI-scale durations. Everything a player sees often stays under 300ms.
+  press: 130,
+  uiFast: 180,
+  uiBase: 240,
+  uiSlow: 420,
+  stagger: 60,       // keep within the 30-80ms band; longer reads as slow
+
+  // Ambient loops. These belong on first-run and marketing surfaces only — a
+  // hero element drifting on a 6s loop is atmosphere; a lobby card drifting
+  // under a cursor a grinder is trying to click is an obstacle. Never float
+  // anything a player aims at. All three are STOPPED under reduced motion, not
+  // shortened: a 1ms infinite loop is a strobe.
+  float: 6000,
+  badgePulse: 2000,
+  shimmer: 500,      // the sweep across a primary CTA on hover
+
+  // Strong curves. CSS's built-ins are too weak to read as designed.
+  ease:      [0.23, 1, 0.32, 1],       // default, entering and exiting
+  easeInOut: [0.77, 0, 0.175, 1],      // on-screen morphs only
+  easeDrawer:[0.32, 0.72, 0, 1],       // sheets and drawers
+  // Deliberately no easeIn. At equal duration it feels slower, because it
+  // delays movement in exactly the moment the player is watching for it.
   spring:    { type: 'spring', stiffness: 380, damping: 32, mass: 0.8 },
   chipSpring:{ type: 'spring', stiffness: 260, damping: 26, mass: 1 },
+  cursor:    { stiffness: 250, damping: 28, mass: 1, restDelta: 0.001 },
 } as const;
 
 // ---------------------------------------------------------------- LAYOUT
@@ -220,6 +274,10 @@ export const mq = {
 
 export const LAYOUT = {
   tableMaxW: '1120px',
+  // Marketing pages run wider than the table. 1120px was tuned for a poker
+  // room; on a landing page it left a third of a desktop viewport empty on
+  // each side and the content read as a column floating in a void.
+  pageMaxW: '1400px',
   tableRatio: 16 / 10,      // landscape
   tableRatioPortrait: 10 / 16,
   seatSize: { phone: 68, laptop: 96 },

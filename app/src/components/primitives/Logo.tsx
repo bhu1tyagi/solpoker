@@ -84,6 +84,7 @@ export function ChipO({ size = "0.66em" }: { size?: string }) {
 export function Logo({
   size = 22,
   title,
+  mono = false,
 }: {
   /**
    * A number of pixels, or any CSS length. Pass `"1em"` next to text that
@@ -96,8 +97,17 @@ export function Logo({
    * decorative, and a title there makes a screen reader say the name twice.
    */
   title?: string;
+  /**
+   * Draw the mark in `currentColor` instead of the purple-to-green gradient.
+   *
+   * For the one case where the mark sits ON the gradient — the header's brand
+   * tile. A gradient mark on a gradient ground loses its edges entirely, and
+   * the ring is the piece of this identity that has to stay legible.
+   */
+  mono?: boolean;
 }) {
   const gradientId = "pokerable-mark-tile";
+  const paint = mono ? "currentColor" : `url(#${gradientId}-suit)`;
   return (
     <svg
       width={size}
@@ -125,7 +135,7 @@ export function Logo({
         cy="50"
         r="42"
         fill="none"
-        stroke={`url(#${gradientId}-suit)`}
+        stroke={paint}
         strokeWidth="10"
         strokeDasharray="20.3 12.7"
         strokeDashoffset="10.15"
@@ -135,15 +145,39 @@ export function Logo({
         cy="50"
         r="33"
         fill="none"
-        stroke={`url(#${gradientId}-suit)`}
+        stroke={paint}
         strokeWidth="2.5"
         opacity="0.7"
       />
       {/* Nudged a unit low: a spade carries its weight in the lobes, so a
           mathematically centred one reads as sitting high in the frame. */}
       <g transform="translate(50 51) scale(0.5) translate(-50 -50)">
-        <path d={SPADE_PATH} fill={`url(#${gradientId}-suit)`} />
+        <path d={SPADE_PATH} fill={paint} />
       </g>
     </svg>
+  );
+}
+
+/**
+ * The wordmark: POKERABLE with the chip standing in for the O.
+ *
+ * The chip is the rendered art in /public/logo-96.png, not the SVG mark above,
+ * and it sits directly in the word with no container tile behind it. The
+ * hidden "o" keeps the word whole for screen readers, searches and the page
+ * checks; the visible text alone would spell "PKERABLE".
+ *
+ * Sized in ems so it scales with whatever type size the header sets. The
+ * height sits at the CAP height, not the em box: an image sized to the em box
+ * towers over uppercase neighbours and reads as an icon that wandered into
+ * the word rather than as a letter.
+ */
+export function Wordmark({ size = "1.75rem" }: { size?: string }) {
+  return (
+    <span className="wordmark" style={{ fontSize: size }}>
+      P
+      <span className="sr-only-o">o</span>
+      <img src="/logo-96.png" alt="" className="wordmark-chip" />
+      KERABLE
+    </span>
   );
 }
