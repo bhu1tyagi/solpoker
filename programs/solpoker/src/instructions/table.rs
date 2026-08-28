@@ -17,6 +17,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{transfer, Transfer};
 use ephemeral_rollups_sdk::access_control::structs::EphemeralPermission;
+use session_keys::{session_auth_or, Session, SessionError, SessionTokenV2};
 
 use crate::errors::PokerError;
 use crate::state::*;
@@ -163,48 +164,50 @@ pub fn create_seat(ctx: Context<CreateSeat>, seat_index: u8) -> Result<()> {
     Ok(())
 }
 
-/// Take a seat, moving `buy_in` chips from the player's balance to the seat stack.
-pub fn join_table(ctx: Context<JoinTable>, seat_index: u8, buy_in: u64) -> Result<()> {
+/// The seat-taking itself, shared by both signing paths.
+///
+/// Custody moves only on the base layer. No explicit check is needed: while
+/// the table is delegated its base-layer owner is the delegation program, so
+/// Anchor's owner check on `Account<Table>` rejects the instruction outright.
+/// On the ER it fails too, because `Player` is never delegated and so cannot
+/// be written there.
+fn take_seat(
+    table: &mut Table,
+    config: &TableConfig,
+    seat: &mut Seat,
+    player: &mut Player,
+    authority: Pubkey,
+    seat_index: u8,
+    buy_in: u64,
+) -> Result<()> {
     require!(
         (seat_index as usize) < MAX_SEATS,
         PokerError::SeatIndexOutOfRange
     );
-    // Custody moves only on the base layer. No explicit check is needed: while
-    // the table is delegated its base-layer owner is the delegation program, so
-    // Anchor's owner check on `Account<Table>` rejects this instruction outright.
-    // On the ER the instruction fails too, because `Player` is never delegated
-    // and so cannot be written there.
-
-    let config = &ctx.accounts.config;
     require!(
         buy_in >= config.min_buy_in && buy_in <= config.max_buy_in,
         PokerError::BuyInOutOfRange
     );
-
-    let authority = ctx.accounts.authority.key();
     require!(
-        ctx.accounts.table.seat_of(&authority).is_none(),
+        table.seat_of(&authority).is_none(),
         PokerError::AlreadySeated
     );
     require!(
-        ctx.accounts.table.is_empty_seat(seat_index as usize),
+        table.is_empty_seat(seat_index as usize),
         PokerError::SeatOccupied
     );
-
-    let player = &mut ctx.accounts.player;
     require!(player.chips >= buy_in, PokerError::InsufficientChips);
 
     // The only place chips leave a player balance.
     player.chips -= buy_in;
 
-    let seat = &mut ctx.accounts.seat;
     seat.occupant = authority;
     seat.stack = buy_in;
     seat.reset_for_new_hand(false);
     seat.last_action_slot = 0;
 
-    ctx.accounts.table.seats[seat_index as usize] = authority;
-    ctx.accounts.table.empty_since = 0;
+    table.seats[seat_index as usize] = authority;
+    table.empty_since = 0;
 
     msg!(
         "player {} took seat {} with {} chips ({} left in balance)",
@@ -216,24 +219,31 @@ pub fn join_table(ctx: Context<JoinTable>, seat_index: u8, buy_in: u64) -> Resul
     Ok(())
 }
 
-/// Leave the table, returning the whole seat stack to the player's balance.
-pub fn leave_table(ctx: Context<LeaveTable>, seat_index: u8) -> Result<()> {
+/// The leaving itself, shared by both signing paths.
+///
+/// Whatever signs, the chips can only travel from the seat named by
+/// `authority` to the `Player` balance owned by that same `authority` — the
+/// account constraints pin both ends. There is no way to point this at
+/// somebody else's balance, which is what makes the session path below safe.
+fn vacate_own_seat(
+    table: &mut Table,
+    seat: &mut Seat,
+    player: &mut Player,
+    authority: Pubkey,
+    seat_index: u8,
+) -> Result<()> {
     require!(
         (seat_index as usize) < MAX_SEATS,
         PokerError::SeatIndexOutOfRange
     );
-    // See join_table: delegation state is enforced by account ownership.
+    // See take_seat: delegation state is enforced by account ownership.
     require!(
-        ctx.accounts.table.state == TableState::Waiting,
+        table.state == TableState::Waiting,
         PokerError::HandInProgress
     );
-
-    let authority = ctx.accounts.authority.key();
-    let seat = &mut ctx.accounts.seat;
     require_keys_eq!(seat.occupant, authority, PokerError::NotSeated);
 
     let returned = seat.stack;
-    let player = &mut ctx.accounts.player;
     player.chips = player
         .chips
         .checked_add(returned)
@@ -243,9 +253,9 @@ pub fn leave_table(ctx: Context<LeaveTable>, seat_index: u8) -> Result<()> {
     seat.stack = 0;
     seat.reset_for_new_hand(false);
 
-    ctx.accounts.table.seats[seat_index as usize] = Table::EMPTY_SEAT;
+    table.seats[seat_index as usize] = Table::EMPTY_SEAT;
     let now = Clock::get()?.unix_timestamp;
-    ctx.accounts.table.touch_vacancy(now);
+    table.touch_vacancy(now);
 
     msg!(
         "player {} left seat {} with {} chips (balance now {})",
@@ -255,6 +265,89 @@ pub fn leave_table(ctx: Context<LeaveTable>, seat_index: u8) -> Result<()> {
         player.chips
     );
     Ok(())
+}
+
+/// Take a seat, moving `buy_in` chips from the player's balance to the seat stack.
+pub fn join_table(ctx: Context<JoinTable>, seat_index: u8, buy_in: u64) -> Result<()> {
+    let authority = ctx.accounts.authority.key();
+    take_seat(
+        &mut ctx.accounts.table,
+        &ctx.accounts.config,
+        &mut ctx.accounts.seat,
+        &mut ctx.accounts.player,
+        authority,
+        seat_index,
+        buy_in,
+    )
+}
+
+/// Leave the table, returning the whole seat stack to the player's balance.
+pub fn leave_table(ctx: Context<LeaveTable>, seat_index: u8) -> Result<()> {
+    let authority = ctx.accounts.authority.key();
+    vacate_own_seat(
+        &mut ctx.accounts.table,
+        &mut ctx.accounts.seat,
+        &mut ctx.accounts.player,
+        authority,
+        seat_index,
+    )
+}
+
+/// `join_table`, but the session key may sign it.
+///
+/// Sitting down and cashing out were the two remaining wallet prompts in a
+/// session, and this instruction and `stand_up` are what remove them. The
+/// guard is the same one every in-game instruction uses: either the wallet
+/// itself signs, or an approved session token binds the signing key to the
+/// wallet it acts for.
+///
+/// What a session key is thereby allowed to do is spend the player's balance
+/// into a seat — the seat is assigned to the session's own authority and the
+/// buy-in is bounded by the table config, so the chips stay under the
+/// player's name, but a leaked key can put them into play. That trade was
+/// made knowingly: the key already signs bets that can lose the whole seat
+/// stack, and a sit prompt on every table was judged a worse deal than the
+/// wider blast radius of a stolen key.
+///
+/// A separate instruction rather than a change to `join_table`, so clients
+/// built before this deploy keep working through it.
+#[session_auth_or(
+    ctx.accounts.authority.key() == ctx.accounts.payer.key(),
+    SessionError::InvalidToken
+)]
+pub fn sit_down(ctx: Context<SitDown>, seat_index: u8, buy_in: u64) -> Result<()> {
+    let authority = ctx.accounts.authority.key();
+    take_seat(
+        &mut ctx.accounts.table,
+        &ctx.accounts.config,
+        &mut ctx.accounts.seat,
+        &mut ctx.accounts.player,
+        authority,
+        seat_index,
+        buy_in,
+    )
+}
+
+/// `leave_table`, but the session key may sign it.
+///
+/// This one is safe outright, not by trade-off: the chips can only travel to
+/// the seat occupant's own balance, so the most a leaked session key can do
+/// here is stand its own player up between hands. What it buys is the whole
+/// cash-out running promptless — sit out, wait, pause, leave, resume — on the
+/// session key from beginning to end.
+#[session_auth_or(
+    ctx.accounts.authority.key() == ctx.accounts.payer.key(),
+    SessionError::InvalidToken
+)]
+pub fn stand_up(ctx: Context<StandUp>, seat_index: u8) -> Result<()> {
+    let authority = ctx.accounts.authority.key();
+    vacate_own_seat(
+        &mut ctx.accounts.table,
+        &mut ctx.accounts.seat,
+        &mut ctx.accounts.player,
+        authority,
+        seat_index,
+    )
 }
 
 #[derive(Accounts)]
@@ -377,6 +470,80 @@ pub struct LeaveTable<'info> {
     )]
     pub player: Account<'info, Player>,
     pub authority: Signer<'info>,
+}
+
+#[derive(Accounts, Session)]
+#[instruction(seat_index: u8)]
+pub struct SitDown<'info> {
+    /// Whoever pays for and signs this: the player's wallet or their session key.
+    pub payer: Signer<'info>,
+    /// CHECK: the player taking the seat. Bound to `payer` by the session
+    /// token when a session signs, and required to BE the payer otherwise.
+    /// Every custody constraint below hangs off this key: the player account
+    /// must belong to it and the seat is assigned to it, so whoever signs,
+    /// the chips move only between this player's own balance and seat.
+    pub authority: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [TABLE_SEED, &table.table_id.to_le_bytes()],
+        bump = table.bump
+    )]
+    pub table: Account<'info, Table>,
+    #[account(
+        seeds = [CONFIG_SEED, &table.table_id.to_le_bytes()],
+        bump = config.bump
+    )]
+    pub config: Account<'info, TableConfig>,
+    #[account(
+        mut,
+        seeds = [SEAT_SEED, table.key().as_ref(), &[seat_index]],
+        bump = seat.bump,
+        constraint = seat.table == table.key() @ PokerError::SeatTableMismatch
+    )]
+    pub seat: Account<'info, Seat>,
+    #[account(
+        mut,
+        seeds = [PLAYER_SEED, authority.key().as_ref()],
+        bump = player.bump,
+        has_one = authority
+    )]
+    pub player: Account<'info, Player>,
+    #[session(signer = payer, authority = authority.key())]
+    pub session_token: Option<Account<'info, SessionTokenV2>>,
+}
+
+#[derive(Accounts, Session)]
+#[instruction(seat_index: u8)]
+pub struct StandUp<'info> {
+    /// Whoever pays for and signs this: the player's wallet or their session key.
+    pub payer: Signer<'info>,
+    /// CHECK: the player standing up. Bound to `payer` by the session token
+    /// when a session signs, and required to BE the payer otherwise. The seat
+    /// must be occupied by this key and the balance must belong to it, so the
+    /// chips have exactly one place they can go: home.
+    pub authority: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [TABLE_SEED, &table.table_id.to_le_bytes()],
+        bump = table.bump
+    )]
+    pub table: Account<'info, Table>,
+    #[account(
+        mut,
+        seeds = [SEAT_SEED, table.key().as_ref(), &[seat_index]],
+        bump = seat.bump,
+        constraint = seat.table == table.key() @ PokerError::SeatTableMismatch
+    )]
+    pub seat: Account<'info, Seat>,
+    #[account(
+        mut,
+        seeds = [PLAYER_SEED, authority.key().as_ref()],
+        bump = player.bump,
+        has_one = authority
+    )]
+    pub player: Account<'info, Player>,
+    #[session(signer = payer, authority = authority.key())]
+    pub session_token: Option<Account<'info, SessionTokenV2>>,
 }
 
 /// Send a seated player home, with their chips.

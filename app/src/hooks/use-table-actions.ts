@@ -13,6 +13,8 @@ import {
   delegateCoreIx,
   delegateSeatIx,
   joinTableIx,
+  sitDownIx,
+  standUpIx,
   vacateSeatIx,
   leaveTableIx,
   playerActionIx,
@@ -102,13 +104,59 @@ export function useTableActions(args: {
     [publicKey, signTransaction],
   );
 
-  /** Wallet only. This takes chips out of your balance. */
   /**
-   * Take a seat, and quietly acquire the key that lets you act at it.
+   * Sign and send on the base layer with the session key: no prompt.
    *
-   * A session key is only ever wanted because someone is sitting down, so it
-   * rides in the same transaction rather than being a second thing to approve.
-   * One prompt, one signature, and nothing to find afterwards.
+   * Preflight is deliberately left on, unlike the rollup sends: a join
+   * against a seat somebody took first is doomed, and one simulation round
+   * trip says so instantly instead of after a blockhash expires.
+   */
+  const sendBaseAsSession = useCallback(
+    async (build: (program: SolpokerProgram) => Promise<Transaction>, label: string) => {
+      if (!session) throw new Error("no session key");
+      const conn = getBaseConnection();
+      const program = makeProgram(conn);
+      const tx = await build(program);
+      const bh = await conn.getLatestBlockhash();
+      tx.feePayer = session.publicKey;
+      tx.recentBlockhash = bh.blockhash;
+      tx.sign(session);
+      const sig = await conn.sendRawTransaction(tx.serialize());
+      const conf = await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
+      if (conf.value.err) {
+        throw new Error(`${label} failed: ${JSON.stringify(conf.value.err)}`);
+      }
+      return sig;
+    },
+    [session],
+  );
+
+  /**
+   * Whether the session key can sit and stand for the player, promptless.
+   *
+   * Three things have to hold: the key and its token exist, and the key holds
+   * enough SOL to pay the fee itself. When any of them fails the wallet path
+   * below still works — a prompt is worse than promptless and better than a
+   * dead button.
+   */
+  const sessionCanSign = useCallback(async (): Promise<boolean> => {
+    if (!session || !sessionToken) return false;
+    try {
+      const bal = await getBaseConnection().getBalance(session.publicKey);
+      return bal >= 50_000;
+    } catch {
+      return false;
+    }
+  }, [session, sessionToken]);
+
+  /**
+   * Take a seat — without a prompt whenever a live session key can sign it.
+   *
+   * The first sit of a session still goes through the wallet, because that is
+   * the transaction that creates the session key, and it rides along rather
+   * than being a second thing to approve. Every sit after that, and every
+   * cash-out, runs on the session key: the wallet is asked once per session,
+   * not once per chair.
    *
    * Returns the session it created, or null if one already existed, so the
    * caller can put it straight into state without a round trip.
@@ -119,6 +167,23 @@ export function useTableActions(args: {
       setBusy("join");
       try {
         const conn = getBaseConnection();
+
+        // The promptless path: a live, funded session key signs `sit_down`.
+        if (await sessionCanSign()) {
+          await sendBaseAsSession(
+            async (program) =>
+              new Transaction().add(
+                await sitDownIx(program, tableId, seatIndex, buyIn, {
+                  payer: session!.publicKey,
+                  authority: publicKey,
+                  sessionToken,
+                }),
+              ),
+            "sit down",
+          );
+          toast(`Sat down with ${buyIn.toLocaleString()} chips`, "good");
+          return null;
+        }
 
         // Checked before signing rather than discovered inside a CPI, where
         // running out of lamports comes back as `custom program error: 0x1`.
@@ -159,7 +224,7 @@ export function useTableActions(args: {
         setBusy(null);
       }
     },
-    [tableId, sendBase, publicKey],
+    [tableId, sendBase, publicKey, session, sessionToken, sessionCanSign, sendBaseAsSession],
   );
 
   /**
@@ -174,20 +239,38 @@ export function useTableActions(args: {
    */
   type Nested = { nested?: boolean };
 
-  /** Wallet only. This puts your seat stack back into your balance. */
+  /**
+   * Put the seat stack back into the balance — promptless when the session
+   * key can sign, the wallet otherwise. Either way the chips have exactly one
+   * destination: the seat occupant's own balance.
+   */
   const leave = useCallback(
     async (seatIndex: number, opts: Nested = {}) => {
-      if (!table) return;
+      if (!table || !publicKey) return;
       const phase = (s: string | null) => {
         if (!opts.nested) setBusy(s);
       };
       phase("leave");
       try {
-        await sendBase(
-          async (program) =>
-            new Transaction().add(await leaveTableIx(program, table, seatIndex, publicKey!)),
-          "leave",
-        );
+        if (await sessionCanSign()) {
+          await sendBaseAsSession(
+            async (program) =>
+              new Transaction().add(
+                await standUpIx(program, table, seatIndex, {
+                  payer: session!.publicKey,
+                  authority: publicKey,
+                  sessionToken,
+                }),
+              ),
+            "stand up",
+          );
+        } else {
+          await sendBase(
+            async (program) =>
+              new Transaction().add(await leaveTableIx(program, table, seatIndex, publicKey)),
+            "leave",
+          );
+        }
         toast("Cashed out", "good");
       } catch (e) {
         toast(friendlyError(e), "bad");
@@ -195,7 +278,7 @@ export function useTableActions(args: {
         phase(null);
       }
     },
-    [table, sendBase, publicKey],
+    [table, sendBase, publicKey, session, sessionToken, sessionCanSign, sendBaseAsSession],
   );
 
   /**

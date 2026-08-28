@@ -199,6 +199,62 @@ export async function joinTableIx(
     .instruction();
 }
 
+/**
+ * `join_table`, signable by the session key: sitting down without a prompt.
+ *
+ * The chips still move only between this player's own balance and a seat
+ * assigned to them — the program pins both ends to the session's authority —
+ * but a browser-held key may now commit balance into play. That trade was
+ * made deliberately; see the program's `sit_down` for the reasoning.
+ */
+export async function sitDownIx(
+  program: SolpokerProgram,
+  tableId: BN,
+  i: number,
+  buyIn: number,
+  signer: SessionSigner,
+) {
+  const table = tablePda(tableId);
+  return program.methods
+    .sitDown(i, new BN(buyIn))
+    .accountsPartial({
+      payer: signer.payer,
+      authority: signer.authority,
+      table,
+      config: configPda(tableId),
+      seat: seatPda(table, i),
+      player: playerPda(signer.authority),
+      sessionToken: signer.sessionToken,
+    })
+    .instruction();
+}
+
+/**
+ * `leave_table`, signable by the session key: the promptless cash-out.
+ *
+ * Safe outright — the chips can only go from the occupant's seat to the
+ * occupant's own balance, so the key that signs it could at most stand its
+ * own player up.
+ */
+export async function standUpIx(
+  program: SolpokerProgram,
+  table: PublicKey,
+  i: number,
+  signer: SessionSigner,
+) {
+  return program.methods
+    .standUp(i)
+    .accountsPartial({
+      payer: signer.payer,
+      authority: signer.authority,
+      table,
+      seat: seatPda(table, i),
+      player: playerPda(signer.authority),
+      sessionToken: signer.sessionToken,
+    })
+    .instruction();
+}
+
 /** Wallet only. This moves chips back into your balance. */
 export async function leaveTableIx(
   program: SolpokerProgram,

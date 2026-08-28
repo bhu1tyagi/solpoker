@@ -123,6 +123,16 @@ pub mod solpoker {
         instructions::table::leave_table(ctx, seat_index)
     }
 
+    /// `join_table`, session-key signable. See the instruction for the trade.
+    pub fn sit_down(ctx: Context<SitDown>, seat_index: u8, buy_in: u64) -> Result<()> {
+        instructions::table::sit_down(ctx, seat_index, buy_in)
+    }
+
+    /// `leave_table`, session-key signable: a promptless cash-out.
+    pub fn stand_up(ctx: Context<StandUp>, seat_index: u8) -> Result<()> {
+        instructions::table::stand_up(ctx, seat_index)
+    }
+
     pub fn vacate_seat(ctx: Context<VacateSeat>, seat_index: u8) -> Result<()> {
         instructions::table::vacate_seat(ctx, seat_index)
     }

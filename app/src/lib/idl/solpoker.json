@@ -3375,6 +3375,226 @@
       ]
     },
     {
+      "name": "sit_down",
+      "docs": [
+        "`join_table`, session-key signable. See the instruction for the trade."
+      ],
+      "discriminator": [
+        17,
+        21,
+        140,
+        237,
+        149,
+        56,
+        191,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Whoever pays for and signs this: the player's wallet or their session key."
+          ],
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "token when a session signs, and required to BE the payer otherwise.",
+            "Every custody constraint below hangs off this key: the player account",
+            "must belong to it and the seat is assigned to it, so whoever signs,",
+            "the chips move only between this player's own balance and seat."
+          ],
+          "relations": [
+            "player"
+          ]
+        },
+        {
+          "name": "table",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  98,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table.table_id",
+                "account": "Table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table.table_id",
+                "account": "Table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "writable": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "seat_index",
+          "type": "u8"
+        },
+        {
+          "name": "buy_in",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "stand_up",
+      "docs": [
+        "`leave_table`, session-key signable: a promptless cash-out."
+      ],
+      "discriminator": [
+        0,
+        17,
+        202,
+        143,
+        95,
+        210,
+        199,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Whoever pays for and signs this: the player's wallet or their session key."
+          ],
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "when a session signs, and required to BE the payer otherwise. The seat",
+            "must be occupied by this key and the balance must belong to it, so the",
+            "chips have exactly one place they can go: home."
+          ],
+          "relations": [
+            "player"
+          ]
+        },
+        {
+          "name": "table",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  98,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "table.table_id",
+                "account": "Table"
+              }
+            ]
+          }
+        },
+        {
+          "name": "seat",
+          "writable": true
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session_token",
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "seat_index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "start_hand",
       "discriminator": [
         50,
