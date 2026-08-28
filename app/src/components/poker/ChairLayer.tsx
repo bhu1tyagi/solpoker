@@ -2,34 +2,169 @@
 
 import { useMemo } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Clone, OrthographicCamera, useGLTF } from "@react-three/drei";
+import { OrthographicCamera, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
+
+/**
+ * The chairs: a green Chesterfield club chair as an actual 3D model.
+ *
+ * No marketplace has a licence-clean tufted Chesterfield to download, so the
+ * chair is modelled here out of primitives — the low rolled back and arms as
+ * capsules, the deep seat, the walnut bun feet — with the diamond tufting
+ * drawn once into a procedural bump map, buttons and seams and all. At table
+ * scale that reads as the real thing, and it costs no accounts, no rigs and
+ * no megabytes.
+ *
+ * Every seat gets the same chair, yaw-rotated to face the table's centre, so
+ * a chair's direction is geometry: the far rail faces you, the near rail
+ * shows its back, and the hero's seat at the bottom centre is the big one
+ * seen from directly behind — you are sitting in it.
+ *
+ * The canvas renders on demand and never takes a pointer event.
+ */
+
+/** Camera elevation. Steeper looks more top-down, shallower more cinematic. */
+const TILT = (36 * Math.PI) / 180;
 
 /** Extra canvas above and below the stage, so tall chair backs at the far
  * rail are never clipped by the stage box. Symmetric, so the world's centre
  * — and with it every chair's anchor — does not move. */
 const OVERSCAN = 0.22;
 
+const LEATHER = "#375a41";
+const LEATHER_DEEP = "#2c4a35";
+const WOOD = "#2e1d13";
+
 /**
- * The chairs, as an actual 3D model rendered live.
- *
- * One CC0 model — Poly Haven's GreenChair_01, green velvet on dark carved
- * wood — cloned once per seat and ROTATED to face the table's centre, so a
- * chair's direction is geometry rather than a guess baked into a picture.
- * The camera is orthographic and tilted the way the CSS table itself is
- * implicitly drawn: everything is seen from the same front-on angle, chairs
- * at the far rail show their fronts, chairs at the near rail their backs —
- * which is exactly what makes the hero's seat read as "you are sitting here".
- *
- * The canvas never animates: `frameloop="demand"` renders a handful of
- * frames while the model loads and then holds the picture, costing nothing.
- * It also never takes a pointer event — sitting is still the DOM's job.
+ * The tufting, drawn once: a diamond grid of seams with a button at every
+ * crossing, used as a bump map so the light does the upholstery work.
  */
+function makeTuftBump(): THREE.CanvasTexture {
+  const S = 256;
+  const c = document.createElement("canvas");
+  c.width = c.height = S;
+  const ctx = c.getContext("2d")!;
+  // Mid-grey = flat; darker = pressed seam; lighter = swell.
+  ctx.fillStyle = "#8a8a8a";
+  ctx.fillRect(0, 0, S, S);
+  const step = S / 4;
+  // Gentle swells inside each diamond.
+  for (let y = 0; y <= S; y += step) {
+    for (let x = 0; x <= S; x += step) {
+      const g = ctx.createRadialGradient(
+        x + step / 2, y + step / 2, 4,
+        x + step / 2, y + step / 2, step * 0.62,
+      );
+      g.addColorStop(0, "#b4b4b4");
+      g.addColorStop(1, "#8a8a8a");
+      ctx.fillStyle = g;
+      ctx.fillRect(x, y, step, step);
+    }
+  }
+  // Diagonal seams.
+  ctx.strokeStyle = "#4a4a4a";
+  ctx.lineWidth = 5;
+  for (let k = -4; k <= 4; k++) {
+    ctx.beginPath();
+    ctx.moveTo(k * step - S, -8);
+    ctx.lineTo(k * step + S, S + 8);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(k * step + S, -8);
+    ctx.lineTo(k * step - S, S + 8);
+    ctx.stroke();
+  }
+  // Buttons at the crossings.
+  ctx.fillStyle = "#3a3a3a";
+  for (let y = 0; y <= S; y += step) {
+    for (let x = 0; x <= S; x += step) {
+      ctx.beginPath();
+      ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1.5, 1);
+  return tex;
+}
 
-const MODEL = "/seats/chair/GreenChair_01_1k.gltf";
+function useMaterials() {
+  return useMemo(() => {
+    const bump = makeTuftBump();
+    const tufted = new THREE.MeshStandardMaterial({
+      color: LEATHER,
+      roughness: 0.55,
+      bumpMap: bump,
+      bumpScale: 2.4,
+    });
+    const smooth = new THREE.MeshStandardMaterial({
+      color: LEATHER,
+      roughness: 0.52,
+    });
+    const cushion = new THREE.MeshStandardMaterial({
+      color: LEATHER_DEEP,
+      roughness: 0.48,
+    });
+    const wood = new THREE.MeshStandardMaterial({
+      color: WOOD,
+      roughness: 0.45,
+    });
+    return { tufted, smooth, cushion, wood };
+  }, []);
+}
 
-/** Camera elevation. Steeper looks more top-down, shallower more cinematic. */
-const TILT = (36 * Math.PI) / 180;
+/**
+ * The chair, one unit wide at the arms, facing +Z. Proportions taken off the
+ * reference render: low back, arms nearly as high as the back, deep cushion.
+ */
+function Chesterfield({ scale }: { scale: number }) {
+  const m = useMaterials();
+  return (
+    <group scale={scale}>
+      {/* Bun feet. */}
+      {[
+        [-0.36, 0.3],
+        [0.36, 0.3],
+        [-0.36, -0.3],
+        [0.36, -0.3],
+      ].map(([x, z], i) => (
+        <mesh key={i} material={m.wood} position={[x, 0.055, z]} scale={[1, 0.75, 1]}>
+          <sphereGeometry args={[0.075, 16, 12]} />
+        </mesh>
+      ))}
+
+      {/* The body: smooth leather box between the arms. */}
+      <RoundedBox material={m.smooth} position={[0, 0.4, 0.02]} args={[0.72, 0.56, 0.82]} radius={0.07} smoothness={3} />
+
+      {/* Seat cushion, deeper green, sitting proud between the arms. */}
+      <RoundedBox material={m.cushion} position={[0, 0.7, 0.1]} args={[0.68, 0.16, 0.6]} radius={0.06} smoothness={3} />
+
+      {/* Arms: fat rolled capsules riding OUTSIDE the body, the scroll on
+          their front ends. */}
+      {[-0.45, 0.45].map((x) => (
+        <group key={x}>
+          <mesh material={m.smooth} position={[x, 0.42, 0]}>
+            <boxGeometry args={[0.24, 0.55, 0.78]} />
+          </mesh>
+          <mesh material={m.tufted} position={[x, 0.72, -0.02]} rotation={[Math.PI / 2, 0, 0]}>
+            <capsuleGeometry args={[0.16, 0.52, 8, 20]} />
+          </mesh>
+          <mesh material={m.tufted} position={[x, 0.68, 0.36]}>
+            <sphereGeometry args={[0.155, 18, 14]} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* The low back: the tufted panel is the chair's face, with the rolled
+          top edge meeting the arm rolls at the corners. */}
+      <RoundedBox material={m.tufted} position={[0, 0.74, -0.34]} args={[1.06, 0.68, 0.24]} radius={0.08} smoothness={3} />
+      <mesh material={m.tufted} position={[0, 1.06, -0.33]} rotation={[0, 0, Math.PI / 2]}>
+        <capsuleGeometry args={[0.12, 0.8, 8, 20]} />
+      </mesh>
+    </group>
+  );
+}
 
 export interface ChairSpot {
   /** Seat anchor percentages, same numbers the DOM pods anchor to. */
@@ -40,29 +175,8 @@ export interface ChairSpot {
 }
 
 function Chairs({ spots, aspect, compact }: { spots: ChairSpot[]; aspect: number; compact: boolean }) {
-  const { scene } = useGLTF(MODEL);
-
-  // Sink the upholstery toward the room's own green. Applied once to the
-  // source scene; every Clone shares the tinted materials.
-  useMemo(() => {
-    const tint = new THREE.Color(0.6, 0.78, 0.65);
-    scene.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const m of mats) {
-        const std = m as THREE.MeshStandardMaterial;
-        if (std.color && !std.userData.tinted) {
-          std.color.multiply(tint);
-          std.userData.tinted = true;
-        }
-      }
-    });
-  }, [scene]);
-
-  // The model is authored in metres standing on the origin. Everything below
-  // is in "percent of table width" world units.
-  const base = compact ? 18 : 16;
+  // World units are "percent of table width"; the chair is one unit wide.
+  const base = compact ? 15 : 13;
 
   const items = useMemo(
     () =>
@@ -73,7 +187,7 @@ function Chairs({ spots, aspect, compact }: { spots: ChairSpot[]; aspect: number
         const z = (s.y - 50) / (aspect * Math.sin(TILT));
         // Face the middle of the table.
         const yaw = Math.atan2(-x, -z);
-        const scale = s.anchor === 0 ? base * 1.3 : base;
+        const scale = s.anchor === 0 ? base * 1.35 : base;
         return { x, z, yaw, scale, key: `${s.anchor}` };
       }),
     [spots, aspect, base],
@@ -83,7 +197,7 @@ function Chairs({ spots, aspect, compact }: { spots: ChairSpot[]; aspect: number
     <>
       {items.map((c) => (
         <group key={c.key} position={[c.x, 0, c.z]} rotation={[0, c.yaw, 0]}>
-          <Clone object={scene} scale={c.scale} />
+          <Chesterfield scale={c.scale} />
         </group>
       ))}
     </>
@@ -133,16 +247,14 @@ export function ChairLayer({
         style={{ background: "transparent" }}
       >
         <FittedCamera />
-        {/* The room's light: a little of it everywhere, most of it falling
-            from above the middle of the table, a cool wash from behind the
-            camera so near-rail chair backs keep their shape. */}
-        <ambientLight intensity={0.38} />
-        <directionalLight position={[0, 55, 35]} intensity={1.9} color="#fff6e8" />
-        <directionalLight position={[0, 20, 90]} intensity={0.35} color="#bcd8cb" />
+        {/* The room's light: a little of it everywhere, a warm key from over
+            the table, a cool wash from behind the camera so near-rail chair
+            backs keep their shape. */}
+        <ambientLight intensity={0.42} />
+        <directionalLight position={[0, 55, 35]} intensity={1.8} color="#fff3e2" />
+        <directionalLight position={[0, 20, 90]} intensity={0.4} color="#bcd8cb" />
         <Chairs spots={spots} aspect={aspect} compact={compact} />
       </Canvas>
     </div>
   );
 }
-
-useGLTF.preload(MODEL);
