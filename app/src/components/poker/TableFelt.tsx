@@ -83,7 +83,19 @@ export function TableFelt({
   const stage = showdown?.stage ?? null;
   const handLive = table?.state === 1;
   /** The room is doing invisible work, so its mark turns. */
-  const tableBusy = Boolean(overlay) || (working && !handLive && stage === null);
+  /**
+   * What the line under the board will say, worked out here because the
+   * mark's ring keys off it: any waiting-shaped status sets the ring turning.
+   * The ring IS the loading indicator — the one motion for every wait, in
+   * place of dots or spinners — so it runs for "waiting for players" and
+   * "shuffling" exactly as it does for "dealing you in".
+   */
+  const fallbackLabel =
+    status ?? (handLive && hand ? STREET_NAMES[hand.street] : "waiting");
+  const tableBusy =
+    Boolean(overlay) ||
+    (working && !handLive && stage === null) ||
+    (stage === null && !handLive && isWaiting(fallbackLabel));
   // Between hands the previous board is stale. It stays up through the
   // showdown, because that is what everyone is looking at, and clears once the
   // table is genuinely waiting for the next one.
@@ -316,11 +328,7 @@ export function TableFelt({
           <div aria-hidden style={{ height: boardSize === "sm" ? 130 : 210 }} />
         )}
 
-        <StatusLine
-          stage={stage}
-          busy={overlay}
-          fallback={status ?? (handLive && hand ? STREET_NAMES[hand.street] : "waiting")}
-        />
+        <StatusLine stage={stage} busy={overlay} fallback={fallbackLabel} />
       </div>
 
       {/* Seats. */}
@@ -564,73 +572,64 @@ function StatusLine({
   /*
    * Printed into the cloth, not floating over it.
    *
-   * The mark above this line is ink sunk into the felt — low contrast, a
-   * breath of blur — and the words have to be made of the same stuff or they
-   * read as UI parked on a table. Same ink, wide tracking the way lettering
-   * is screened onto real cloth, the same soft edge. The showdown moments
-   * keep their green, dimmed into the weave with everything else.
+   * Solid ink at any opacity still reads as UI text parked on a table. What
+   * reads as screen-printing is white run through `overlay` blending: the
+   * letters take the cloth's own green and its lighting gradient, so they
+   * genuinely sit IN the felt the way the mark does — brighter where the
+   * cloth is lit, sunk where it falls dark — with a breath of blur softening
+   * the edges the way ink spreads into weave. The waiting states breathe
+   * slowly; the mark's turning ring is the actual loading indicator, so the
+   * dots that used to trail this line are gone.
+   *
+   * The showdown moments keep their green and skip the blend: "paying the
+   * winner" is an event, not upholstery.
    */
-  const printed = {
-    fontFamily: "var(--font-display)",
-    fontSize: busy ? 15 : 13,
-    fontWeight: 700,
-    color: !busy && stage ? "var(--c-green)" : "var(--c-ink)",
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.22em",
-    filter: "blur(0.4px)",
-  };
-  const restOpacity = !busy && stage ? 0.55 : 0.38;
+  const waiting = Boolean(busy) || isWaiting(label);
+  const stageMoment = !busy && stage !== null;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 16 }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: 18,
+        marginTop: 14,
+      }}
+    >
       <AnimatePresence mode="wait">
         <motion.span
           key={label}
           initial={{ opacity: 0, y: 3 }}
           animate={
-            busy
-              ? { opacity: [0.26, 0.5, 0.26], y: 0 }
-              : { opacity: restOpacity, y: 0 }
+            waiting && !stageMoment
+              ? { opacity: [0.5, 0.85, 0.5], y: 0 }
+              : { opacity: stageMoment ? 0.6 : 0.75, y: 0 }
           }
           exit={{ opacity: 0, y: -3 }}
           transition={
-            busy
-              ? { duration: 2.2, repeat: Infinity, ease: "easeInOut" }
+            waiting && !stageMoment
+              ? { duration: 2.4, repeat: Infinity, ease: "easeInOut" }
               : { duration: 0.18 }
           }
-          style={printed}
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: busy ? 15 : 13,
+            fontWeight: 700,
+            color: stageMoment ? "var(--c-green)" : "#fff",
+            mixBlendMode: stageMoment ? undefined : "overlay",
+            textTransform: "uppercase",
+            letterSpacing: "0.24em",
+            filter: "blur(0.4px)",
+            whiteSpace: "nowrap",
+          }}
         >
           {label}
         </motion.span>
       </AnimatePresence>
-      {/* Anything the table is waiting on gets a pulse, so a slow moment never
-          looks like a stuck one. */}
-      {isWaiting(label) && <WaitingDots />}
     </div>
   );
 }
 
 const SETTLED_LABELS = new Set(["preflop", "flop", "turn", "river", "showdown"]);
 const isWaiting = (label: string) => !SETTLED_LABELS.has(label);
-
-function WaitingDots() {
-  return (
-    <span style={{ display: "inline-flex", gap: 3 }}>
-      {[0, 1, 2].map((i) => (
-        <motion.span
-          key={i}
-          animate={{ opacity: [0.25, 1, 0.25] }}
-          transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.18 }}
-          style={{
-            width: 3,
-            height: 3,
-            borderRadius: "50%",
-            background: "currentColor",
-            color: "var(--c-ink-faint)",
-            display: "inline-block",
-          }}
-        />
-      ))}
-    </span>
-  );
-}
