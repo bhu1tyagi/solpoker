@@ -393,10 +393,6 @@ export function TableFelt({
               secured={isMe ? secured : undefined}
               avatarOn={pos.x > 50 ? "left" : "right"}
               cardsOn={pos.y < 50 ? "below" : "above"}
-              // Which slot of the rotated ring this seat renders in, which
-              // decides the chair photograph, its size and its light. Slot 0
-              // is always the viewer's own seat at the bottom centre.
-              anchor={view(i)}
               winner={awardBySeat.has(i)}
               compact={compact}
               onSit={onSit}

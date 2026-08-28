@@ -75,12 +75,6 @@ interface Props {
    * cards toward the felt, or the cards would run off the top of the screen.
    */
   cardsOn?: "above" | "below";
-  /**
-   * Which slot of the rotated ring this seat renders in (0 = the hero seat at
-   * the bottom centre). Decides which chair photograph stands here, how big,
-   * and under which light.
-   */
-  anchor?: number;
   /** This seat just won something, so the seat celebrates briefly. */
   winner?: boolean;
   /** The phone-sized seat. */
@@ -104,7 +98,6 @@ export function SeatPod({
   secured,
   avatarOn = "left",
   cardsOn = "above",
-  anchor = 0,
   winner = false,
   compact = false,
   onSit,
@@ -117,11 +110,12 @@ export function SeatPod({
     return (
       <motion.button
         onClick={() => onSit?.(index)}
-        // The seat shows a plus and a number, which is right on the table but
-        // says nothing on its own. The name is what a screen reader announces
-        // and what the browser tests click.
+        className={onSit ? "seat-open" : undefined}
+        // The seat shows a silhouette and a verb, which is right on the table
+        // but says nothing on its own. The name is what a screen reader
+        // announces and what the browser tests click.
         aria-label={`Seat ${index + 1}`}
-        whileHover={onSit ? { scale: 1.05 } : undefined}
+        whileHover={onSit ? { scale: 1.06 } : undefined}
         whileTap={onSit ? { scale: 0.97 } : undefined}
         transition={spring.snappy}
         style={{
@@ -129,57 +123,65 @@ export function SeatPod({
           background: "none",
           padding: 0,
           cursor: onSit ? "pointer" : "default",
-          display: "block",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
           position: "relative",
         }}
       >
-        {/* An open seat is the chair itself, waiting. The label hangs OUTSIDE
-            the layout box: counted in, it pushed every chair half a label off
-            its anchor and the table read lopsided. */}
-        <SeatChair anchor={anchor} width={d.avatar + (compact ? 54 : 108)} />
-        {/* The invitation: the one interface object on an empty chair. */}
+        {/*
+          An empty seat answers the only two questions a newcomer has: is
+          somebody here, and what do I do about it. The ghost of a player
+          answers the first — the shape a person will fill, in the same circle
+          every occupied seat draws — and the verb on the pill answers the
+          second. "SIT" is an instruction; "open" was a report. Spectators and
+          live tables get the report, because for them there is nothing to do.
+        */}
         <span
           aria-hidden
+          className="seat-ring"
           style={{
-            position: "absolute",
-            left: "50%",
-            top: "54%",
-            transform: "translate(-50%, -50%)",
-            width: compact ? 18 : 24,
-            height: compact ? 18 : 24,
-            borderRadius: "50%",
             display: "grid",
             placeItems: "center",
-            background: "rgba(0, 0, 0, 0.45)",
-            border: "1px solid color-mix(in srgb, var(--c-green) 45%, transparent)",
-            color: "var(--c-green)",
-            fontSize: compact ? 13 : 16,
-            fontWeight: 700,
-            lineHeight: 1,
+            width: d.avatar + (compact ? 4 : 8),
+            height: d.avatar + (compact ? 4 : 8),
+            borderRadius: "50%",
+            border: `${d.ring}px solid color-mix(in srgb, var(--c-ink) 16%, transparent)`,
+            background: "color-mix(in srgb, var(--c-felt-raised) 78%, transparent)",
+            transition: "border-color 0.2s ease, box-shadow 0.2s ease",
           }}
         >
-          +
+          {/* The player who is not here yet. */}
+          <svg
+            viewBox="0 0 48 48"
+            style={{ width: "62%", color: "var(--c-ink)", opacity: 0.22 }}
+          >
+            <circle cx="24" cy="17" r="8.5" fill="currentColor" />
+            <path d="M 8 42 C 8 31, 15 27, 24 27 C 33 27, 40 31, 40 42 Z" fill="currentColor" />
+          </svg>
         </span>
         <span
-          className="label"
+          className="label seat-sit-pill"
           style={{
-            position: "absolute",
-            top: "100%",
-            left: "50%",
-            transform: "translateX(-50%)",
-            marginTop: 2,
+            marginTop: compact ? -6 : -8,
+            position: "relative",
+            zIndex: 1,
             fontSize: d.nameFont,
-            letterSpacing: "0.08em",
+            fontWeight: 800,
+            letterSpacing: "0.1em",
             textTransform: "uppercase",
-            color: "rgba(255, 255, 255, 0.4)",
-            padding: "2px 8px",
+            color: onSit ? "var(--c-green)" : "rgba(255, 255, 255, 0.4)",
+            padding: compact ? "2px 9px" : "3px 12px",
             borderRadius: "var(--r-pill)",
-            background: "rgba(0, 0, 0, 0.4)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            background: "rgba(0, 0, 0, 0.55)",
+            border: onSit
+              ? "1px solid color-mix(in srgb, var(--c-green) 40%, transparent)"
+              : "1px solid rgba(255, 255, 255, 0.08)",
             whiteSpace: "nowrap",
+            transition: "background 0.2s ease, color 0.2s ease",
           }}
         >
-          open · {index + 1}
+          {onSit ? `sit · ${index + 1}` : `open · ${index + 1}`}
         </span>
       </motion.button>
     );
@@ -425,24 +427,6 @@ export function SeatPod({
             : undefined,
         }}
       >
-        {/* The chair this player is sitting in, behind them. Yours is the one
-            seen from directly behind, so the room reads as looking over your
-            own shoulder at the table. */}
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: anchor === 0 ? (compact ? 0 : -4) : compact ? -12 : -18,
-            transform: "translateX(-50%)",
-            zIndex: -1,
-          }}
-        >
-          <SeatChair
-            anchor={anchor}
-            width={size + (anchor === 0 ? (compact ? 92 : 170) : compact ? 50 : 90)}
-          />
-        </div>
         {avatar}
         {/* The name, overlapping the circle's bottom edge as the draft sets
             it, then the stack in its black pill. */}
@@ -487,71 +471,6 @@ function CircleAvatar({ pubkey, size }: { pubkey: string; size: number }) {
       }}
     >
       <Avatar pubkey={pubkey} size={size} square />
-    </span>
-  );
-}
-
-/**
- * The chair, photographed: the same green Chesterfield rendered from four
- * angles, matted out, and placed per seat so every chair faces the felt.
- *
- * The realism is layered on in the room rather than baked into the pictures:
- *
- *   depth    seats farther up the screen render smaller, the way the far
- *            side of a real table is farther from your eyes;
- *   light    the room's light falls from the centre of the table, so far
- *            chairs are lit a touch brighter than near ones, and the hero's
- *            back — closest to the viewer, facing away from the light — sits
- *            darkest;
- *   ground   every chair stands in its own pool of soft shadow, which is
- *            what keeps a photograph from floating over a drawing.
- */
-const CHAIR_VIEWS = [
-  { src: "/seats/chair-rear.png", flip: false, depth: 1.16, light: 0.86 },
-  { src: "/seats/chair-rear34.png", flip: false, depth: 1.0, light: 0.8 },
-  { src: "/seats/chair-front34.png", flip: false, depth: 0.86, light: 0.92 },
-  { src: "/seats/chair-front.png", flip: false, depth: 0.84, light: 0.95 },
-  { src: "/seats/chair-front34.png", flip: true, depth: 0.86, light: 0.92 },
-  { src: "/seats/chair-rear34.png", flip: true, depth: 1.0, light: 0.8 },
-] as const;
-
-function SeatChair({ anchor, width }: { anchor: number; width: number }) {
-  const view = CHAIR_VIEWS[anchor] ?? CHAIR_VIEWS[0];
-  const w = Math.round(width * view.depth);
-  return (
-    <span style={{ display: "block", position: "relative", width: w }}>
-      {/* The pool of shadow the chair stands in. */}
-      <span
-        aria-hidden
-        style={{
-          position: "absolute",
-          left: "50%",
-          bottom: -Math.round(w * 0.045),
-          transform: "translateX(-50%)",
-          width: w * 1.06,
-          height: Math.round(w * 0.3),
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 45%, transparent 70%)",
-        }}
-      />
-      <img
-        src={view.src}
-        alt=""
-        aria-hidden
-        draggable={false}
-        style={{
-          width: w,
-          maxWidth: "none",
-          height: "auto",
-          display: "block",
-          position: "relative",
-          transform: view.flip ? "scaleX(-1)" : undefined,
-          filter: `brightness(${view.light}) saturate(0.94) drop-shadow(0 ${Math.round(w * 0.05)}px ${Math.round(w * 0.1)}px rgba(0, 0, 0, 0.5))`,
-          pointerEvents: "none",
-          userSelect: "none",
-        }}
-      />
     </span>
   );
 }
