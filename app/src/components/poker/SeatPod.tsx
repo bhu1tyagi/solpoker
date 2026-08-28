@@ -75,12 +75,6 @@ interface Props {
    * cards toward the felt, or the cards would run off the top of the screen.
    */
   cardsOn?: "above" | "below";
-  /**
-   * Which slot of the rotated ring this seat renders in (0 = the hero seat at
-   * the bottom centre). Decides which of the chair renders stands here, so
-   * every chair faces the felt and yours is the one seen from behind.
-   */
-  anchor?: number;
   /** This seat just won something, so the seat celebrates briefly. */
   winner?: boolean;
   /** The phone-sized seat. */
@@ -104,7 +98,6 @@ export function SeatPod({
   secured,
   avatarOn = "left",
   cardsOn = "above",
-  anchor = 0,
   winner = false,
   compact = false,
   onSit,
@@ -133,12 +126,14 @@ export function SeatPod({
           position: "relative",
         }}
       >
-        {/* An open seat is an actual chair waiting at the rail, its back
-            turned away from the table. The green plus on the cushion is the
-            whole invitation. The label hangs OUTSIDE the layout box: counted
-            in, it pushed every chair half a label off its anchor — away from
-            the top rail, into the bottom one — and the table read lopsided. */}
-        <SeatChair anchor={anchor} width={d.avatar + (compact ? 34 : 66)} />
+        {/* The chair itself lives in the 3D layer behind this button; the DOM
+            keeps only the hit area, the invitation and the label. The label
+            hangs OUTSIDE the layout box: counted in, it pushed every chair
+            half a label off its anchor and the table read lopsided. */}
+        <span
+          aria-hidden
+          style={{ display: "block", width: d.avatar + (compact ? 30 : 56), height: d.avatar + (compact ? 26 : 48) }}
+        />
         {/* The invitation: the one interface object on an empty chair. */}
         <span
           aria-hidden
@@ -427,24 +422,6 @@ export function SeatPod({
             : undefined,
         }}
       >
-        {/* The chair this player is sitting in, behind them. Yours is the one
-            seen from directly behind, so the room reads as looking over your
-            own shoulder at the table. */}
-        <div
-          aria-hidden
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: anchor === 0 ? (compact ? 0 : -2) : compact ? -12 : -18,
-            transform: "translateX(-50%)",
-            zIndex: -1,
-          }}
-        >
-          <SeatChair
-            anchor={anchor}
-            width={size + (anchor === 0 ? (compact ? 78 : 148) : compact ? 30 : 58)}
-          />
-        </div>
         {avatar}
         {/* The name, overlapping the circle's bottom edge as the draft sets
             it, then the stack in its black pill. */}
@@ -490,53 +467,6 @@ function CircleAvatar({ pubkey, size }: { pubkey: string; size: number }) {
     >
       <Avatar pubkey={pubkey} size={size} square />
     </span>
-  );
-}
-
-/**
- * The chair, as a photographed object rather than a drawing.
- *
- * One green Chesterfield club chair, generated once and rendered from four
- * angles, matted out and placed per seat so every chair at the table faces
- * the felt: the hero's seat is seen from directly behind — you are sitting
- * in it — the top-centre seat faces you across the table, and the corners
- * take the three-quarter views, mirrored for their side. Dimmed toward the
- * room's light so studio renders sit believably in a dark casino.
- */
-const CHAIR_VIEWS = [
-  { src: "/seats/chair-rear.png", flip: false },
-  { src: "/seats/chair-rear34.png", flip: false },
-  { src: "/seats/chair-front34.png", flip: true },
-  { src: "/seats/chair-front.png", flip: false },
-  { src: "/seats/chair-front34.png", flip: false },
-  { src: "/seats/chair-rear34.png", flip: true },
-] as const;
-
-function SeatChair({ anchor, width }: { anchor: number; width: number }) {
-  const view = CHAIR_VIEWS[anchor] ?? CHAIR_VIEWS[0];
-  // The hero chair sits over the near rail's black ground rather than the lit
-  // felt, so it keeps more of its light or it disappears into the room.
-  const brightness = anchor === 0 ? 0.88 : 0.72;
-  return (
-    <img
-      src={view.src}
-      alt=""
-      aria-hidden
-      draggable={false}
-      style={{
-        width,
-        // The global reset caps every img at max-width 100%, and inside a
-        // shrink-to-fit absolute wrapper that circularity collapses the chair
-        // to its minimum size. This is the one image that sets its own width.
-        maxWidth: "none",
-        height: "auto",
-        display: "block",
-        transform: view.flip ? "scaleX(-1)" : undefined,
-        filter: `brightness(${brightness}) saturate(0.92) drop-shadow(0 12px 22px rgba(0, 0, 0, 0.55))`,
-        pointerEvents: "none",
-        userSelect: "none",
-      }}
-    />
   );
 }
 
