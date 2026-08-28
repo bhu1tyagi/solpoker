@@ -570,21 +570,16 @@ function StatusLine({
           : fallback);
 
   /*
-   * Printed into the cloth, not floating over it.
+   * Printed into the cloth exactly the way the mark above it is: the same
+   * ink, a steady low opacity, a breath of blur spreading the edges into the
+   * weave. Nothing animates here — the words hold still like lettering
+   * screened onto a real table, and the mark's turning ring alone says the
+   * room is working. Bold and widely tracked, because that is how cloth
+   * lettering is actually set.
    *
-   * Solid ink at any opacity still reads as UI text parked on a table. What
-   * reads as screen-printing is white run through `overlay` blending: the
-   * letters take the cloth's own green and its lighting gradient, so they
-   * genuinely sit IN the felt the way the mark does — brighter where the
-   * cloth is lit, sunk where it falls dark — with a breath of blur softening
-   * the edges the way ink spreads into weave. The waiting states breathe
-   * slowly; the mark's turning ring is the actual loading indicator, so the
-   * dots that used to trail this line are gone.
-   *
-   * The showdown moments keep their green and skip the blend: "paying the
-   * winner" is an event, not upholstery.
+   * The showdown moments keep their green: "paying the winner" is an event,
+   * not upholstery.
    */
-  const waiting = Boolean(busy) || isWaiting(label);
   const stageMoment = !busy && stage !== null;
 
   return (
@@ -594,33 +589,24 @@ function StatusLine({
         alignItems: "center",
         justifyContent: "center",
         minHeight: 18,
-        marginTop: 14,
+        marginTop: 30,
       }}
     >
       <AnimatePresence mode="wait">
         <motion.span
           key={label}
           initial={{ opacity: 0, y: 3 }}
-          animate={
-            waiting && !stageMoment
-              ? { opacity: [0.5, 0.85, 0.5], y: 0 }
-              : { opacity: stageMoment ? 0.6 : 0.75, y: 0 }
-          }
+          animate={{ opacity: stageMoment ? 0.6 : 0.34, y: 0 }}
           exit={{ opacity: 0, y: -3 }}
-          transition={
-            waiting && !stageMoment
-              ? { duration: 2.4, repeat: Infinity, ease: "easeInOut" }
-              : { duration: 0.18 }
-          }
+          transition={{ duration: 0.25 }}
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: busy ? 15 : 13,
-            fontWeight: 700,
-            color: stageMoment ? "var(--c-green)" : "#fff",
-            mixBlendMode: stageMoment ? undefined : "overlay",
+            fontSize: busy ? 16 : 14,
+            fontWeight: 800,
+            color: stageMoment ? "var(--c-green)" : "var(--c-ink)",
             textTransform: "uppercase",
-            letterSpacing: "0.24em",
-            filter: "blur(0.4px)",
+            letterSpacing: "0.3em",
+            filter: "blur(0.5px)",
             whiteSpace: "nowrap",
           }}
         >
