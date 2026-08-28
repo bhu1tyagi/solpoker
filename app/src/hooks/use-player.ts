@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Transaction } from "@solana/web3.js";
+import { PublicKey, Transaction } from "@solana/web3.js";
 import { getBaseConnection } from "@/lib/connection";
 import { makeProgram } from "@/lib/anchor";
 import { decodePlayer } from "@/lib/decode";
@@ -31,6 +31,89 @@ export interface PlayerState {
   hasUsdcAccount: boolean;
   /** Wallet SOL, in lamports. Not money here — postage. */
   lamports: number;
+}
+
+/*
+ * After the first read, the balances keep themselves.
+ *
+ * "Did my deposit arrive?" is the one moment a player actually stares at these
+ * numbers, and they used to move only on a reload or after an action. Three
+ * account subscriptions — the player account, the USDC account, the wallet
+ * itself — and a transfer sent from an exchange or a phone shows up the moment
+ * it confirms, wherever on the site it is being watched.
+ *
+ * Shared across every mounted copy of the hook, because there are around five
+ * per page (the header, the gate, readiness, the page itself) and each opening
+ * its own three subscriptions would ask the endpoint the same question
+ * fifteen times. One set per wallet; each hook registers to be told.
+ *
+ * Pushes are folded into existing state rather than creating it: until a
+ * hook's first full read lands there is nothing sound to fold into, and that
+ * read is retried until it does. The USDC account may not exist yet and the
+ * player account may never have been made — subscribing to an address that
+ * does not exist is free, and the notification that creates it is exactly the
+ * news wanted.
+ */
+type PlayerPatch = (cur: PlayerState) => PlayerState;
+
+const patchListeners = new Set<(patch: PlayerPatch) => void>();
+let subscribedWallet: string | null = null;
+let subscriptionIds: number[] = [];
+
+function teardownBalanceSubscriptions() {
+  const conn = getBaseConnection();
+  for (const id of subscriptionIds) {
+    void conn.removeAccountChangeListener(id).catch(() => {});
+  }
+  subscriptionIds = [];
+  subscribedWallet = null;
+}
+
+function ensureBalanceSubscriptions(publicKey: PublicKey) {
+  const wallet = publicKey.toBase58();
+  if (subscribedWallet === wallet) return;
+  teardownBalanceSubscriptions();
+  subscribedWallet = wallet;
+
+  const conn = getBaseConnection();
+  const push = (patch: PlayerPatch) => {
+    for (const l of patchListeners) l(patch);
+  };
+
+  subscriptionIds = [
+    conn.onAccountChange(
+      playerPda(publicKey),
+      (info) => {
+        try {
+          const p = decodePlayer(new Uint8Array(info.data));
+          push((cur) => ({
+            ...cur,
+            exists: true,
+            chips: p.chips,
+            handsPlayed: p.handsPlayed,
+          }));
+        } catch {
+          // A half-written or foreign layout is not news.
+        }
+      },
+      { commitment: "confirmed" },
+    ),
+    conn.onAccountChange(
+      usdcAta(publicKey),
+      (info) => {
+        // A closed token account notifies once with nothing in it.
+        const gone = info.lamports === 0 || info.data.length < TOKEN_AMOUNT_OFFSET + 8;
+        const microUsdc = gone ? 0 : readTokenAmount(new Uint8Array(info.data));
+        push((cur) => ({ ...cur, microUsdc, hasUsdcAccount: !gone }));
+      },
+      { commitment: "confirmed" },
+    ),
+    conn.onAccountChange(
+      publicKey,
+      (info) => push((cur) => ({ ...cur, lamports: info.lamports })),
+      { commitment: "confirmed" },
+    ),
+  ];
 }
 
 /**
@@ -107,6 +190,20 @@ export function usePlayer() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Register with the shared subscriptions above. Pushes are ignored until
+  // this hook's own first read has landed, so there is always a whole state
+  // to patch; the last hook out tears the subscriptions down.
+  useEffect(() => {
+    if (!publicKey) return;
+    const apply = (patch: PlayerPatch) => setState((cur) => (cur ? patch(cur) : cur));
+    patchListeners.add(apply);
+    ensureBalanceSubscriptions(publicKey);
+    return () => {
+      patchListeners.delete(apply);
+      if (patchListeners.size === 0) teardownBalanceSubscriptions();
+    };
+  }, [publicKey]);
 
   const send = useCallback(
     async (kind: "buy" | "sell", chips: number) => {
