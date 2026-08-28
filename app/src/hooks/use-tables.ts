@@ -127,6 +127,26 @@ function writeListCache(tables: LobbyTable[]) {
 const NEVER_PLAYED_GRACE_MS = 60 * 60 * 1000;
 
 /**
+ * Per-table facts that cannot change, fetched once and remembered.
+ *
+ * A table's config is written at creation and never after, and the deck and
+ * hole accounts that decide `outdated` either were made with the table or will
+ * never exist. Yet every six-second poll re-read all three for every table in
+ * the room — three batched calls whose answers were guaranteed to match last
+ * tick's. On a lobby of forty tables that made the poll a five-call burst,
+ * which is exactly the shape a rate limiter exists to flatten; only the two
+ * ownership sweeps actually carry news. Keyed by table address, module level
+ * on purpose: remounting the lobby should not forget what cannot have changed.
+ *
+ * Config is only cached once an account was actually read, so one null from a
+ * flaky batch cannot freeze a table as stakes-less for the rest of the visit.
+ * `outdated` caches either way: an absent deck at a verified table address is
+ * a fact about how the table was created, not about the network.
+ */
+const configCache = new Map<string, ConfigView | null>();
+const outdatedCache = new Map<string, boolean>();
+
+/**
  * Every table on the program, including the ones currently playing.
  *
  * The subtlety that once made live tables vanish: while a game runs, the
@@ -234,36 +254,44 @@ export function useTables() {
           return out;
         };
 
-        // Config never changes, so one batched read covers the whole lobby.
-        const configs = decoded.length
-          ? await batched(decoded.map((d) => new PublicKey(d.table.config)))
-          : [];
-
-        // A deck from an older layout cannot be dealt from, so say so here
-        // rather than letting someone sit down and hit a deserialization error
-        // the moment they press start.
-        const holes = decoded.length
-          ? await batched(decoded.map((d) => holePda(new PublicKey(d.table.address), 0)))
-          : [];
-        const decks = decoded.length
-          ? await batched(decoded.map((d) => deckPda(new PublicKey(d.table.address))))
-          : [];
+        // Only the tables this browser has not measured yet. Config, deck and
+        // card slots are set at creation and never change, so on a steady
+        // lobby these three reads happen once and every later poll is just the
+        // two ownership sweeps above.
+        const unseen = decoded.filter(
+          (d) => !configCache.has(d.table.address) || !outdatedCache.has(d.table.address),
+        );
+        if (unseen.length) {
+          const [configs, holes, decks] = [
+            await batched(unseen.map((d) => new PublicKey(d.table.config))),
+            await batched(unseen.map((d) => holePda(new PublicKey(d.table.address), 0))),
+            await batched(unseen.map((d) => deckPda(new PublicKey(d.table.address)))),
+          ];
+          unseen.forEach((d, i) => {
+            try {
+              const info = configs[i];
+              // Only a read that actually found the account is remembered; a
+              // missing config retries next poll rather than sticking.
+              if (info) configCache.set(d.table.address, decodeConfig(new Uint8Array(info.data)));
+            } catch {
+              // Show the table without its stakes rather than not at all.
+              configCache.set(d.table.address, null);
+            }
+            const deck = decks[i];
+            // A table whose card slots were never created cannot deal a hand,
+            // and looks completely normal until somebody sits at it and waits.
+            // Seat 0's slot is the cheap probe: creation makes all six in one
+            // transaction, so either they all exist or none do.
+            outdatedCache.set(
+              d.table.address,
+              !deck || deck.data.length < DECK_ACCOUNT_SIZE || holes[i] === null,
+            );
+          });
+        }
 
         return decoded
-            .map((d, i) => {
-              let config: ConfigView | null = null;
-              try {
-                const info = configs[i];
-                if (info) config = decodeConfig(new Uint8Array(info.data));
-              } catch {
-                // Show the table without its stakes rather than not at all.
-              }
-              const deck = decks[i];
-              // A table whose card slots were never created cannot deal a hand,
-              // and looks completely normal until somebody sits at it and waits.
-              // Seat 0's slot is the cheap probe: creation makes all six in one
-              // transaction, so either they all exist or none do.
-              const hasCardSlots = holes[i] !== null;
+            .map((d) => {
+              const config = configCache.get(d.table.address) ?? null;
               const seated = d.table.seats.filter(Boolean).length;
               const emptyFor = d.table.emptySince
                 ? Math.floor(Date.now() / 1000) - d.table.emptySince
@@ -288,8 +316,7 @@ export function useTables() {
                 config,
                 seated,
                 house,
-                outdated:
-                  !deck || deck.data.length < DECK_ACCOUNT_SIZE || !hasCardSlots,
+                outdated: outdatedCache.get(d.table.address) ?? false,
                 abandoned:
                   !house &&
                   !d.delegated &&
