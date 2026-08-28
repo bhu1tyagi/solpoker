@@ -17,9 +17,9 @@ const SIZES: Record<
   Size,
   { w: number; h: number; rank: number; suit: number; pip: number; pad: number }
 > = {
-  sm: { w: 40, h: 57, rank: 10, suit: 8, pip: 18, pad: 3 },
-  md: { w: 56, h: 80, rank: 12, suit: 10, pip: 24, pad: 4 },
-  lg: { w: 70, h: 98, rank: 14, suit: 12, pip: 30, pad: 5 },
+  sm: { w: 40, h: 57, rank: 12, suit: 10, pip: 23, pad: 3 },
+  md: { w: 56, h: 80, rank: 15, suit: 12, pip: 31, pad: 4 },
+  lg: { w: 70, h: 98, rank: 18, suit: 15, pip: 40, pad: 5 },
 };
 
 /**
@@ -44,6 +44,80 @@ export const SUIT_COLORS_FOUR = [
   "var(--c-suit-heart)",
   "var(--c-suit-spade)",
 ];
+
+/**
+ * The court, drawn rather than lettered.
+ *
+ * Traditional court art is a woodcut with a costume; at 40 to 70 pixels wide
+ * that is mud. These are the same people reduced to what identifies them at a
+ * glance — the king's peaked crown, the queen's tiara and hair, the jack's
+ * cap and feather — as clean marks in the suit's own colour, in the flat
+ * geometric language every other symbol in this product speaks. The corner
+ * index still says the letter; the figure is what reads across the table.
+ */
+function CourtFace({ rank, height }: { rank: "J" | "Q" | "K"; height: number }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 100 100"
+      height={height}
+      style={{ display: "block" }}
+    >
+      {/* Shoulders and head, shared: a bust, not a floating hat. */}
+      <path
+        d="M18 98 C 18 76, 32 68, 50 68 C 68 68, 82 76, 82 98 Z"
+        fill="currentColor"
+      />
+      <circle cx="50" cy="49" r="15" fill="none" stroke="currentColor" strokeWidth="5" />
+      {rank === "K" && (
+        <>
+          {/* The peaked crown, points tipped with pearls. */}
+          <path d="M29 34 L34 15 L42 27 L50 11 L58 27 L66 15 L71 34 Z" fill="currentColor" />
+          <circle cx="34" cy="13" r="3" fill="currentColor" />
+          <circle cx="50" cy="9" r="3" fill="currentColor" />
+          <circle cx="66" cy="13" r="3" fill="currentColor" />
+        </>
+      )}
+      {rank === "Q" && (
+        <>
+          {/* The tiara, and hair falling past the face on both sides. */}
+          <path d="M31 34 Q 50 16, 69 34 L 69 38 L 31 38 Z" fill="currentColor" />
+          <circle cx="50" cy="17" r="3.5" fill="currentColor" />
+          <circle cx="35" cy="26" r="2.8" fill="currentColor" />
+          <circle cx="65" cy="26" r="2.8" fill="currentColor" />
+          <path
+            d="M34 42 C 29 52, 29 60, 33 68"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="5"
+            strokeLinecap="round"
+          />
+          <path
+            d="M66 42 C 71 52, 71 60, 67 68"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="5"
+            strokeLinecap="round"
+          />
+        </>
+      )}
+      {rank === "J" && (
+        <>
+          {/* The soft cap, worn at an angle, with its feather. */}
+          <path d="M28 36 Q 46 16, 72 30 L 72 37 L 28 40 Z" fill="currentColor" />
+          <path
+            d="M68 26 L 82 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="5"
+            strokeLinecap="round"
+          />
+          <circle cx="84" cy="10" r="3" fill="currentColor" />
+        </>
+      )}
+    </svg>
+  );
+}
 
 interface Props {
   /** Card byte, or NO_CARD. */
@@ -174,26 +248,6 @@ function Face({
         userSelect: "none",
       }}
     >
-      {/* The house watermark, printed into the stock behind the pips the way
-          a branded deck carries its casino's mark. The real logo — the same
-          art as the navbar's chip — drained of its colour and barely there:
-          on white stock a grey ghost, never competing with rank or suit. */}
-      <img
-        src="/logo-96.png"
-        alt=""
-        aria-hidden
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-          width: "58%",
-          filter: "grayscale(1)",
-          opacity: 0.1,
-          pointerEvents: "none",
-          userSelect: "none",
-        }}
-      />
       {known && (
         <>
           <span style={{ position: "absolute", top: s.pad, left: s.pad + 1 }}>{index}</span>
@@ -209,7 +263,8 @@ function Face({
           >
             {index}
           </span>
-          {/* The pip, seated dead centre as the draft sets it. */}
+          {/* The centre: a court figure for J, Q and K, the big pip for
+              everything else, seated dead centre as the draft sets it. */}
           <span
             style={{
               position: "absolute",
@@ -220,7 +275,11 @@ function Face({
               lineHeight: 1,
             }}
           >
-            {suit}
+            {rank === "J" || rank === "Q" || rank === "K" ? (
+              <CourtFace rank={rank} height={Math.round(s.h * 0.46)} />
+            ) : (
+              suit
+            )}
           </span>
         </>
       )}

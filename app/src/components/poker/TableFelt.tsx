@@ -310,7 +310,10 @@ export function TableFelt({
             ))}
           </div>
         ) : (
-          <div aria-hidden style={{ height: boardSize === "sm" ? 57 : 98 }} />
+          // Taller than the board it stands in for, on purpose: the column is
+          // centre-anchored, so this pushes the status line below the mark's
+          // lower arc instead of across it while the ring turns.
+          <div aria-hidden style={{ height: boardSize === "sm" ? 130 : 210 }} />
         )}
 
         <StatusLine
