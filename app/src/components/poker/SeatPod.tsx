@@ -107,15 +107,24 @@ export function SeatPod({
   const size = isMe ? d.avatarMe : d.avatar;
 
   if (empty) {
+    /*
+     * Seats along the top of the table hang their label ABOVE the plate.
+     * Below it, the pill lands on the rail and reads as a caption printed on
+     * the felt rather than as this seat's own invitation — and at the top
+     * corners it collided with the table's edge outright. `cardsOn` already
+     * knows which half of the room a seat is in, so it decides this too.
+     */
+    const labelAbove = cardsOn === "below";
+    const plate = d.avatar + (compact ? 4 : 10);
     return (
       <motion.button
         onClick={() => onSit?.(index)}
-        className={onSit ? "seat-open" : undefined}
+        className={onSit ? "seat-open" : "seat-open is-quiet"}
         // The seat shows a silhouette and a verb, which is right on the table
         // but says nothing on its own. The name is what a screen reader
         // announces and what the browser tests click.
         aria-label={`Seat ${index + 1}`}
-        whileHover={onSit ? { scale: 1.06 } : undefined}
+        whileHover={onSit ? { scale: 1.05 } : undefined}
         whileTap={onSit ? { scale: 0.97 } : undefined}
         transition={spring.snappy}
         style={{
@@ -124,64 +133,42 @@ export function SeatPod({
           padding: 0,
           cursor: onSit ? "pointer" : "default",
           display: "flex",
-          flexDirection: "column",
+          flexDirection: labelAbove ? "column-reverse" : "column",
           alignItems: "center",
           position: "relative",
         }}
       >
-        {/*
-          An empty seat answers the only two questions a newcomer has: is
-          somebody here, and what do I do about it. The ghost of a player
-          answers the first — the shape a person will fill, in the same circle
-          every occupied seat draws — and the verb on the pill answers the
-          second. "SIT" is an instruction; "open" was a report. Spectators and
-          live tables get the report, because for them there is nothing to do.
-        */}
         <span
+          className="seat-plate"
           aria-hidden
-          className="seat-ring"
-          style={{
-            display: "grid",
-            placeItems: "center",
-            width: d.avatar + (compact ? 4 : 8),
-            height: d.avatar + (compact ? 4 : 8),
-            borderRadius: "50%",
-            border: `${d.ring}px solid color-mix(in srgb, var(--c-ink) 16%, transparent)`,
-            background: "color-mix(in srgb, var(--c-felt-raised) 78%, transparent)",
-            transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-          }}
+          style={{ width: plate, height: plate }}
         >
-          {/* The player who is not here yet. */}
-          <svg
-            viewBox="0 0 48 48"
-            style={{ width: "62%", color: "var(--c-ink)", opacity: 0.22 }}
-          >
-            <circle cx="24" cy="17" r="8.5" fill="currentColor" />
-            <path d="M 8 42 C 8 31, 15 27, 24 27 C 33 27, 40 31, 40 42 Z" fill="currentColor" />
+          <span className="seat-plate-ring" />
+          {/* The player who is not here yet, in the same circle every seated
+              player occupies — so a full seat and an empty one are plainly
+              the same kind of thing. */}
+          <svg viewBox="0 0 48 48" className="seat-ghost">
+            <circle cx="24" cy="17.5" r="8" fill="currentColor" />
+            <path
+              d="M 8.5 42 C 8.5 31.5, 15.5 27.5, 24 27.5 C 32.5 27.5, 39.5 31.5, 39.5 42 Z"
+              fill="currentColor"
+            />
           </svg>
         </span>
+        {/* A verb, not a status: "sit" is the only question an empty seat
+            answers. Spectators and live tables read "open" instead, because
+            for them there is nothing to do. Overlaps the plate's edge the
+            same way a seated player's name pill does. */}
         <span
-          className="label seat-sit-pill"
+          className="seat-cta"
           style={{
-            marginTop: compact ? -6 : -8,
-            position: "relative",
-            zIndex: 1,
             fontSize: d.nameFont,
-            fontWeight: 800,
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            color: onSit ? "var(--c-green)" : "rgba(255, 255, 255, 0.4)",
             padding: compact ? "2px 9px" : "3px 12px",
-            borderRadius: "var(--r-pill)",
-            background: "rgba(0, 0, 0, 0.55)",
-            border: onSit
-              ? "1px solid color-mix(in srgb, var(--c-green) 40%, transparent)"
-              : "1px solid rgba(255, 255, 255, 0.08)",
-            whiteSpace: "nowrap",
-            transition: "background 0.2s ease, color 0.2s ease",
+            marginTop: labelAbove ? 0 : compact ? -7 : -10,
+            marginBottom: labelAbove ? (compact ? -7 : -10) : 0,
           }}
         >
-          {onSit ? `sit · ${index + 1}` : `open · ${index + 1}`}
+          {onSit ? "sit" : "open"} · {index + 1}
         </span>
       </motion.button>
     );

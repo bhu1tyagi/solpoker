@@ -3528,3 +3528,118 @@ input[type="range"]::-moz-range-thumb {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   An empty seat.
+
+   Not a placeholder: a place setting. A recessed plate lit from above, the
+   ghost of the player who will fill it, and the verb that puts one there.
+   The ring around the plate is the brand's own purple-to-green, held at a
+   whisper and breathing slowly while the seat is free — an invitation you
+   notice without it competing with a hand in progress. Hovering brings the
+   ring to full and fills the verb with the same gradient the primary action
+   uses everywhere else, so the whole seat reads as one button.
+
+   `.is-quiet` is the same seat with nothing to offer — a spectator's view, or
+   a table already in play. It keeps the plate and loses the invitation.
+--------------------------------------------------------------------------- */
+.seat-plate {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 26%,
+    color-mix(in srgb, var(--c-felt-raised) 88%, white) 0%,
+    var(--c-felt-raised) 46%,
+    color-mix(in srgb, var(--c-felt-raised) 62%, black) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.5),
+    0 12px 26px rgba(0, 0, 0, 0.55);
+}
+
+.seat-plate-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  padding: 1.5px;
+  background: linear-gradient(135deg, var(--c-purple), var(--c-green));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0.16;
+  transition: opacity 0.22s ease;
+}
+
+.seat-ghost {
+  width: 56%;
+  color: var(--c-ink);
+  opacity: 0.2;
+  transition: opacity 0.22s ease;
+}
+
+.seat-cta {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-ink-muted);
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(6px);
+  white-space: nowrap;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.seat-open:not(.is-quiet) .seat-cta {
+  color: var(--c-green);
+  border-color: color-mix(in srgb, var(--c-green) 34%, transparent);
+}
+
+/* The slow breath, only while the seat is actually offering itself. */
+@keyframes seat-breathe {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.34;
+  }
+}
+.seat-open:not(.is-quiet) .seat-plate-ring {
+  animation: seat-breathe 3.4s ease-in-out infinite;
+}
+
+.seat-open:not(.is-quiet):hover .seat-plate-ring {
+  animation: none;
+  opacity: 1;
+}
+.seat-open:not(.is-quiet):hover .seat-ghost {
+  opacity: 0.44;
+}
+.seat-open:not(.is-quiet):hover .seat-cta {
+  color: var(--c-felt);
+  background: linear-gradient(135deg, var(--c-purple), var(--c-green));
+  border-color: transparent;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--c-green) 26%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seat-open .seat-plate-ring {
+    animation: none;
+  }
+}
