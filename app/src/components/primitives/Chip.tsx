@@ -72,67 +72,137 @@ const MAX_PER_COLUMN = 6;
  * previous version scaled a single-colour pile against the table's biggest
  * stack, which made every pile the same colour and every comparison relative.
  */
-function chipsFor(amount: number): { count: number; token: string }[] {
-  const columns: { count: number; token: string }[] = [];
+export function chipsFor(
+  amount: number,
+): { count: number; token: string; value: number }[] {
+  const columns: { count: number; token: string; value: number }[] = [];
   let left = Math.max(0, Math.floor(amount));
 
   for (const { value, token } of DENOMINATIONS) {
     const count = Math.floor(left / value);
     if (count > 0) {
-      columns.push({ count: Math.min(MAX_PER_COLUMN, count), token });
+      columns.push({ count: Math.min(MAX_PER_COLUMN, count), token, value });
       left -= count * value;
     }
   }
   // A non-zero amount always shows at least one chip, even if it rounds to
   // nothing: an empty space where a bet should be reads as a bug.
   if (columns.length === 0 && amount > 0) {
-    columns.push({ count: 1, token: "var(--c-chip1)" });
+    columns.push({ count: 1, token: "var(--c-chip1)", value: 1 });
   }
   return columns;
 }
 
 /**
- * One chip, seen from slightly above: a flat disc, so it is an ellipse rather
- * than a bar. The lighter top face and the darker edge below it are what stop a
- * stack of these reading as a row of sliders.
+ * One chip, drawn the way a chip actually looks from a seat: a face seen at a
+ * shallow angle, a visible clay edge below it, moulded spots crossing the rim.
  *
- * The edge carries spots. Every real chip has them — the pale dashes moulded
- * into the rim — and they are the single detail that separates a stack of chips
- * from a stack of coloured discs: they give the edge a texture that repeats up
- * the pile, so the eye reads depth instead of a gradient. Drawn as a repeating
- * gradient on the lower half rather than as elements, so a six-high column is
- * still one div per chip.
+ * SVG rather than gradients, because the gradients were always an
+ * approximation and read as ovals. Here every part of the real object is its
+ * own element: the darker body, the spot stripes crossing rim and edge
+ * together the way moulded spots do, the face, the inlay ring, and the
+ * denomination printed in the inlay — which is what lets a player read a
+ * stack's value from the chips themselves, not just the number beside them.
  *
  * Every colour is mixed from the one denomination token, so a chip can never
- * drift out of its own hue however the palette moves.
+ * drift out of its own hue however the palette moves. The white chip inverts
+ * its accents — pale spots and pale ink would vanish on a pale face — which
+ * is also what real one-dollar chips do.
  */
-function Coin({ size, token }: { size: number; token: string }) {
-  const h = Math.max(4, Math.round(size * 0.42));
-  // The spots shrink with the chip so they stay spots rather than stripes.
-  const spot = Math.max(2, Math.round(size * 0.13));
-  const gap = Math.max(2, Math.round(size * 0.11));
-  const edge = `color-mix(in srgb, ${token} 45%, var(--c-felt))`;
-  const spotColor = `color-mix(in srgb, ${token} 55%, white)`;
+export function Coin({
+  size,
+  token,
+  value,
+}: {
+  size: number;
+  token: string;
+  /** Denomination printed in the inlay. Omit on buried chips: only the top of a column can be read anyway. */
+  value?: number;
+}) {
+  const light = token === "var(--c-chip1)";
+  const face = token;
+  const body = `color-mix(in srgb, ${token} 55%, black)`;
+  const spot = light ? "#b83a3a" : "rgba(255, 255, 255, 0.92)";
+  const inlay = light
+    ? "color-mix(in srgb, white 88%, black)"
+    : `color-mix(in srgb, ${token} 68%, black)`;
+  const ink = light ? "rgba(30, 30, 34, 0.85)" : "rgba(255, 255, 255, 0.92)";
+
+  // Face at (50, 26), body 12 units deep: 100 x 63 altogether.
+  const h = Math.round(size * 0.63);
   return (
-    <div
-      style={{
-        width: size,
-        height: h,
-        borderRadius: "50%",
-        background: [
-          // 1. The moulded spots, on the edge only. Clipped to the bottom half
-          //    by its own size and position, so the face stays clean.
-          `repeating-linear-gradient(90deg, ${spotColor} 0 ${spot}px, transparent ${spot}px ${spot + gap}px) no-repeat left ${Math.round(h * 0.58)}px / 100% ${Math.round(h * 0.26)}px`,
-          // 2. A highlight arc across the top face, where the light lands.
-          `radial-gradient(120% 180% at 34% 8%, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 52%) no-repeat`,
-          // 3. Face, then the chip's own edge in shadow beneath it.
-          `linear-gradient(180deg, ${token} 0%, ${token} 45%, color-mix(in srgb, ${token} 72%, var(--c-felt)) 46%, ${edge} 100%)`,
-        ].join(", "),
-        // A hairline of rim-light along the top edge, the way every raised
-        // surface in this system catches light from above.
-        boxShadow: "var(--e-raised)",
-      }}
-    />
+    <svg
+      aria-hidden
+      width={size}
+      height={h}
+      viewBox="0 0 100 63"
+      style={{ display: "block", overflow: "visible" }}
+    >
+      {/* The body: the bottom of the cylinder, its lower arc in shadow. */}
+      <ellipse cx="50" cy="37" rx="47" ry="24" fill={body} />
+      {/* Moulded spots on the visible edge, riding the bottom arc. */}
+      <path
+        d="M 3 37 A 47 24 0 0 0 97 37"
+        fill="none"
+        stroke={spot}
+        strokeWidth="12"
+        strokeDasharray="11.5 13.1"
+        strokeDashoffset="-6"
+        opacity="0.9"
+      />
+      {/* A hard shadow line right under the face, seating it on the body. */}
+      <ellipse cx="50" cy="27.5" rx="47" ry="24" fill="rgba(0,0,0,0.35)" />
+      {/* The face. */}
+      <ellipse cx="50" cy="26" rx="47" ry="24" fill={face} />
+      {/* Spots crossing the face rim, aligned with the edge stripes. */}
+      <ellipse
+        cx="50"
+        cy="26"
+        rx="42.5"
+        ry="20"
+        fill="none"
+        stroke={spot}
+        strokeWidth="8.5"
+        strokeDasharray="10.5 12"
+        strokeDashoffset="-5.2"
+      />
+      {/* The inlay: the printed centre disc every clay chip carries. */}
+      <ellipse cx="50" cy="26" rx="30" ry="13.5" fill={inlay} />
+      <ellipse
+        cx="50"
+        cy="26"
+        rx="30"
+        ry="13.5"
+        fill="none"
+        stroke={light ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.28)"}
+        strokeWidth="1.6"
+      />
+      {/* Light landing on the near rim of the face. */}
+      <path
+        d="M 8 20 A 47 24 0 0 1 92 20"
+        fill="none"
+        stroke="rgba(255,255,255,0.35)"
+        strokeWidth="2.5"
+        opacity="0.7"
+      />
+      {value !== undefined && (
+        <text
+          x="50"
+          y="26"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill={ink}
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontWeight: 800,
+            fontSize: value >= 100 ? 15 : 17,
+            letterSpacing: "0.02em",
+          }}
+        >
+          {value}
+        </text>
+      )}
+    </svg>
   );
 }
 
@@ -170,17 +240,19 @@ export function ChipStack({
       }}
     >
       {/* Chips overlap as they stack, so only the front edge of each one shows,
-          which is what makes a pile look like a pile. */}
+          which is what makes a pile look like a pile. The top chip of every
+          column carries its printed denomination — the buried ones only show
+          their edges, the same as on a real table. */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 3 }}>
-        {columns.map(({ count, token }, c) => {
-          const step = Math.max(3, Math.round(size * 0.3));
+        {columns.map(({ count, token, value }, c) => {
+          const step = Math.max(3, Math.round(size * 0.26));
           return (
             <div
               key={token}
               style={{
                 position: "relative",
                 width: size,
-                height: step * (count - 1) + Math.round(size * 0.42),
+                height: step * (count - 1) + Math.round(size * 0.63),
               }}
             >
               {Array.from({ length: count }, (_, i) => (
@@ -191,7 +263,11 @@ export function ChipStack({
                   transition={{ delay: (c * MAX_PER_COLUMN + i) * 0.015 }}
                   style={{ position: "absolute", bottom: i * step, left: 0 }}
                 >
-                  <Coin size={size} token={token} />
+                  <Coin
+                    size={size}
+                    token={token}
+                    value={i === count - 1 && size >= 14 ? value : undefined}
+                  />
                 </motion.div>
               ))}
             </div>

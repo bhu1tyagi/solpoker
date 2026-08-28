@@ -3509,3 +3509,22 @@ input[type="range"]::-moz-range-thumb {
   font: inherit;
   color: inherit;
 }
+
+/* The felt mark's outer ring, turning while the table works. The dashes make
+   the rotation legible at any speed; slow on purpose — a room at work, not a
+   spinner. transform-box keeps the rotation about the ring's own centre. */
+@keyframes mark-ring-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.mark-ring-turning {
+  animation: mark-ring-turn 8s linear infinite;
+  transform-origin: 50% 50%;
+  transform-box: fill-box;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mark-ring-turning {
+    animation: none;
+  }
+}
