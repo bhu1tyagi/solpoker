@@ -18,8 +18,6 @@
     "@magicblock-labs/ephemeral-rollups-sdk": "0.14.3",
     "@magicblock-labs/gum-sdk": "3.0.10",
     "@noble/hashes": "^1.8.0",
-    "@react-three/drei": "^10.7.8",
-    "@react-three/fiber": "^9.7.0",
     "@solana/spl-token": "^0.4.15",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-react": "^0.15.39",
@@ -35,7 +33,6 @@
     "qrcode": "^1.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "three": "^0.185.1",
     "zustand": "^5.0.7"
   },
   "devDependencies": {
@@ -45,7 +42,6 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
-    "@types/three": "^0.185.4",
     "playwright": "^1.62.1",
     "tailwindcss": "^4.1.11",
     "tsx": "^4.23.12",

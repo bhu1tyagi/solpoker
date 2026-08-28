@@ -6,19 +6,11 @@ import { PlayingCard, CardSlot } from "@/components/primitives/PlayingCard";
 import { ChipStack, Coin, chipsFor } from "@/components/primitives/Chip";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { SeatPod } from "./SeatPod";
-import dynamic from "next/dynamic";
 import { TABLE_GEOMETRY, spring, stagger } from "@/styles/theme";
 import { MAX_SEATS, STREET_NAMES } from "@/lib/constants";
 import { NO_CARD } from "@/lib/engine/cards";
 import type { HandView, SeatView, TableView } from "@/stores/table-store";
 import type { Award, ShowdownStage } from "@/hooks/use-showdown-sequence";
-
-// Client-only: the chair layer is a WebGL canvas, and three.js has no
-// business rendering on the server.
-const ChairLayer = dynamic(
-  () => import("./ChairLayer").then((m) => m.ChairLayer),
-  { ssr: false },
-);
 
 interface Props {
   table: TableView | null;
@@ -260,14 +252,6 @@ export function TableFelt({
         </svg>
       </div>
 
-      {/* The chairs: one 3D model, cloned and turned per seat. Above the
-          cloth, below every DOM element of the seats. */}
-      <ChairLayer
-        spots={geo.seats.map((p, slot) => ({ x: p.x, y: p.y, anchor: slot }))}
-        aspect={Number(geo.aspect)}
-        compact={compact}
-      />
-
       {/* Board and pot, centred. Absolute centring shrink-wraps to half the
           felt, so the column takes its content's width or the status line
           would fold under a small board. */}
@@ -409,6 +393,10 @@ export function TableFelt({
               secured={isMe ? secured : undefined}
               avatarOn={pos.x > 50 ? "left" : "right"}
               cardsOn={pos.y < 50 ? "below" : "above"}
+              // Which slot of the rotated ring this seat renders in, which
+              // decides the chair photograph, its size and its light. Slot 0
+              // is always the viewer's own seat at the bottom centre.
+              anchor={view(i)}
               winner={awardBySeat.has(i)}
               compact={compact}
               onSit={onSit}

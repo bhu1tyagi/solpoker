@@ -75,6 +75,12 @@ interface Props {
    * cards toward the felt, or the cards would run off the top of the screen.
    */
   cardsOn?: "above" | "below";
+  /**
+   * Which slot of the rotated ring this seat renders in (0 = the hero seat at
+   * the bottom centre). Decides which chair photograph stands here, how big,
+   * and under which light.
+   */
+  anchor?: number;
   /** This seat just won something, so the seat celebrates briefly. */
   winner?: boolean;
   /** The phone-sized seat. */
@@ -98,6 +104,7 @@ export function SeatPod({
   secured,
   avatarOn = "left",
   cardsOn = "above",
+  anchor = 0,
   winner = false,
   compact = false,
   onSit,
@@ -126,14 +133,10 @@ export function SeatPod({
           position: "relative",
         }}
       >
-        {/* The chair itself lives in the 3D layer behind this button; the DOM
-            keeps only the hit area, the invitation and the label. The label
-            hangs OUTSIDE the layout box: counted in, it pushed every chair
-            half a label off its anchor and the table read lopsided. */}
-        <span
-          aria-hidden
-          style={{ display: "block", width: d.avatar + (compact ? 30 : 56), height: d.avatar + (compact ? 26 : 48) }}
-        />
+        {/* An open seat is the chair itself, waiting. The label hangs OUTSIDE
+            the layout box: counted in, it pushed every chair half a label off
+            its anchor and the table read lopsided. */}
+        <SeatChair anchor={anchor} width={d.avatar + (compact ? 46 : 92)} />
         {/* The invitation: the one interface object on an empty chair. */}
         <span
           aria-hidden
@@ -422,6 +425,24 @@ export function SeatPod({
             : undefined,
         }}
       >
+        {/* The chair this player is sitting in, behind them. Yours is the one
+            seen from directly behind, so the room reads as looking over your
+            own shoulder at the table. */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: anchor === 0 ? (compact ? 0 : -4) : compact ? -12 : -18,
+            transform: "translateX(-50%)",
+            zIndex: -1,
+          }}
+        >
+          <SeatChair
+            anchor={anchor}
+            width={size + (anchor === 0 ? (compact ? 82 : 148) : compact ? 42 : 76)}
+          />
+        </div>
         {avatar}
         {/* The name, overlapping the circle's bottom edge as the draft sets
             it, then the stack in its black pill. */}
@@ -466,6 +487,71 @@ function CircleAvatar({ pubkey, size }: { pubkey: string; size: number }) {
       }}
     >
       <Avatar pubkey={pubkey} size={size} square />
+    </span>
+  );
+}
+
+/**
+ * The chair, photographed: the same green Chesterfield rendered from four
+ * angles, matted out, and placed per seat so every chair faces the felt.
+ *
+ * The realism is layered on in the room rather than baked into the pictures:
+ *
+ *   depth    seats farther up the screen render smaller, the way the far
+ *            side of a real table is farther from your eyes;
+ *   light    the room's light falls from the centre of the table, so far
+ *            chairs are lit a touch brighter than near ones, and the hero's
+ *            back — closest to the viewer, facing away from the light — sits
+ *            darkest;
+ *   ground   every chair stands in its own pool of soft shadow, which is
+ *            what keeps a photograph from floating over a drawing.
+ */
+const CHAIR_VIEWS = [
+  { src: "/seats/chair-rear.png", flip: false, depth: 1.16, light: 0.86 },
+  { src: "/seats/chair-rear34.png", flip: false, depth: 1.0, light: 0.8 },
+  { src: "/seats/chair-front34.png", flip: true, depth: 0.86, light: 0.92 },
+  { src: "/seats/chair-front.png", flip: false, depth: 0.84, light: 0.95 },
+  { src: "/seats/chair-front34.png", flip: false, depth: 0.86, light: 0.92 },
+  { src: "/seats/chair-rear34.png", flip: true, depth: 1.0, light: 0.8 },
+] as const;
+
+function SeatChair({ anchor, width }: { anchor: number; width: number }) {
+  const view = CHAIR_VIEWS[anchor] ?? CHAIR_VIEWS[0];
+  const w = Math.round(width * view.depth);
+  return (
+    <span style={{ display: "block", position: "relative", width: w }}>
+      {/* The pool of shadow the chair stands in. */}
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: "50%",
+          bottom: -Math.round(w * 0.045),
+          transform: "translateX(-50%)",
+          width: w * 1.06,
+          height: Math.round(w * 0.3),
+          borderRadius: "50%",
+          background:
+            "radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 45%, transparent 70%)",
+        }}
+      />
+      <img
+        src={view.src}
+        alt=""
+        aria-hidden
+        draggable={false}
+        style={{
+          width: w,
+          maxWidth: "none",
+          height: "auto",
+          display: "block",
+          position: "relative",
+          transform: view.flip ? "scaleX(-1)" : undefined,
+          filter: `brightness(${view.light}) saturate(0.94) drop-shadow(0 ${Math.round(w * 0.05)}px ${Math.round(w * 0.1)}px rgba(0, 0, 0, 0.5))`,
+          pointerEvents: "none",
+          userSelect: "none",
+        }}
+      />
     </span>
   );
 }
