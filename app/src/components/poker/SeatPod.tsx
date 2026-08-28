@@ -136,7 +136,7 @@ export function SeatPod({
         {/* An open seat is the chair itself, waiting. The label hangs OUTSIDE
             the layout box: counted in, it pushed every chair half a label off
             its anchor and the table read lopsided. */}
-        <SeatChair anchor={anchor} width={d.avatar + (compact ? 46 : 92)} />
+        <SeatChair anchor={anchor} width={d.avatar + (compact ? 54 : 108)} />
         {/* The invitation: the one interface object on an empty chair. */}
         <span
           aria-hidden
@@ -440,7 +440,7 @@ export function SeatPod({
         >
           <SeatChair
             anchor={anchor}
-            width={size + (anchor === 0 ? (compact ? 82 : 148) : compact ? 42 : 76)}
+            width={size + (anchor === 0 ? (compact ? 92 : 170) : compact ? 50 : 90)}
           />
         </div>
         {avatar}
@@ -509,9 +509,9 @@ function CircleAvatar({ pubkey, size }: { pubkey: string; size: number }) {
 const CHAIR_VIEWS = [
   { src: "/seats/chair-rear.png", flip: false, depth: 1.16, light: 0.86 },
   { src: "/seats/chair-rear34.png", flip: false, depth: 1.0, light: 0.8 },
-  { src: "/seats/chair-front34.png", flip: true, depth: 0.86, light: 0.92 },
-  { src: "/seats/chair-front.png", flip: false, depth: 0.84, light: 0.95 },
   { src: "/seats/chair-front34.png", flip: false, depth: 0.86, light: 0.92 },
+  { src: "/seats/chair-front.png", flip: false, depth: 0.84, light: 0.95 },
+  { src: "/seats/chair-front34.png", flip: true, depth: 0.86, light: 0.92 },
   { src: "/seats/chair-rear34.png", flip: true, depth: 1.0, light: 0.8 },
 ] as const;
 
