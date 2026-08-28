@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, type KeyedAccountInfo } from "@solana/web3.js";
 import bs58 from "bs58";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeConfig, decodeTable } from "@/lib/decode";
@@ -146,6 +146,96 @@ const NEVER_PLAYED_GRACE_MS = 60 * 60 * 1000;
 const configCache = new Map<string, ConfigView | null>();
 const outdatedCache = new Map<string, boolean>();
 
+const measured = (address: string) =>
+  configCache.has(address) && outdatedCache.has(address);
+
+/**
+ * The three creation-time reads for one table, when it first appears over the
+ * websocket rather than in a listing. One call, three keys.
+ */
+async function measureTable(table: TableView): Promise<void> {
+  if (measured(table.address)) return;
+  const conn = getBaseConnection();
+  const addr = new PublicKey(table.address);
+  const [config, hole, deck] = await conn.getMultipleAccountsInfo([
+    new PublicKey(table.config),
+    holePda(addr, 0),
+    deckPda(addr),
+  ]);
+  try {
+    if (config) configCache.set(table.address, decodeConfig(new Uint8Array(config.data)));
+  } catch {
+    // Show the table without its stakes rather than not at all.
+    configCache.set(table.address, null);
+  }
+  outdatedCache.set(
+    table.address,
+    !deck || deck.data.length < DECK_ACCOUNT_SIZE || hole === null,
+  );
+}
+
+/**
+ * One row of the lobby, from a table account plus the remembered
+ * creation-time facts. Shared by the full listing and the websocket path, so
+ * a table looks the same however news of it arrived.
+ */
+function buildEntry(table: TableView, delegated: boolean): LobbyTable {
+  const config = configCache.get(table.address) ?? null;
+  const seated = table.seats.filter(Boolean).length;
+  const emptyFor = table.emptySince
+    ? Math.floor(Date.now() / 1000) - table.emptySince
+    : 0;
+  /*
+   * A house table, opened by the treasury so somebody arriving has somewhere
+   * to sit without opening one themselves.
+   *
+   * Sitting empty is its JOB, so the two rules that hide a deserted table do
+   * not apply to it. Without this exemption every house table vanishes from
+   * the lobby an hour after the last player leaves, which is exactly when a
+   * newcomer most needs to find one.
+   *
+   * It changes nothing on chain: the sweep is permissionless and still
+   * reaches these, so the keeper that opens them has to be able to open them
+   * again.
+   */
+  const house = config?.creator === TREASURY_AUTHORITY.toBase58();
+  return {
+    table,
+    delegated,
+    config,
+    seated,
+    house,
+    outdated: outdatedCache.get(table.address) ?? false,
+    abandoned:
+      !house && !delegated && seated === 0 && emptyFor >= ABANDONED_AFTER_SECS,
+    stale:
+      !house &&
+      !delegated &&
+      table.handNumber === 0 &&
+      Date.now() - createdAt(table.tableId) > NEVER_PLAYED_GRACE_MS,
+  };
+}
+
+/**
+ * The address a Table account must live at, derived from its own claimed id.
+ *
+ * The delegation program hosts frozen accounts from every app on the network,
+ * and an Anchor discriminator is just a hash of the struct name, so another
+ * app's "Table" matches ours byte for byte. Re-deriving the address is what
+ * keeps an impostor out: it cannot sit at our program's address.
+ */
+function verifiedTableAddress(data: Uint8Array): PublicKey | null {
+  if (data.length < 16) return null;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const idBytes = new Uint8Array(8);
+  new DataView(idBytes.buffer).setBigUint64(0, view.getBigUint64(8, true), true);
+  const [expected] = PublicKey.findProgramAddressSync(
+    [new TextEncoder().encode("table"), idBytes],
+    PROGRAM_ID,
+  );
+  return expected;
+}
+
 /**
  * Every table on the program, including the ones currently playing.
  *
@@ -209,19 +299,9 @@ export function useTables() {
           conn.getProgramAccounts(PROGRAM_ID, { filters }),
           conn.getProgramAccounts(DELEGATION_PROGRAM, { filters }),
         ]);
-        const enc = new TextEncoder();
-        const accounts = [...ownAccounts, ...delegatedAccounts].filter((a) => {
-          const d = a.account.data;
-          if (d.length < 16) return false;
-          const view = new DataView(d.buffer, d.byteOffset, d.byteLength);
-          const idBytes = new Uint8Array(8);
-          new DataView(idBytes.buffer).setBigUint64(0, view.getBigUint64(8, true), true);
-          const [expected] = PublicKey.findProgramAddressSync(
-            [enc.encode("table"), idBytes],
-            PROGRAM_ID,
-          );
-          return expected.equals(a.pubkey);
-        });
+        const accounts = [...ownAccounts, ...delegatedAccounts].filter((a) =>
+          verifiedTableAddress(new Uint8Array(a.account.data))?.equals(a.pubkey),
+        );
 
         // One unreadable account must not take the lobby down with it. Older
         // builds of the program left accounts with a different layout, and a
@@ -258,9 +338,7 @@ export function useTables() {
         // card slots are set at creation and never change, so on a steady
         // lobby these three reads happen once and every later poll is just the
         // two ownership sweeps above.
-        const unseen = decoded.filter(
-          (d) => !configCache.has(d.table.address) || !outdatedCache.has(d.table.address),
-        );
+        const unseen = decoded.filter((d) => !measured(d.table.address));
         if (unseen.length) {
           const [configs, holes, decks] = [
             await batched(unseen.map((d) => new PublicKey(d.table.config))),
@@ -290,46 +368,8 @@ export function useTables() {
         }
 
         return decoded
-            .map((d) => {
-              const config = configCache.get(d.table.address) ?? null;
-              const seated = d.table.seats.filter(Boolean).length;
-              const emptyFor = d.table.emptySince
-                ? Math.floor(Date.now() / 1000) - d.table.emptySince
-                : 0;
-              /*
-               * A house table, opened by the treasury so somebody arriving has
-               * somewhere to sit without opening one themselves.
-               *
-               * Sitting empty is its JOB, so the two rules that hide a deserted
-               * table do not apply to it. Without this exemption every house
-               * table vanishes from the lobby an hour after the last player
-               * leaves, which is exactly when a newcomer most needs to find one.
-               *
-               * It changes nothing on chain: the sweep is permissionless and
-               * still reaches these, so the keeper that opens them has to be
-               * able to open them again.
-               */
-              const house = config?.creator === TREASURY_AUTHORITY.toBase58();
-              return {
-                table: d.table,
-                delegated: d.delegated,
-                config,
-                seated,
-                house,
-                outdated: outdatedCache.get(d.table.address) ?? false,
-                abandoned:
-                  !house &&
-                  !d.delegated &&
-                  seated === 0 &&
-                  emptyFor >= ABANDONED_AFTER_SECS,
-                stale:
-                  !house &&
-                  !d.delegated &&
-                  d.table.handNumber === 0 &&
-                  Date.now() - createdAt(d.table.tableId) > NEVER_PLAYED_GRACE_MS,
-              };
-            })
-            .sort((a, b) => b.table.tableId - a.table.tableId);
+          .map((d) => buildEntry(d.table, d.delegated))
+          .sort((a, b) => b.table.tableId - a.table.tableId);
       }, "table listing", { tries: 3 });
       setTables(list);
       writeListCache(list);
@@ -369,17 +409,84 @@ export function useTables() {
     }
   }, []);
 
+  /*
+   * News arrives by push, not by asking again.
+   *
+   * The six-second listing poll was the app's biggest RPC spender: two
+   * program scans per tick per open tab, which at fifty concurrent viewers is
+   * a scan-storm no rate limit survives. The endpoint's websocket carries the
+   * same facts for free — a table account changes exactly when somebody
+   * joins, leaves, starts, pauses, or closes it — so the room updates the
+   * moment something happens and costs nothing while nothing does.
+   *
+   * Both owners are watched, same as the listing reads both: a table being
+   * delegated is next modified as the delegation program's account, and one
+   * coming home is next modified as ours. Each subscription filters on the
+   * Table discriminator server-side, and the address check keeps out the
+   * other apps' same-named accounts that share the delegation program.
+   */
+  useEffect(() => {
+    const conn = getBaseConnection();
+    const filters = [{ memcmp: { offset: 0, bytes: bs58.encode(TABLE_DISCRIMINATOR) } }];
+
+    const upsert = (entry: LobbyTable) =>
+      setTables((cur) => {
+        const rest = cur.filter((t) => t.table.address !== entry.table.address);
+        return [...rest, entry].sort((a, b) => b.table.tableId - a.table.tableId);
+      });
+
+    const onChange = ({ accountId, accountInfo }: KeyedAccountInfo) => {
+      // A closed account notifies once with nothing in it. That is
+      // `close_table` seen from outside: take the row down.
+      if (accountInfo.lamports === 0 || accountInfo.data.length < 16) {
+        setTables((cur) => cur.filter((t) => t.table.address !== accountId.toBase58()));
+        return;
+      }
+      const data = new Uint8Array(accountInfo.data);
+      if (!verifiedTableAddress(data)?.equals(accountId)) return;
+      let table: TableView;
+      try {
+        table = decodeTable(data, accountId.toBase58());
+      } catch {
+        return;
+      }
+      if (tombstonedIds().has(String(table.tableId))) return;
+      const delegated = accountInfo.owner.equals(DELEGATION_PROGRAM);
+      upsert(buildEntry(table, delegated));
+      // A table born after the last listing has no measured facts yet. Show
+      // it at once — stakes arrive a beat later — and measure exactly once.
+      if (!measured(table.address)) {
+        void measureTable(table)
+          .then(() => upsert(buildEntry(table, delegated)))
+          .catch(() => {
+            // The next reconcile listing measures it instead.
+          });
+      }
+    };
+
+    const subs = [
+      conn.onProgramAccountChange(PROGRAM_ID, onChange, { commitment: "confirmed", filters }),
+      conn.onProgramAccountChange(DELEGATION_PROGRAM, onChange, { commitment: "confirmed", filters }),
+    ];
+    return () => {
+      for (const s of subs) void conn.removeProgramAccountChangeListener(s).catch(() => {});
+    };
+  }, []);
+
   useEffect(() => {
     void refresh();
-    // Six seconds keeps the players column honest while someone is watching
-    // the room fill; twelve read as frozen. Coming back to the tab refreshes
-    // immediately, because that is the moment a person is actually looking.
+    // A slow reconcile, not the news channel. The websocket above carries the
+    // room's changes; this exists for what a socket can miss — events dropped
+    // across a reconnect, a subscription the endpoint quietly let lapse — and
+    // once a minute is enough for a safety net. Coming back to the tab still
+    // refreshes immediately, because that is the moment a person is actually
+    // looking and the socket may have been idle for hours.
     const id = setInterval(() => {
       // A hidden tab keeps its place but stops spending the shared RPC
       // budget; the focus handler below catches it up the moment it returns.
       if (document.visibilityState === "hidden") return;
       void refresh();
-    }, 6_000);
+    }, 60_000);
     const onVisible = () => {
       if (document.visibilityState === "visible") void refresh();
     };

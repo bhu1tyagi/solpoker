@@ -67,9 +67,48 @@ export function useLeaderboard() {
     }
   }, []);
 
+  /*
+   * One scan to build the board, then the websocket keeps it honest.
+   *
+   * A Player account changes only on base-layer moves — buying chips, selling
+   * them, sitting down, cashing out — so the stream is quiet and every event
+   * is one row's worth of news. The full scan repeated every twenty seconds
+   * was the second-biggest RPC spender after the lobby listing, and with a
+   * room of concurrent viewers it multiplied; now it runs once a minute as a
+   * reconcile for whatever a reconnect may have dropped.
+   */
+  useEffect(() => {
+    const conn = getBaseConnection();
+    const sub = conn.onProgramAccountChange(
+      PROGRAM_ID,
+      ({ accountInfo }) => {
+        try {
+          const p = decodePlayer(new Uint8Array(accountInfo.data));
+          setRows((cur) => {
+            const rest = cur.filter((r) => r.authority !== p.authority);
+            // The zero-chip filter, applied live: a player selling out drops
+            // off the board the moment the sale lands.
+            if (p.chips > 0) {
+              rest.push({ authority: p.authority, chips: p.chips, handsPlayed: p.handsPlayed });
+            }
+            rest.sort((a, b) => b.chips - a.chips || b.handsPlayed - a.handsPlayed);
+            return rest;
+          });
+        } catch {
+          // One unreadable account must not disturb the board.
+        }
+      },
+      {
+        commitment: "confirmed",
+        filters: [{ memcmp: { offset: 0, bytes: bs58.encode(PLAYER_DISCRIMINATOR) } }],
+      },
+    );
+    return () => void conn.removeProgramAccountChangeListener(sub).catch(() => {});
+  }, []);
+
   useEffect(() => {
     void refresh();
-    const id = setInterval(() => void refresh(), 20_000);
+    const id = setInterval(() => void refresh(), 60_000);
     return () => clearInterval(id);
   }, [refresh]);
 
