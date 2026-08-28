@@ -174,6 +174,22 @@ export function TableFelt({
         margin: "0 auto",
       }}
     >
+      {/* The table's thickness: the same pill dropped a few pixels, the dark
+          side wall a real table shows along its near edge. One element, and
+          the flat drawing becomes an object seen from a chair's height. */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: geo.ellipseInset,
+          transform: "translateY(14px)",
+          borderRadius: 999,
+          background:
+            "linear-gradient(180deg, color-mix(in srgb, var(--c-felt-rail) 70%, black) 60%, color-mix(in srgb, var(--c-felt-rail) 35%, black) 100%)",
+          boxShadow: "0 26px 60px -12px rgba(0, 0, 0, 0.75)",
+        }}
+      />
+
       {/* The table, per the Superdesign "High Stakes Table" draft: a stadium
           with a broad near-black rail around deep green cloth — the one place
           the product stops being a dark UI and becomes a physical object. The
@@ -186,11 +202,14 @@ export function TableFelt({
           borderRadius: 999,
           border: "12px solid var(--c-felt-rail)",
           // The cloth: lit from dead centre, falling to near-black at the rim,
-          // with the draft's deep inset shadow pooling against the rail.
+          // with the draft's deep inset shadow pooling against the rail. The
+          // faint bright line along the top of the inset is the rail's rim
+          // catching the room light, which is what says "padded edge" rather
+          // than "border".
           background:
             "radial-gradient(circle at center, var(--c-felt-cloth) 0%, var(--c-felt-cloth-deep) 100%)",
           boxShadow:
-            "inset 0 0 150px rgba(0, 0, 0, 0.8), 0 50px 100px -20px rgba(0, 0, 0, 0.5)",
+            "inset 0 6px 14px rgba(255, 255, 255, 0.05), inset 0 0 150px rgba(0, 0, 0, 0.8), 0 50px 100px -20px rgba(0, 0, 0, 0.5)",
           overflow: "hidden",
         }}
       >

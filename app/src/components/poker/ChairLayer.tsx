@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { ContactShadows, OrthographicCamera, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
 /**
  * The chairs: a green Chesterfield club chair as an actual 3D model.
@@ -24,16 +25,16 @@ import * as THREE from "three";
  */
 
 /** Camera elevation. Steeper looks more top-down, shallower more cinematic. */
-const TILT = (36 * Math.PI) / 180;
+const TILT = (44 * Math.PI) / 180;
 
 /** Extra canvas above and below the stage, so tall chair backs at the far
  * rail are never clipped by the stage box. Symmetric, so the world's centre
  * — and with it every chair's anchor — does not move. */
 const OVERSCAN = 0.22;
 
-const LEATHER = "#33523c";
-const LEATHER_DEEP = "#2c4a35";
-const WOOD = "#2e1d13";
+const LEATHER = "#223c2b";
+const LEATHER_DEEP = "#1c3324";
+const WOOD = "#31200f";
 
 /**
  * The tufting, drawn once: a diamond grid of seams with a button at every
@@ -92,26 +93,52 @@ function makeTuftBump(): THREE.CanvasTexture {
 function useMaterials() {
   return useMemo(() => {
     const bump = makeTuftBump();
-    const tufted = new THREE.MeshStandardMaterial({
-      color: LEATHER,
-      roughness: 0.55,
-      bumpMap: bump,
-      bumpScale: 2.4,
-    });
-    const smooth = new THREE.MeshStandardMaterial({
-      color: LEATHER,
-      roughness: 0.52,
-    });
-    const cushion = new THREE.MeshStandardMaterial({
-      color: LEATHER_DEEP,
-      roughness: 0.48,
-    });
+    // Physical materials with a clearcoat: leather's sheen is the whole
+    // difference between upholstery and painted foam, and it only appears
+    // once there is an environment to reflect.
+    const leather = (color: string, extra: Partial<THREE.MeshPhysicalMaterialParameters> = {}) =>
+      new THREE.MeshPhysicalMaterial({
+        color,
+        roughness: 0.5,
+        clearcoat: 0.28,
+        clearcoatRoughness: 0.42,
+        envMapIntensity: 0.15,
+        ...extra,
+      });
+    const tufted = leather(LEATHER, { bumpMap: bump, bumpScale: 2.6 });
+    const smooth = leather(LEATHER);
+    const cushion = leather(LEATHER_DEEP, { roughness: 0.42 });
     const wood = new THREE.MeshStandardMaterial({
       color: WOOD,
-      roughness: 0.45,
+      roughness: 0.4,
+      envMapIntensity: 0.2,
     });
     return { tufted, smooth, cushion, wood };
   }, []);
+}
+
+/**
+ * Image-based light from three's built-in RoomEnvironment — a windowed studio
+ * baked to a cubemap on the spot. No network, no HDR files, and it is what
+ * puts the soft window-light gradients across the leather that a couple of
+ * directional lights never manage.
+ */
+function StudioEnvironment() {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const tex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = tex;
+    invalidate();
+    return () => {
+      scene.environment = null;
+      tex.dispose();
+      pmrem.dispose();
+    };
+  }, [gl, scene, invalidate]);
+  return null;
 }
 
 /**
@@ -176,7 +203,7 @@ export interface ChairSpot {
 
 function Chairs({ spots, aspect, compact }: { spots: ChairSpot[]; aspect: number; compact: boolean }) {
   // World units are "percent of table width"; the chair is one unit wide.
-  const base = compact ? 11.5 : 9.5;
+  const base = compact ? 13 : 11;
 
   const items = useMemo(
     () =>
@@ -192,7 +219,7 @@ function Chairs({ spots, aspect, compact }: { spots: ChairSpot[]; aspect: number
         // facing line, so it straddles the rail instead of climbing onto
         // the cloth.
         const len = Math.hypot(x, z) || 1;
-        const back = 1.6;
+        const back = 0.8;
         return {
           x: x + (x / len) * back,
           z: z + (z / len) * back,
@@ -255,15 +282,18 @@ export function ChairLayer({
       <Canvas
         frameloop="demand"
         gl={{ alpha: true, antialias: true }}
+        onCreated={({ gl }) => {
+          gl.toneMappingExposure = 0.82;
+        }}
         style={{ background: "transparent" }}
       >
         <FittedCamera />
-        {/* The room's light: a little of it everywhere, a warm key from over
-            the table, a cool wash from behind the camera so near-rail chair
-            backs keep their shape. */}
-        <ambientLight intensity={0.36} />
-        <directionalLight position={[0, 55, 35]} intensity={1.55} color="#fff3e2" />
-        <directionalLight position={[0, 20, 90]} intensity={0.35} color="#bcd8cb" />
+        <StudioEnvironment />
+        {/* Directional light shapes the shadows; the environment above does
+            the material work. */}
+        <ambientLight intensity={0.15} />
+        <directionalLight position={[0, 55, 35]} intensity={0.95} color="#fff3e2" />
+        <directionalLight position={[0, 20, 90]} intensity={0.25} color="#bcd8cb" />
         <Chairs spots={spots} aspect={aspect} compact={compact} />
         {/* The pool of shadow under each chair is what glues it to the
             room: without it every chair floats. Rendered once — the scene
