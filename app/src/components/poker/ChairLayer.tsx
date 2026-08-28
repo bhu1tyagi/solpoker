@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { OrthographicCamera, RoundedBox } from "@react-three/drei";
+import { ContactShadows, OrthographicCamera, RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 
 /**
@@ -31,7 +31,7 @@ const TILT = (36 * Math.PI) / 180;
  * — and with it every chair's anchor — does not move. */
 const OVERSCAN = 0.22;
 
-const LEATHER = "#375a41";
+const LEATHER = "#33523c";
 const LEATHER_DEEP = "#2c4a35";
 const WOOD = "#2e1d13";
 
@@ -176,7 +176,7 @@ export interface ChairSpot {
 
 function Chairs({ spots, aspect, compact }: { spots: ChairSpot[]; aspect: number; compact: boolean }) {
   // World units are "percent of table width"; the chair is one unit wide.
-  const base = compact ? 15 : 13;
+  const base = compact ? 11.5 : 9.5;
 
   const items = useMemo(
     () =>
@@ -187,8 +187,19 @@ function Chairs({ spots, aspect, compact }: { spots: ChairSpot[]; aspect: number
         const z = (s.y - 50) / (aspect * Math.sin(TILT));
         // Face the middle of the table.
         const yaw = Math.atan2(-x, -z);
-        const scale = s.anchor === 0 ? base * 1.35 : base;
-        return { x, z, yaw, scale, key: `${s.anchor}` };
+        const scale = s.anchor === 0 ? base * 1.28 : base;
+        // Step every chair a little back from its anchor along its own
+        // facing line, so it straddles the rail instead of climbing onto
+        // the cloth.
+        const len = Math.hypot(x, z) || 1;
+        const back = 1.6;
+        return {
+          x: x + (x / len) * back,
+          z: z + (z / len) * back,
+          yaw,
+          scale,
+          key: `${s.anchor}`,
+        };
       }),
     [spots, aspect, base],
   );
@@ -250,10 +261,23 @@ export function ChairLayer({
         {/* The room's light: a little of it everywhere, a warm key from over
             the table, a cool wash from behind the camera so near-rail chair
             backs keep their shape. */}
-        <ambientLight intensity={0.42} />
-        <directionalLight position={[0, 55, 35]} intensity={1.8} color="#fff3e2" />
-        <directionalLight position={[0, 20, 90]} intensity={0.4} color="#bcd8cb" />
+        <ambientLight intensity={0.36} />
+        <directionalLight position={[0, 55, 35]} intensity={1.55} color="#fff3e2" />
+        <directionalLight position={[0, 20, 90]} intensity={0.35} color="#bcd8cb" />
         <Chairs spots={spots} aspect={aspect} compact={compact} />
+        {/* The pool of shadow under each chair is what glues it to the
+            room: without it every chair floats. Rendered once — the scene
+            never moves. */}
+        <ContactShadows
+          position={[0, 0.01, 0]}
+          opacity={0.6}
+          scale={[180, 130]}
+          blur={2.6}
+          far={16}
+          resolution={512}
+          frames={1}
+          color="#000000"
+        />
       </Canvas>
     </div>
   );

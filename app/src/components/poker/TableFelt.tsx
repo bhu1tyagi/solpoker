@@ -263,6 +263,9 @@ export function TableFelt({
           alignItems: "center",
           gap: compact ? 10 : 12,
           width: "max-content",
+          // Above the chair canvas: the pot, board and status are the game,
+          // and no piece of furniture may stand in front of them.
+          zIndex: 8,
         }}
       >
         {/* Settlement zeroes the live pot, so through the reveal and the
