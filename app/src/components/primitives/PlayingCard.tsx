@@ -46,76 +46,60 @@ export const SUIT_COLORS_FOUR = [
 ];
 
 /**
- * The court, drawn rather than lettered.
+ * The court, as the court has always looked.
  *
- * Traditional court art is a woodcut with a costume; at 40 to 70 pixels wide
- * that is mud. These are the same people reduced to what identifies them at a
- * glance — the king's peaked crown, the queen's tiara and hair, the jack's
- * cap and feather — as clean marks in the suit's own colour, in the flat
- * geometric language every other symbol in this product speaks. The corner
- * index still says the letter; the figure is what reads across the table.
+ * The real double-headed English-pattern figures, from Byron Knoll's
+ * public-domain vector deck — the same art that has said "king" for a
+ * century and a half. Each file in public/cards/ is the full traditional
+ * card; this crops to the framed portrait in its middle and sets it into our
+ * own card, so the figure is the classic one while the stock, corners and
+ * indices stay this product's.
+ *
+ * The crop numbers are the source deck's own geometry: the portrait frame
+ * occupies the central ~73% of the width and ~62% of the height of the
+ * 222x323 original.
  */
-function CourtFace({ rank, height }: { rank: "J" | "Q" | "K"; height: number }) {
+const SUIT_FILE = ["c", "d", "h", "s"];
+
+function CourtFace({
+  rank,
+  suit,
+  w,
+  h,
+}: {
+  rank: "J" | "Q" | "K";
+  suit: number;
+  w: number;
+  h: number;
+}) {
+  const boxW = Math.round(w * 0.63);
+  const boxH = Math.round(h * 0.56);
   return (
-    <svg
+    <span
       aria-hidden
-      viewBox="0 0 100 100"
-      height={height}
-      style={{ display: "block" }}
+      style={{
+        display: "block",
+        width: boxW,
+        height: boxH,
+        overflow: "hidden",
+        position: "relative",
+        borderRadius: 1,
+      }}
     >
-      {/* Shoulders and head, shared: a bust, not a floating hat. */}
-      <path
-        d="M18 98 C 18 76, 32 68, 50 68 C 68 68, 82 76, 82 98 Z"
-        fill="currentColor"
+      <img
+        src={`/cards/${rank.toLowerCase()}${SUIT_FILE[suit]}.png`}
+        alt=""
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          height: `${Math.round(100 / 0.62)}%`,
+          userSelect: "none",
+          pointerEvents: "none",
+        }}
       />
-      <circle cx="50" cy="49" r="15" fill="none" stroke="currentColor" strokeWidth="5" />
-      {rank === "K" && (
-        <>
-          {/* The peaked crown, points tipped with pearls. */}
-          <path d="M29 34 L34 15 L42 27 L50 11 L58 27 L66 15 L71 34 Z" fill="currentColor" />
-          <circle cx="34" cy="13" r="3" fill="currentColor" />
-          <circle cx="50" cy="9" r="3" fill="currentColor" />
-          <circle cx="66" cy="13" r="3" fill="currentColor" />
-        </>
-      )}
-      {rank === "Q" && (
-        <>
-          {/* The tiara, and hair falling past the face on both sides. */}
-          <path d="M31 34 Q 50 16, 69 34 L 69 38 L 31 38 Z" fill="currentColor" />
-          <circle cx="50" cy="17" r="3.5" fill="currentColor" />
-          <circle cx="35" cy="26" r="2.8" fill="currentColor" />
-          <circle cx="65" cy="26" r="2.8" fill="currentColor" />
-          <path
-            d="M34 42 C 29 52, 29 60, 33 68"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="5"
-            strokeLinecap="round"
-          />
-          <path
-            d="M66 42 C 71 52, 71 60, 67 68"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="5"
-            strokeLinecap="round"
-          />
-        </>
-      )}
-      {rank === "J" && (
-        <>
-          {/* The soft cap, worn at an angle, with its feather. */}
-          <path d="M28 36 Q 46 16, 72 30 L 72 37 L 28 40 Z" fill="currentColor" />
-          <path
-            d="M68 26 L 82 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="5"
-            strokeLinecap="round"
-          />
-          <circle cx="84" cy="10" r="3" fill="currentColor" />
-        </>
-      )}
-    </svg>
+    </span>
   );
 }
 
@@ -275,8 +259,8 @@ function Face({
               lineHeight: 1,
             }}
           >
-            {rank === "J" || rank === "Q" || rank === "K" ? (
-              <CourtFace rank={rank} height={Math.round(s.h * 0.46)} />
+            {known && (rank === "J" || rank === "Q" || rank === "K") ? (
+              <CourtFace rank={rank} suit={suitOf(card)} w={s.w} h={s.h} />
             ) : (
               suit
             )}
