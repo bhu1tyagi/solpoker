@@ -50,56 +50,36 @@ export const SUIT_COLORS_FOUR = [
  *
  * The real double-headed English-pattern figures, from Byron Knoll's
  * public-domain vector deck — the same art that has said "king" for a
- * century and a half. Each file in public/cards/ is the full traditional
- * card; this crops to the framed portrait in its middle and sets it into our
- * own card, so the figure is the classic one while the stock, corners and
- * indices stay this product's.
- *
- * The crop numbers are the source deck's own geometry: the portrait frame
- * occupies the central ~73% of the width and ~62% of the height of the
- * 222x323 original.
+ * century and a half. Each file in public/cards/ is the complete figure,
+ * cropped once offline to the art's own measured bounds (166x266 out of the
+ * 222x323 originals, the corner indices excluded), so it is shown whole:
+ * nothing sliced, nothing scaled past its frame. The classic figure sits in
+ * our stock, and the corners and indices stay this product's.
  */
 const SUIT_FILE = ["c", "d", "h", "s"];
 
 function CourtFace({
   rank,
   suit,
-  w,
   h,
 }: {
   rank: "J" | "Q" | "K";
   suit: number;
-  w: number;
   h: number;
 }) {
-  const boxW = Math.round(w * 0.63);
-  const boxH = Math.round(h * 0.56);
   return (
-    <span
+    <img
       aria-hidden
+      src={`/cards/${rank.toLowerCase()}${SUIT_FILE[suit]}.png`}
+      alt=""
       style={{
+        height: Math.round(h * 0.62),
+        width: "auto",
         display: "block",
-        width: boxW,
-        height: boxH,
-        overflow: "hidden",
-        position: "relative",
-        borderRadius: 1,
+        userSelect: "none",
+        pointerEvents: "none",
       }}
-    >
-      <img
-        src={`/cards/${rank.toLowerCase()}${SUIT_FILE[suit]}.png`}
-        alt=""
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: "50%",
-          transform: "translate(-50%, -50%)",
-          height: `${Math.round(100 / 0.62)}%`,
-          userSelect: "none",
-          pointerEvents: "none",
-        }}
-      />
-    </span>
+    />
   );
 }
 
@@ -260,7 +240,7 @@ function Face({
             }}
           >
             {known && (rank === "J" || rank === "Q" || rank === "K") ? (
-              <CourtFace rank={rank} suit={suitOf(card)} w={s.w} h={s.h} />
+              <CourtFace rank={rank} suit={suitOf(card)} h={s.h} />
             ) : (
               suit
             )}
