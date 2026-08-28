@@ -76,10 +76,11 @@ interface Props {
    */
   cardsOn?: "above" | "below";
   /**
-   * Which rail this seat sits at. The empty chair turns so its back faces
-   * away from the table, the way a real chair waits at its rail.
+   * Which slot of the rotated ring this seat renders in (0 = the hero seat at
+   * the bottom centre). Decides which of the chair renders stands here, so
+   * every chair faces the felt and yours is the one seen from behind.
    */
-  side?: "bottom" | "top" | "left" | "right";
+  anchor?: number;
   /** This seat just won something, so the seat celebrates briefly. */
   winner?: boolean;
   /** The phone-sized seat. */
@@ -103,7 +104,7 @@ export function SeatPod({
   secured,
   avatarOn = "left",
   cardsOn = "above",
-  side = "bottom",
+  anchor = 0,
   winner = false,
   compact = false,
   onSit,
@@ -137,7 +138,30 @@ export function SeatPod({
             whole invitation. The label hangs OUTSIDE the layout box: counted
             in, it pushed every chair half a label off its anchor — away from
             the top rail, into the bottom one — and the table read lopsided. */}
-        <Chair size={d.avatar + (compact ? 16 : 30)} side={side} />
+        <SeatChair anchor={anchor} width={d.avatar + (compact ? 34 : 66)} />
+        {/* The invitation: the one interface object on an empty chair. */}
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "54%",
+            transform: "translate(-50%, -50%)",
+            width: compact ? 18 : 24,
+            height: compact ? 18 : 24,
+            borderRadius: "50%",
+            display: "grid",
+            placeItems: "center",
+            background: "rgba(0, 0, 0, 0.45)",
+            border: "1px solid color-mix(in srgb, var(--c-green) 45%, transparent)",
+            color: "var(--c-green)",
+            fontSize: compact ? 13 : 16,
+            fontWeight: 700,
+            lineHeight: 1,
+          }}
+        >
+          +
+        </span>
         <span
           className="label"
           style={{
@@ -392,11 +416,35 @@ export function SeatPod({
           flexDirection: "column",
           alignItems: "center",
           zIndex: 1,
+          position: "relative",
+          // A stacking context ALWAYS, not only while animating. The chair
+          // below sits at z -1, and without this it fell behind the page the
+          // moment framer reset the idle transform — a chair visible only
+          // while its seat was moving.
+          isolation: "isolate",
           filter: winner
             ? "drop-shadow(0 0 14px color-mix(in srgb, var(--c-win) 30%, transparent))"
             : undefined,
         }}
       >
+        {/* The chair this player is sitting in, behind them. Yours is the one
+            seen from directly behind, so the room reads as looking over your
+            own shoulder at the table. */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: anchor === 0 ? (compact ? 0 : -2) : compact ? -12 : -18,
+            transform: "translateX(-50%)",
+            zIndex: -1,
+          }}
+        >
+          <SeatChair
+            anchor={anchor}
+            width={size + (anchor === 0 ? (compact ? 78 : 148) : compact ? 30 : 58)}
+          />
+        </div>
         {avatar}
         {/* The name, overlapping the circle's bottom edge as the draft sets
             it, then the stack in its black pill. */}
@@ -445,106 +493,50 @@ function CircleAvatar({ pubkey, size }: { pubkey: string; size: number }) {
   );
 }
 
-/** How the chair turns so its back faces away from the table. */
-const CHAIR_TURN = { bottom: 0, top: 180, left: 90, right: -90 } as const;
-
 /**
- * The empty chair, seen from above: a leather horseshoe of backrest and
- * armrests wrapped around a round cushion, standing in its own pool of
- * shadow. Drawn with the back at the bottom — the pose of a chair on the
- * near rail — and turned to face whichever rail it actually waits at.
+ * The chair, as a photographed object rather than a drawing.
  *
- * The materials are deliberate. The horseshoe takes its light along the top
- * edge the way upholstery catches the room's light; the cushion is darker
- * where a body would sit and carries a stitched seam; the green plus in the
- * middle is the only interface object on it, and the only invitation needed.
+ * One green Chesterfield club chair, generated once and rendered from four
+ * angles, matted out and placed per seat so every chair at the table faces
+ * the felt: the hero's seat is seen from directly behind — you are sitting
+ * in it — the top-centre seat faces you across the table, and the corners
+ * take the three-quarter views, mirrored for their side. Dimmed toward the
+ * room's light so studio renders sit believably in a dark casino.
  */
-function Chair({ size, side }: { size: number; side: "bottom" | "top" | "left" | "right" }) {
-  // The horseshoe of backrest and armrests, reused by every layer below so
-  // the side wall, the upholstery and the light all follow one geometry.
-  const HS = "M 20 32 L 20 66 C 20 100, 100 100, 100 66 L 100 32";
+const CHAIR_VIEWS = [
+  { src: "/seats/chair-rear.png", flip: false },
+  { src: "/seats/chair-rear34.png", flip: false },
+  { src: "/seats/chair-front34.png", flip: true },
+  { src: "/seats/chair-front.png", flip: false },
+  { src: "/seats/chair-front34.png", flip: false },
+  { src: "/seats/chair-rear34.png", flip: true },
+] as const;
+
+function SeatChair({ anchor, width }: { anchor: number; width: number }) {
+  const view = CHAIR_VIEWS[anchor] ?? CHAIR_VIEWS[0];
+  // The hero chair sits over the near rail's black ground rather than the lit
+  // felt, so it keeps more of its light or it disappears into the room.
+  const brightness = anchor === 0 ? 0.88 : 0.72;
   return (
-    <svg
+    <img
+      src={view.src}
+      alt=""
       aria-hidden
-      width={size}
-      height={size}
-      viewBox="0 0 120 120"
-      style={{ transform: `rotate(${CHAIR_TURN[side]}deg)`, display: "block" }}
-    >
-      <defs>
-        {/* A seat is a hollow, not a dome: deepest in the middle where a
-            body sinks it, rising to a rim that catches the room's light.
-            The gradient runs dark-centre to lit-edge for exactly that
-            reason — the other way round it read as bulging up. */}
-        <radialGradient id="chair-cushion" cx="50%" cy="48%" r="72%">
-          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-chair-cushion) 68%, #000)" />
-          <stop offset="55%" stopColor="color-mix(in srgb, var(--c-chair-cushion) 86%, #000)" />
-          <stop offset="88%" stopColor="var(--c-chair-cushion)" />
-          <stop offset="100%" stopColor="color-mix(in srgb, var(--c-ink) 10%, var(--c-chair-cushion))" />
-        </radialGradient>
-        <linearGradient id="chair-back" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 18%, var(--c-chair-back))" />
-          <stop offset="45%" stopColor="var(--c-chair-back)" />
-          <stop offset="100%" stopColor="color-mix(in srgb, var(--c-chair-back) 70%, #000)" />
-        </linearGradient>
-        <radialGradient id="chair-armcap" cx="38%" cy="32%" r="80%">
-          <stop offset="0%" stopColor="color-mix(in srgb, var(--c-ink) 22%, var(--c-chair-back))" />
-          <stop offset="100%" stopColor="color-mix(in srgb, var(--c-chair-back) 80%, #000)" />
-        </radialGradient>
-        <filter id="chair-ground" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="5" />
-        </filter>
-        <filter id="chair-ground-tight" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="2.5" />
-        </filter>
-      </defs>
-
-      {/* Two shadows ground it: a wide soft pool, and a tighter dark one
-          right under the frame. One blur alone floats. */}
-      <ellipse cx="60" cy="70" rx="48" ry="34" fill="rgba(0,0,0,0.45)" filter="url(#chair-ground)" />
-      <ellipse cx="60" cy="66" rx="38" ry="26" fill="rgba(0,0,0,0.5)" filter="url(#chair-ground-tight)" />
-
-      {/* The seat FIRST, so the backrest lands on top of it and the cushion
-          reads as tucked into the frame — drawn the other way round, the
-          sitting surface floated above its own chair. A sofa cushion, not a
-          disc: a rounded square that runs to the arms with no gap. */}
-      <rect x="25" y="21" width="70" height="66" rx="22" fill="color-mix(in srgb, #000 55%, var(--c-chair-cushion))" />
-      <rect x="25" y="16" width="70" height="66" rx="22" fill="url(#chair-cushion)" stroke="rgba(255,255,255,0.10)" strokeWidth="1" />
-      {/* Overhead light on a recess: shadow under its near lip, light on the
-          far one. The dark band along the top edge is what sinks the seat. */}
-      <path d="M 36 21 L 84 21" stroke="rgba(0,0,0,0.40)" strokeWidth="8" strokeLinecap="round" />
-      <path d="M 40 78 L 80 78" stroke="rgba(255,255,255,0.07)" strokeWidth="5" strokeLinecap="round" />
-
-      {/* The frame over the cushion, bottom up: its own side wall, the
-          upholstery, a seam of shadow under the crown, the crown's light.
-          Each layer is the same horseshoe shifted by height. */}
-      <path d={HS} fill="none" stroke="color-mix(in srgb, #000 55%, var(--c-chair-back))" strokeWidth="19" strokeLinecap="round" transform="translate(0 6)" />
-      <path d={HS} fill="none" stroke="url(#chair-back)" strokeWidth="19" strokeLinecap="round" />
-      <path d={HS} fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="7" strokeLinecap="round" transform="translate(0 3.4)" />
-      <path d={HS} fill="none" stroke="color-mix(in srgb, var(--c-ink) 17%, transparent)" strokeWidth="4.5" strokeLinecap="round" transform="translate(0 -5)" />
-
-      {/* The shadow the backrest throws onto the seat it wraps. */}
-      <path
-        d="M 29 64 C 29 88, 91 88, 91 64"
-        fill="none"
-        stroke="rgba(0,0,0,0.30)"
-        strokeWidth="6"
-        strokeLinecap="round"
-      />
-
-      {/* Armrest pads, each catching the light on its forward shoulder. */}
-      <circle cx="20" cy="32" r="10" fill="url(#chair-armcap)" />
-      <circle cx="100" cy="32" r="10" fill="url(#chair-armcap)" />
-      <ellipse cx="17.5" cy="29" rx="4" ry="3" fill="rgba(255,255,255,0.14)" />
-      <ellipse cx="97.5" cy="29" rx="4" ry="3" fill="rgba(255,255,255,0.14)" />
-
-      {/* The invitation. A plus is symmetric, so it survives every turn of
-          the chair without a counter-rotation. */}
-      <g stroke="var(--c-green)" strokeWidth="4" strokeLinecap="round">
-        <path d="M 60 39 L 60 55" />
-        <path d="M 52 47 L 68 47" />
-      </g>
-    </svg>
+      draggable={false}
+      style={{
+        width,
+        // The global reset caps every img at max-width 100%, and inside a
+        // shrink-to-fit absolute wrapper that circularity collapses the chair
+        // to its minimum size. This is the one image that sets its own width.
+        maxWidth: "none",
+        height: "auto",
+        display: "block",
+        transform: view.flip ? "scaleX(-1)" : undefined,
+        filter: `brightness(${brightness}) saturate(0.92) drop-shadow(0 12px 22px rgba(0, 0, 0, 0.55))`,
+        pointerEvents: "none",
+        userSelect: "none",
+      }}
+    />
   );
 }
 

@@ -82,12 +82,15 @@ export const stagger = {
  * bottom-right. Each straddles the rim the way players sit at a real table.
  */
 export const SEAT_POSITIONS: { x: number; y: number }[] = [
-  { x: 35, y: 90 },
-  { x: 8, y: 50 },
-  { x: 35, y: 10 },
-  { x: 65, y: 10 },
-  { x: 92, y: 50 },
-  { x: 65, y: 90 },
+  // The classic 6-max ring, hero at the bottom centre: the rotation that puts
+  // you at seat 0 puts you dead centre above the action bar, facing the
+  // opponent across the table, the way every poker room seats its hero.
+  { x: 50, y: 91 },
+  { x: 13, y: 72 },
+  { x: 26, y: 11 },
+  { x: 50, y: 8 },
+  { x: 74, y: 11 },
+  { x: 87, y: 72 },
 ];
 
 /**
@@ -95,12 +98,14 @@ export const SEAT_POSITIONS: { x: number; y: number }[] = [
  * board, each spot pulled toward the middle from its own chair.
  */
 export const BET_POSITIONS: { x: number; y: number }[] = [
-  { x: 42, y: 68 },
-  { x: 25, y: 50 },
-  { x: 42, y: 30 },
-  { x: 58, y: 30 },
-  { x: 75, y: 50 },
-  { x: 58, y: 68 },
+  { x: 50, y: 71 },
+  { x: 28, y: 60 },
+  { x: 38, y: 29 },
+  // Nudged off the centre line: dead centre above the board is where the pot
+  // pile stands, and the top seat's bet was landing in its lap.
+  { x: 60, y: 28 },
+  { x: 70, y: 32 },
+  { x: 72, y: 60 },
 ];
 
 export const POT_POSITION = { x: 50, y: 56 };
