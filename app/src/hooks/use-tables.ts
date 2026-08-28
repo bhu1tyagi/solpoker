@@ -5,7 +5,7 @@ import { PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeConfig, decodeTable } from "@/lib/decode";
-import { isTransient } from "@/lib/net";
+import { isTransient, net } from "@/lib/net";
 import {
   ABANDONED_AFTER_SECS,
   DECK_ACCOUNT_SIZE,
@@ -148,6 +148,13 @@ export function useTables() {
   /** Whether at least one listing has succeeded, and how many have failed since. */
   const hadTables = useRef(false);
   const failures = useRef(0);
+  /**
+   * One listing at a time. A refresh now retries through network weather, so
+   * it can still be running when the six-second poll fires again; two
+   * interleaved listings would race each other's writes and double the load on
+   * an RPC that is already rate-limiting us.
+   */
+  const inFlight = useRef(false);
 
   /**
    * Reload the list.
@@ -158,129 +165,145 @@ export function useTables() {
    * own schedule is worse than showing nothing.
    */
   const refresh = useCallback(async (showLoading = false) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     const conn = getBaseConnection();
     if (showLoading) setLoading(true);
     try {
       setError(null);
-      const filters = [{ memcmp: { offset: 0, bytes: bs58.encode(TABLE_DISCRIMINATOR) } }];
-      const [ownAccounts, delegatedAccounts] = await Promise.all([
-        conn.getProgramAccounts(PROGRAM_ID, { filters }),
-        conn.getProgramAccounts(DELEGATION_PROGRAM, { filters }),
-      ]);
-      const enc = new TextEncoder();
-      const accounts = [...ownAccounts, ...delegatedAccounts].filter((a) => {
-        const d = a.account.data;
-        if (d.length < 16) return false;
-        const view = new DataView(d.buffer, d.byteOffset, d.byteLength);
-        const idBytes = new Uint8Array(8);
-        new DataView(idBytes.buffer).setBigUint64(0, view.getBigUint64(8, true), true);
-        const [expected] = PublicKey.findProgramAddressSync(
-          [enc.encode("table"), idBytes],
-          PROGRAM_ID,
-        );
-        return expected.equals(a.pubkey);
-      });
+      /*
+       * The whole listing, retried in place through transient failures.
+       *
+       * The first load is a burst — two program sweeps plus three batched
+       * reads, landing alongside everything else the page fetches — and the
+       * public RPC rate-limits bursts. That is weather, not an outage: the
+       * next attempt a second later almost always succeeds. Before this, the
+       * very first blip on a browser with no cached list went straight to
+       * "Could not reach the network", which the six-second poll then quietly
+       * disproved — an error that fixes itself is worse than a skeleton that
+       * takes two seconds longer.
+       */
+      const list = await net(async () => {
+        const filters = [{ memcmp: { offset: 0, bytes: bs58.encode(TABLE_DISCRIMINATOR) } }];
+        const [ownAccounts, delegatedAccounts] = await Promise.all([
+          conn.getProgramAccounts(PROGRAM_ID, { filters }),
+          conn.getProgramAccounts(DELEGATION_PROGRAM, { filters }),
+        ]);
+        const enc = new TextEncoder();
+        const accounts = [...ownAccounts, ...delegatedAccounts].filter((a) => {
+          const d = a.account.data;
+          if (d.length < 16) return false;
+          const view = new DataView(d.buffer, d.byteOffset, d.byteLength);
+          const idBytes = new Uint8Array(8);
+          new DataView(idBytes.buffer).setBigUint64(0, view.getBigUint64(8, true), true);
+          const [expected] = PublicKey.findProgramAddressSync(
+            [enc.encode("table"), idBytes],
+            PROGRAM_ID,
+          );
+          return expected.equals(a.pubkey);
+        });
 
-      // One unreadable account must not take the lobby down with it. Older
-      // builds of the program left accounts with a different layout, and a
-      // failed listing is indistinguishable from an empty one on screen.
-      const dead = tombstonedIds();
-      const decoded = accounts.flatMap((a) => {
-        try {
-          const table = decodeTable(new Uint8Array(a.account.data), a.pubkey.toBase58());
-          if (dead.has(String(table.tableId))) return [];
-          return [
-            {
-              table,
-              delegated: a.account.owner.equals(DELEGATION_PROGRAM),
-            },
-          ];
-        } catch {
-          return [];
-        }
-      });
+        // One unreadable account must not take the lobby down with it. Older
+        // builds of the program left accounts with a different layout, and a
+        // failed listing is indistinguishable from an empty one on screen.
+        const dead = tombstonedIds();
+        const decoded = accounts.flatMap((a) => {
+          try {
+            const table = decodeTable(new Uint8Array(a.account.data), a.pubkey.toBase58());
+            if (dead.has(String(table.tableId))) return [];
+            return [
+              {
+                table,
+                delegated: a.account.owner.equals(DELEGATION_PROGRAM),
+              },
+            ];
+          } catch {
+            return [];
+          }
+        });
 
-      // Solana RPC caps getMultipleAccountsInfo at 100 keys and web3.js does
-      // not chunk for you: key 101 is not a partial answer but an error, which
-      // would blank the whole lobby — including for people already seated —
-      // the day the room grows past a hundred tables. Chunk, preserving order.
-      const batched = async (keys: PublicKey[]) => {
-        const out: Awaited<ReturnType<typeof conn.getMultipleAccountsInfo>> = [];
-        for (let i = 0; i < keys.length; i += 100) {
-          out.push(...(await conn.getMultipleAccountsInfo(keys.slice(i, i + 100))));
-        }
-        return out;
-      };
+        // Solana RPC caps getMultipleAccountsInfo at 100 keys and web3.js does
+        // not chunk for you: key 101 is not a partial answer but an error, which
+        // would blank the whole lobby — including for people already seated —
+        // the day the room grows past a hundred tables. Chunk, preserving order.
+        const batched = async (keys: PublicKey[]) => {
+          const out: Awaited<ReturnType<typeof conn.getMultipleAccountsInfo>> = [];
+          for (let i = 0; i < keys.length; i += 100) {
+            out.push(...(await conn.getMultipleAccountsInfo(keys.slice(i, i + 100))));
+          }
+          return out;
+        };
 
-      // Config never changes, so one batched read covers the whole lobby.
-      const configs = decoded.length
-        ? await batched(decoded.map((d) => new PublicKey(d.table.config)))
-        : [];
+        // Config never changes, so one batched read covers the whole lobby.
+        const configs = decoded.length
+          ? await batched(decoded.map((d) => new PublicKey(d.table.config)))
+          : [];
 
-      // A deck from an older layout cannot be dealt from, so say so here
-      // rather than letting someone sit down and hit a deserialization error
-      // the moment they press start.
-      const holes = decoded.length
-        ? await batched(decoded.map((d) => holePda(new PublicKey(d.table.address), 0)))
-        : [];
-      const decks = decoded.length
-        ? await batched(decoded.map((d) => deckPda(new PublicKey(d.table.address))))
-        : [];
+        // A deck from an older layout cannot be dealt from, so say so here
+        // rather than letting someone sit down and hit a deserialization error
+        // the moment they press start.
+        const holes = decoded.length
+          ? await batched(decoded.map((d) => holePda(new PublicKey(d.table.address), 0)))
+          : [];
+        const decks = decoded.length
+          ? await batched(decoded.map((d) => deckPda(new PublicKey(d.table.address))))
+          : [];
 
-      const list = decoded
-          .map((d, i) => {
-            let config: ConfigView | null = null;
-            try {
-              const info = configs[i];
-              if (info) config = decodeConfig(new Uint8Array(info.data));
-            } catch {
-              // Show the table without its stakes rather than not at all.
-            }
-            const deck = decks[i];
-            // A table whose card slots were never created cannot deal a hand,
-            // and looks completely normal until somebody sits at it and waits.
-            // Seat 0's slot is the cheap probe: creation makes all six in one
-            // transaction, so either they all exist or none do.
-            const hasCardSlots = holes[i] !== null;
-            const seated = d.table.seats.filter(Boolean).length;
-            const emptyFor = d.table.emptySince
-              ? Math.floor(Date.now() / 1000) - d.table.emptySince
-              : 0;
-            /*
-             * A house table, opened by the treasury so somebody arriving has
-             * somewhere to sit without opening one themselves.
-             *
-             * Sitting empty is its JOB, so the two rules that hide a deserted
-             * table do not apply to it. Without this exemption every house
-             * table vanishes from the lobby an hour after the last player
-             * leaves, which is exactly when a newcomer most needs to find one.
-             *
-             * It changes nothing on chain: the sweep is permissionless and
-             * still reaches these, so the keeper that opens them has to be
-             * able to open them again.
-             */
-            const house = config?.creator === TREASURY_AUTHORITY.toBase58();
-            return {
-              table: d.table,
-              delegated: d.delegated,
-              config,
-              seated,
-              house,
-              outdated:
-                !deck || deck.data.length < DECK_ACCOUNT_SIZE || !hasCardSlots,
-              abandoned:
-                !house &&
-                !d.delegated &&
-                seated === 0 &&
-                emptyFor >= ABANDONED_AFTER_SECS,
-              stale:
-                !house &&
-                !d.delegated &&
-                d.table.handNumber === 0 &&
-                Date.now() - createdAt(d.table.tableId) > NEVER_PLAYED_GRACE_MS,
-            };
-          })
-          .sort((a, b) => b.table.tableId - a.table.tableId);
+        return decoded
+            .map((d, i) => {
+              let config: ConfigView | null = null;
+              try {
+                const info = configs[i];
+                if (info) config = decodeConfig(new Uint8Array(info.data));
+              } catch {
+                // Show the table without its stakes rather than not at all.
+              }
+              const deck = decks[i];
+              // A table whose card slots were never created cannot deal a hand,
+              // and looks completely normal until somebody sits at it and waits.
+              // Seat 0's slot is the cheap probe: creation makes all six in one
+              // transaction, so either they all exist or none do.
+              const hasCardSlots = holes[i] !== null;
+              const seated = d.table.seats.filter(Boolean).length;
+              const emptyFor = d.table.emptySince
+                ? Math.floor(Date.now() / 1000) - d.table.emptySince
+                : 0;
+              /*
+               * A house table, opened by the treasury so somebody arriving has
+               * somewhere to sit without opening one themselves.
+               *
+               * Sitting empty is its JOB, so the two rules that hide a deserted
+               * table do not apply to it. Without this exemption every house
+               * table vanishes from the lobby an hour after the last player
+               * leaves, which is exactly when a newcomer most needs to find one.
+               *
+               * It changes nothing on chain: the sweep is permissionless and
+               * still reaches these, so the keeper that opens them has to be
+               * able to open them again.
+               */
+              const house = config?.creator === TREASURY_AUTHORITY.toBase58();
+              return {
+                table: d.table,
+                delegated: d.delegated,
+                config,
+                seated,
+                house,
+                outdated:
+                  !deck || deck.data.length < DECK_ACCOUNT_SIZE || !hasCardSlots,
+                abandoned:
+                  !house &&
+                  !d.delegated &&
+                  seated === 0 &&
+                  emptyFor >= ABANDONED_AFTER_SECS,
+                stale:
+                  !house &&
+                  !d.delegated &&
+                  d.table.handNumber === 0 &&
+                  Date.now() - createdAt(d.table.tableId) > NEVER_PLAYED_GRACE_MS,
+              };
+            })
+            .sort((a, b) => b.table.tableId - a.table.tableId);
+      }, "table listing", { tries: 3 });
       setTables(list);
       writeListCache(list);
       hadTables.current = true;
@@ -290,10 +313,12 @@ export function useTables() {
       // and with a poll every six seconds, one network blip put the dev
       // overlay over a lobby that was fine: the last good list was still on
       // screen and the next tick replaced it. A transient with a good list
-      // showing is weather, not news. Loud is reserved for failing with
-      // nothing to show — the case that once read as an empty lobby to a
-      // player who had just created a table — and for failures that repeat
-      // or are not network-shaped, which are real and worth a stack trace.
+      // showing is weather, not news — and anything transient has now already
+      // been retried three times by `net` before it even lands here. Loud is
+      // reserved for failing with nothing to show — the case that once read
+      // as an empty lobby to a player who had just created a table — and for
+      // failures that repeat or are not network-shaped, which are real and
+      // worth a stack trace.
       failures.current += 1;
       if (!hadTables.current || failures.current >= 3 || !isTransient(e)) {
         console.error("table listing failed:", e);
@@ -301,6 +326,7 @@ export function useTables() {
       }
     } finally {
       setLoading(false);
+      inFlight.current = false;
     }
   }, []);
 
