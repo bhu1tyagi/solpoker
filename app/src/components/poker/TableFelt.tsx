@@ -561,6 +561,26 @@ function StatusLine({
           ? "paying the winner"
           : fallback);
 
+  /*
+   * Printed into the cloth, not floating over it.
+   *
+   * The mark above this line is ink sunk into the felt — low contrast, a
+   * breath of blur — and the words have to be made of the same stuff or they
+   * read as UI parked on a table. Same ink, wide tracking the way lettering
+   * is screened onto real cloth, the same soft edge. The showdown moments
+   * keep their green, dimmed into the weave with everything else.
+   */
+  const printed = {
+    fontFamily: "var(--font-display)",
+    fontSize: busy ? 15 : 13,
+    fontWeight: 700,
+    color: !busy && stage ? "var(--c-green)" : "var(--c-ink)",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.22em",
+    filter: "blur(0.4px)",
+  };
+  const restOpacity = !busy && stage ? 0.55 : 0.38;
+
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 16 }}>
       <AnimatePresence mode="wait">
@@ -569,8 +589,8 @@ function StatusLine({
           initial={{ opacity: 0, y: 3 }}
           animate={
             busy
-              ? { opacity: [0.55, 1, 0.55], y: 0 }
-              : { opacity: 1, y: 0 }
+              ? { opacity: [0.26, 0.5, 0.26], y: 0 }
+              : { opacity: restOpacity, y: 0 }
           }
           exit={{ opacity: 0, y: -3 }}
           transition={
@@ -578,13 +598,7 @@ function StatusLine({
               ? { duration: 2.2, repeat: Infinity, ease: "easeInOut" }
               : { duration: 0.18 }
           }
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: busy ? 13 : 12,
-            color: !busy && stage ? "var(--c-green)" : "var(--c-ink-muted)",
-            textTransform: "uppercase",
-            letterSpacing: busy ? "0.08em" : "0.04em",
-          }}
+          style={printed}
         >
           {label}
         </motion.span>
