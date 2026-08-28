@@ -282,27 +282,36 @@ export function TableFelt({
           )}
         </AnimatePresence>
 
-        <div style={{ display: "flex", gap: compact ? 4 : 6 }}>
-          {board.map((card, i) => (
-            <div key={i}>
-              {card === NO_CARD ? (
-                <CardSlot size={boardSize} />
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0, y: -14, rotateY: 180 }}
-                  animate={{ opacity: 1, y: 0, rotateY: 0 }}
-                  transition={{ ...spring.deal, delay: (i % 3) * stagger.board }}
-                >
-                  <PlayingCard
-                    card={card}
-                    size={boardSize}
-                    highlighted={highlight?.has(card)}
-                  />
-                </motion.div>
-              )}
-            </div>
-          ))}
-        </div>
+        {/* The slots only exist while there is a hand to hold. Between hands
+            the mark stands alone on the cloth — five empty frames parked on
+            top of it read as clutter, and while the table is working they sat
+            exactly over the turning ring. A spacer holds their height so the
+            pot and the status line never jump when the board arrives. */}
+        {showBoard ? (
+          <div style={{ display: "flex", gap: compact ? 4 : 6 }}>
+            {board.map((card, i) => (
+              <div key={i}>
+                {card === NO_CARD ? (
+                  <CardSlot size={boardSize} />
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: -14, rotateY: 180 }}
+                    animate={{ opacity: 1, y: 0, rotateY: 0 }}
+                    transition={{ ...spring.deal, delay: (i % 3) * stagger.board }}
+                  >
+                    <PlayingCard
+                      card={card}
+                      size={boardSize}
+                      highlighted={highlight?.has(card)}
+                    />
+                  </motion.div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div aria-hidden style={{ height: boardSize === "sm" ? 57 : 98 }} />
+        )}
 
         <StatusLine
           stage={stage}

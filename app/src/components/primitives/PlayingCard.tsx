@@ -2,7 +2,6 @@
 
 import { motion, useReducedMotion } from "motion/react";
 import { NO_CARD, RANK_CHARS, SUIT_SYMBOLS, rankOf, suitOf } from "@/lib/engine/cards";
-import { SPADE_PATH } from "@/components/primitives/Logo";
 import { spring } from "@/styles/theme";
 
 type Size = "sm" | "md" | "lg";
@@ -175,6 +174,26 @@ function Face({
         userSelect: "none",
       }}
     >
+      {/* The house watermark, printed into the stock behind the pips the way
+          a branded deck carries its casino's mark. The real logo — the same
+          art as the navbar's chip — drained of its colour and barely there:
+          on white stock a grey ghost, never competing with rank or suit. */}
+      <img
+        src="/logo-96.png"
+        alt=""
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          width: "58%",
+          filter: "grayscale(1)",
+          opacity: 0.1,
+          pointerEvents: "none",
+          userSelect: "none",
+        }}
+      />
       {known && (
         <>
           <span style={{ position: "absolute", top: s.pad, left: s.pad + 1 }}>{index}</span>
@@ -231,21 +250,21 @@ function Back({ s }: { s: (typeof SIZES)[Size] }) {
         overflow: "hidden",
       }}
     >
-      <svg aria-hidden viewBox="0 0 100 100" style={{ width: "46%", opacity: 0.2, color: "var(--c-ink)" }}>
-        <circle
-          cx="50"
-          cy="50"
-          r="42"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="10"
-          strokeDasharray="20.3 12.7"
-          strokeDashoffset="10.15"
-        />
-        <g transform="translate(50 51) scale(0.5) translate(-50 -50)">
-          <path d={SPADE_PATH} fill="currentColor" />
-        </g>
-      </svg>
+      {/* The actual logo, not a redrawing of it — the navbar's chip, greyed
+          and lifted just enough to read on the dark stock. */}
+      <img
+        src="/logo-96.png"
+        alt=""
+        aria-hidden
+        style={{
+          width: "52%",
+          filter: "grayscale(1) brightness(1.7)",
+          opacity: 0.28,
+          display: "block",
+          pointerEvents: "none",
+          userSelect: "none",
+        }}
+      />
     </div>
   );
 }
