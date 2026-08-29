@@ -236,4 +236,28 @@ export const rpcLog = {
 
 if (typeof window !== "undefined") {
   (window as unknown as { __rpc: typeof rpcLog }).__rpc = rpcLog;
+
+  /*
+   * One library log downgraded, and only one.
+   *
+   * web3.js reports a dropped subscription socket as
+   * `console.error('ws error:', err.message)` — and a browser WebSocket error
+   * event carries no `message`, so it always reads "ws error: undefined".
+   * There is nothing in it to act on and nothing wrong: the same handler has
+   * already marked the socket closed and the reconnect is on its way.
+   *
+   * It matters because Next's dev overlay promotes any console.error to a
+   * full-screen dialog, so a routine reconnect looked like a fault worth
+   * stopping for. This keeps the line — as a warning, where a reconnect
+   * belongs — and matches that exact string and nothing else, so a real error
+   * from anywhere still arrives as one.
+   */
+  const realError = console.error.bind(console);
+  console.error = (...args: unknown[]) => {
+    if (args[0] === "ws error:") {
+      console.warn("ws error (web3.js subscription socket dropped; reconnecting)", ...args.slice(1));
+      return;
+    }
+    realError(...args);
+  };
 }

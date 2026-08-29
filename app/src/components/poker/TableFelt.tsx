@@ -618,7 +618,7 @@ function StatusLine({
    * a readable width, leaving a short stand-in on the felt.
    */
   const LONG = 56;
-  const MEDIUM = 26;
+  const MEDIUM = 18;
   const tooLong = label.length > LONG;
   const shown = tooLong ? "something needs a look" : label;
 
@@ -640,8 +640,18 @@ function StatusLine({
         justifyContent: "center",
         minHeight: 18,
         marginTop: 30,
-        // Never wider than the felt it is printed on.
-        maxWidth: "72%",
+        /*
+         * Sized against the felt, not against the board column above it.
+         *
+         * A percentage here resolved against the centre column, which is only
+         * as wide as five cards, so "waiting for players" broke across two
+         * lines and read as a mistake rather than a caption. The line belongs
+         * to the table, so it is measured against the table: wide enough for
+         * an ordinary label to stay on one line, and still well inside the
+         * rail on the narrowest phone.
+         */
+        width: 460,
+        maxWidth: "82vw",
         marginLeft: "auto",
         marginRight: "auto",
       }}

@@ -128,7 +128,31 @@ export function LobbyGate({
    * Escape, no way past it but connecting. It unlocks the moment a wallet is
    * back.
    */
-  const locked = lockWhenSignedOut && mounted && !connected;
+  /*
+   * Not the instant the page appears — a wallet takes a moment to come back.
+   *
+   * On a reload the adapter re-selects the stored wallet and re-handshakes,
+   * and for those few hundred milliseconds `connected` is false while nothing
+   * is actually wrong. Locking on that put a full "connect your wallet" dialog
+   * on screen for a blink on every refresh, which is worse than the problem it
+   * was added to solve.
+   *
+   * So a disconnect has to persist before it counts. `wallet` being set with
+   * no connection is the adapter mid-restore and is never a signed-out state;
+   * beyond that a short settle window covers the rest of the handshake.
+   */
+  const restoring = (!!wallet && !connected) || connecting;
+  const [settledOut, setSettledOut] = useState(false);
+  useEffect(() => {
+    if (connected || restoring) {
+      setSettledOut(false);
+      return;
+    }
+    const t = setTimeout(() => setSettledOut(true), 700);
+    return () => clearTimeout(t);
+  }, [connected, restoring]);
+
+  const locked = lockWhenSignedOut && mounted && !connected && settledOut;
   const wanted = locked || (onlyWhenAsked ? forced : forced || !dismissed);
   /*
    * Somebody asked for the gate and the balances have not landed yet.
