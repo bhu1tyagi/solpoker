@@ -1,3 +1,15 @@
+/*
+ * Server only, enforced by the build.
+ *
+ * This module reads the funder's secret key. Next.js only inlines env vars
+ * prefixed NEXT_PUBLIC_ into the browser bundle, so the secret cannot
+ * reach a client today — but that protection is a naming convention, and
+ * a convention is one careless import away from being wrong. This makes
+ * the build fail instead: importing this from a client component is a
+ * compile error, not a leak discovered later.
+ */
+import "server-only";
+
 import { Keypair } from "@solana/web3.js";
 import { readFileSync } from "node:fs";
 
