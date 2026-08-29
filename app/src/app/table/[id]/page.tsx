@@ -541,7 +541,21 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
    * repeated refusals, is the seat genuinely still held by whoever left it.
    */
   const mySeatView = mySeat >= 0 ? seats[mySeat] : null;
-  const chairUnsecured = Boolean(mySeatView?.occupant && !mySeatView.cardsSecured);
+  /*
+   * A live rollup link IS the lock being in place.
+   *
+   * "Cards secured" in the HUD is drawn from the link being up, because that is
+   * the authenticated connection reading your hole cards — the very thing the
+   * lock exists to permit. But this flag read the on-chain `cards_secured` bit
+   * separately, and the two could disagree: with the link plainly live and you
+   * playing, a stale or late-arriving on-chain read left the felt escalating to
+   * "this chair is still locked — try another seat" and telling a seated player
+   * to get up mid-hand. If the link is live the chair is secured, full stop, and
+   * the felt must not contradict the badge above it.
+   */
+  const chairUnsecured = Boolean(
+    mySeatView?.occupant && !mySeatView.cardsSecured && link !== "live",
+  );
   const secureFails = useTableStore((s) => s.secureFailures[mySeat] ?? 0);
   const clearSecureFailures = useTableStore((s) => s.clearSecureFailures);
   useEffect(() => {
