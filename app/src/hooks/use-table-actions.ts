@@ -653,24 +653,51 @@ export function useTableActions(args: {
         // account it is never allowed to see.
         phase("start:waiting");
         /*
-         * Including the holes, which is what the next step actually writes to.
+         * Including OUR OWN hole, which is the next step's first write — and
+         * only ours, because ours is the only one this connection is allowed
+         * to see.
          *
-         * This waited on the table, the hand and the seats — and then secured
-         * the HOLE accounts, which were never checked for. A hole that had not
-         * landed yet failed its secure, the seat was recorded unsecured, and
-         * with both players' chairs in that state the table went live with
-         * everyone sat out and no hand able to start. The comment below has
-         * warned about assuming the rest since the day it was written; the
-         * holes were the part still being assumed.
+         * The holes went onto this list because a hole that had not landed
+         * yet failed its secure, the seat was recorded unsecured, and with
+         * both chairs in that state the table went live with everyone sat
+         * out. But listing every occupied hole walked straight into the trap
+         * the comment above describes: the validator serves a permission-
+         * gated hole to its member and to nobody else, and the permission
+         * exists from the moment the player sat down. So the starter polled
+         * the OPPONENT'S hole, read null forever, burned the full thirty
+         * seconds — and did it under a live hand, because the other player's
+         * crank had long since secured the chairs and dealt. The felt said
+         * "setting the table" over a running game and then announced the
+         * table had been returned to Solana, which was false twice over.
+         *
+         * Our own hole still stands proxy for the rest: every hole delegates
+         * in the same transaction as its seat, so seats served plus one hole
+         * served is the whole set, observed from the only angle we have.
          */
+        const mySeatNow = useTableStore.getState().mySeat;
         const mustBeThere = [
           table,
           handPda(table),
           ...Array.from({ length: MAX_SEATS }, (_, i) => seatPda(table, i)),
-          ...occupiedSeats.map((i) => holePda(table, i)),
+          ...(mySeatNow >= 0 ? [holePda(table, mySeatNow)] : []),
         ];
+        /*
+         * The other players' cranks are not waiting for us.
+         *
+         * Delegation flips `delegated` true on every seated client within one
+         * poll, and each of their cranks then secures chairs and deals — the
+         * very work the rest of this function exists to bootstrap. A hand
+         * going live mid-wait is therefore not an anomaly to wait through but
+         * the finish line crossed by somebody else: the rollup is serving the
+         * table, the chairs are locked, cards are out.
+         */
+        const handLive = () => useTableStore.getState().table?.state === 1;
         let allArrived = false;
         for (let t = 0; t < 40; t++) {
+          if (handLive()) {
+            allArrived = true;
+            break;
+          }
           try {
             // Every public account, not just the last seat. Waiting on one
             // and assuming the rest is how a table with a missing hole account
@@ -692,6 +719,14 @@ export function useTableActions(args: {
           throw new Error(
             "The game validator did not pick the table up in time, so it has been left on Solana. Nothing was lost, so try starting again.",
           );
+        }
+
+        // Somebody else already finished the job. Securing again mid-hand
+        // would at best fail noisily and at worst report healthy chairs as
+        // stuck, so say the true thing and stand down.
+        if (handLive()) {
+          toast("Table is live. Cards are locked down.", "good");
+          return;
         }
 
         // Lock the deck to nobody and each hand to its owner. Retried because
@@ -718,7 +753,18 @@ export function useTableActions(args: {
         // The deck is not optional. `start_hand` refuses without it, and a
         // failure here has to stop the start rather than leave a table that
         // knocks CardsNotSecured forever with nobody retrying.
-        await secure(await secureDeckIx(erProgram, table, session.publicKey), "secure deck");
+        try {
+          await secure(await secureDeckIx(erProgram, table, session.publicKey), "secure deck");
+        } catch (e) {
+          // Unless the failure is that we lost the race: a hand in progress
+          // means another crank secured the deck and dealt while our retries
+          // were sleeping. That is the outcome this whole function wants.
+          if (handLive()) {
+            toast("Table is live. Cards are locked down.", "good");
+            return;
+          }
+          throw e;
+        }
 
         // Only seats somebody is sitting in. Securing an empty one used to
         // create a permission with no members, which is readable by nobody and
@@ -739,6 +785,11 @@ export function useTableActions(args: {
               `secure seat ${i}`,
             );
           } catch (e) {
+            // A chair the chain already shows secured is not stuck — another
+            // client's crank got there first and our duplicate was refused.
+            // Counting it produced "this chair belongs to whoever sat there
+            // last" toasts over perfectly healthy tables.
+            if (useTableStore.getState().seats[i]?.cardsSecured) continue;
             // The reason was being discarded, which made this the one failure
             // in the start sequence that could not be diagnosed from a report:
             // the table said two chairs belonged to somebody else and nothing

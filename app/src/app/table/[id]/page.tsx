@@ -595,7 +595,16 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const compact = tableLayout !== "desktop";
 
   // Long operations narrate themselves over the felt.
-  const overlay = actions.busy && actions.busy !== "join"
+  //
+  // Except a start over a live hand. Cards on the felt are the proof the
+  // start succeeded, whatever phase this client's own start sequence thinks
+  // it is in — the other players' cranks secure chairs and deal the moment
+  // delegation lands, and they are not waiting for the starter's bookkeeping
+  // to catch up. "Setting the table" printed over a running game was the
+  // felt contradicting itself. Cash-out keeps its overlay: "finishing this
+  // hand" during a hand is exactly right.
+  const startStale = actions.busy?.startsWith("start") && tableView?.state === 1;
+  const overlay = actions.busy && actions.busy !== "join" && !startStale
     ? OVERLAY_COPY[actions.busy] ?? "working on it"
     : undefined;
 
