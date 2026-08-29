@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useElementWidth } from "@/hooks/use-viewport";
 import { SPADE_PATH } from "@/components/primitives/Logo";
@@ -126,14 +126,26 @@ export function TableFelt({
    */
   const fallbackLabel =
     status ?? (handLive && hand ? STREET_NAMES[hand.street] : "waiting");
-  const tableBusy =
-    Boolean(overlay) ||
-    (working && !handLive && stage === null) ||
-    (stage === null && !handLive && isWaiting(fallbackLabel));
   // Between hands the previous board is stale. It stays up through the
   // showdown, because that is what everyone is looking at, and clears once the
   // table is genuinely waiting for the next one.
   const showBoard = handLive || stage !== null;
+  /*
+   * The room is doing something invisible — but the mark only says so when
+   * there is nothing else on the cloth to look at.
+   *
+   * Cashing out narrates itself as "finishing this hand", and that turned the
+   * ring on and lifted the mark to its loud opacity behind a hand that was
+   * still being played: the brightest thing on the felt, revolving, directly
+   * under the board. Whatever the table is arranging in the background, cards
+   * on the cloth outrank it. The status line still says what is happening;
+   * the mark simply stops competing with the game for the player's eye.
+   */
+  const roomWorking =
+    Boolean(overlay) ||
+    (working && !handLive && stage === null) ||
+    (stage === null && !handLive && isWaiting(fallbackLabel));
+  const tableBusy = roomWorking && !showBoard;
 
   const board = showBoard
     ? (hand?.board ?? [NO_CARD, NO_CARD, NO_CARD, NO_CARD, NO_CARD])
@@ -189,6 +201,14 @@ export function TableFelt({
   // Every pile is drawn against the biggest stack at the table.
   const displayPot = stage !== null ? (showdown?.pot ?? 0) : pot;
   const awardBySeat = new Map((showdown?.awards ?? []).map((a) => [a.seat, a.amount]));
+  /**
+   * The pot as the felt draws it, which is not the same as what the pot holds
+   * once it is being paid out: the chips are visibly leaving, so the pile and
+   * the figure they are leaving have to come down with them rather than blink
+   * out and leave the winner's chips arriving from nowhere.
+   */
+  const paying = stage === "award";
+  const potShown = usePotPayingOut(displayPot, paying);
 
   return (
     <div
@@ -334,49 +354,65 @@ export function TableFelt({
           }}
         >
           {/* Settlement zeroes the live pot, so through the reveal and the
-              comparison the figure comes from the snapshot taken just before it.
-              It disappears when the chips themselves fly to the winner. */}
-          <AnimatePresence mode="wait">
-            {displayPot > 0 && stage !== "award" && (
-              <motion.div
-                key="pot"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={spring.snappy}
-                // The pot sits on the cloth, not in a box. It used to be a black
-                // pill — a container floating over a table full of containers —
-                // and the emphasis now comes from the money itself: the pile of
-                // real chips, and a figure set larger than anything else on the
-                // felt with the table's green light behind it. On cloth,
-                // emphasis is weight and light, not chrome.
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: compact ? 8 : 11,
-                }}
-              >
-                <ChipStack
-                  amount={displayPot}
-                  size={compact ? 14 : 18}
-                  showAmount={false}
-                />
-                <span
-                  className="num"
+              comparison the figure comes from the snapshot taken just before
+              it. During the award it counts down as the chips leave, because
+              that is what a pot being paid out looks like.
+
+              The row is ALWAYS here, at a fixed height, empty or not. It used
+              to unmount when the pot emptied, and this column is centred on
+              its own middle — so losing the row moved the board and the cards
+              under it a dozen pixels up, every hand, exactly as the chips
+              started flying. The jitter was the pot's own absence. */}
+          <div
+            style={{
+              height: compact ? 22 : 30,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <AnimatePresence>
+              {potShown > 0 && (
+                <motion.div
+                  key="pot"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={spring.snappy}
+                  // The pot sits on the cloth, not in a box. It used to be a black
+                  // pill — a container floating over a table full of containers —
+                  // and the emphasis now comes from the money itself: the pile of
+                  // real chips, and a figure set larger than anything else on the
+                  // felt with the table's green light behind it. On cloth,
+                  // emphasis is weight and light, not chrome.
                   style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: compact ? 16 : 22,
-                    fontWeight: 800,
-                    color: "var(--c-green)",
-                    textShadow:
-                      "0 0 22px color-mix(in srgb, var(--c-green) 55%, transparent), 0 1px 2px rgba(0,0,0,0.6)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: compact ? 8 : 11,
                   }}
                 >
-                  <AnimatedNumber value={displayPot} />
-                </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  <ChipStack
+                    amount={potShown}
+                    size={compact ? 14 : 18}
+                    showAmount={false}
+                  />
+                  <span
+                    className="num"
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: compact ? 16 : 22,
+                      fontWeight: 800,
+                      color: "var(--c-green)",
+                      textShadow:
+                        "0 0 22px color-mix(in srgb, var(--c-green) 55%, transparent), 0 1px 2px rgba(0,0,0,0.6)",
+                    }}
+                  >
+                    <AnimatedNumber value={potShown} duration={paying ? 900 : undefined} />
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {/* The slots only exist while there is a hand to hold. Between hands
               the mark stands alone on the cloth — five empty frames parked on
@@ -608,9 +644,27 @@ export function TableFelt({
                     pointerEvents: "none",
                   }}
                 >
+                  {/* Beside the player, never on them.
+                      Centred on the seat, this printed straight across the
+                      winner's face — the one figure in the hand somebody
+                      actually wants to read, laid over the one thing that
+                      identifies who read it. It steps clear to whichever side
+                      has the felt: outward from the middle of the table, so
+                      the end seats push their figure inward and it never
+                      leaves the cloth. */}
                   <span
                     className="num"
                     style={{
+                      display: "block",
+                      // Far enough out to clear the circle itself: the figure
+                      // is centred on this offset, so it has to cover the
+                      // avatar's radius plus half its own width plus air.
+                      // Level with the face, where the lane is clear — above
+                      // it is the player's hand and below it is their name.
+                      transform: `translate(${
+                        (pos.x > 50 ? -1 : 1) * (compact ? 46 : 66)
+                      }px, 0)`,
+                      whiteSpace: "nowrap",
                       fontFamily: "var(--font-mono)",
                       fontSize: compact ? 15 : 19,
                       fontWeight: 800,
@@ -766,3 +820,44 @@ function StatusLine({
 
 const SETTLED_LABELS = new Set(["preflop", "flop", "turn", "river", "showdown"]);
 const isWaiting = (label: string) => !SETTLED_LABELS.has(label);
+
+/** How long the pile takes to empty, against the chips crossing the felt. */
+const PAYOUT_DRAIN_MS = 900;
+
+/**
+ * The pot emptying, as a number the pile can be drawn from.
+ *
+ * While chips are flying to the winner the pot is visibly being paid, so it
+ * has to visibly shrink — both the printed figure and the physical stack
+ * beside it, which is drawn from the same value. Outside the payout this is
+ * simply the pot.
+ */
+function usePotPayingOut(pot: number, paying: boolean): number {
+  const [shown, setShown] = useState(pot);
+  const frame = useRef<number | undefined>(undefined);
+  const from = useRef(pot);
+
+  useEffect(() => {
+    if (!paying) {
+      from.current = pot;
+      setShown(pot);
+      return;
+    }
+    const a = from.current;
+    if (a <= 0) return;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / PAYOUT_DRAIN_MS);
+      // Ease out: the pile empties quickly and the last chips linger, which is
+      // how a dealer actually pushes a pot.
+      setShown(Math.round(a * (1 - (1 - Math.pow(1 - t, 3)))));
+      if (t < 1) frame.current = requestAnimationFrame(tick);
+    };
+    frame.current = requestAnimationFrame(tick);
+    return () => {
+      if (frame.current) cancelAnimationFrame(frame.current);
+    };
+  }, [paying, pot]);
+
+  return shown;
+}

@@ -18,6 +18,17 @@ const SIZES: Record<Size, { w: number; h: number }> = {
 };
 
 /**
+ * How tall a card of each size is, for anything that has to hold its place
+ * while the card itself is absent — a seat reserving room for a hand it has
+ * not been dealt yet, so the table stops moving between hands.
+ */
+export const CARD_HEIGHT: Record<Size, number> = {
+  sm: SIZES.sm.h,
+  md: SIZES.md.h,
+  lg: SIZES.lg.h,
+};
+
+/**
  * The faces are the real deck, whole.
  *
  * Byron Knoll's public-domain vector deck, one PNG per card in public/cards/,

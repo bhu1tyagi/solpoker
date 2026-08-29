@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Avatar, shortKey } from "@/components/primitives/Avatar";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
-import { PlayingCard } from "@/components/primitives/PlayingCard";
+import { CARD_HEIGHT, PlayingCard } from "@/components/primitives/PlayingCard";
 import { ClockRing } from "@/components/primitives/ClockRing";
 import { PrivacyRing } from "@/components/primitives/ChipRing";
 import { spring } from "@/styles/theme";
@@ -105,6 +105,9 @@ export function SeatPod({
   const d = DIMS[compact ? "compact" : "full"];
   const empty = !seat?.occupant;
   const size = isMe ? d.avatarMe : d.avatar;
+  /** The space this seat's hand occupies, held open whether or not it holds one. */
+  const cardSize: "sm" | "md" = isMe && !compact ? "md" : "sm";
+  const cardHeight = CARD_HEIGHT[cardSize];
 
   if (empty) {
     /*
@@ -200,7 +203,7 @@ export function SeatPod({
   const sittingOut = handLive && !dealtIn;
   // The avatar overlay states, straight from the draft's folded seat.
   const overlay = s.folded
-    ? { label: "folded", color: "var(--c-loss)" }
+    ? { label: "folded", color: "var(--c-ink-muted)" }
     : s.allIn
       ? { label: "all in", color: "var(--c-warn)" }
       : null;
@@ -270,43 +273,84 @@ export function SeatPod({
             position: "absolute",
             inset: 0,
             borderRadius: "50%",
-            border: `${d.ring}px solid ${isMe ? "var(--c-green)" : "var(--c-card-back)"}`,
-            boxShadow: isMe
-              ? "0 0 20px rgba(20, 241, 149, 0.3)"
-              : "0 8px 20px rgba(0, 0, 0, 0.45)",
+            // A folded seat keeps its ring but loses its voice: your own green
+            // circle and its glow are for the player still in the hand.
+            border: `${d.ring}px solid ${
+              s.folded
+                ? "var(--c-card-back)"
+                : isMe
+                  ? "var(--c-green)"
+                  : "var(--c-card-back)"
+            }`,
+            boxShadow:
+              isMe && !s.folded
+                ? "0 0 20px rgba(20, 241, 149, 0.3)"
+                : "0 8px 20px rgba(0, 0, 0, 0.45)",
             display: "grid",
             placeItems: "center",
             background: "var(--c-felt-raised)",
+            // The picture goes quiet rather than being covered up. Colour
+            // draining out of a seat is the oldest way a table shows somebody
+            // is out of the hand, and it needs no words at all.
+            filter: s.folded ? "grayscale(1) brightness(0.65)" : undefined,
+            transition: "filter 260ms ease",
           }}
         >
           <CircleAvatar pubkey={s.occupant!} size={size - d.ring * 2} />
         </span>
       )}
 
-      {/* Folded and all-in wash over the picture, as the draft does it. */}
+      {/*
+        Out of the hand, said the way a card room says it.
+        This used to be a black disc dropped over the player's face with the
+        word in loss-red across it — the loudest treatment on the table given
+        to its least eventful event. Folding is not a loss and not an error; it
+        is simply no longer being in the hand. So the picture desaturates, and
+        a single band crosses it carrying the word in the felt's own ink, the
+        way a mucked hand gets a line through it. Two cues, no colour alone,
+        and the player's identity stays legible underneath.
+
+        All-in keeps its warning colour: that one IS an event.
+      */}
       {overlay && (
         <span
           style={{
             position: "absolute",
             inset: 0,
             borderRadius: "50%",
-            background: "rgba(0, 0, 0, 0.6)",
+            overflow: "hidden",
             display: "grid",
             placeItems: "center",
             zIndex: 2,
+            pointerEvents: "none",
           }}
         >
           <span
-            className="label"
             style={{
-              fontSize: d.tagFont,
-              fontWeight: 800,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: overlay.color,
+              position: "absolute",
+              left: 0,
+              right: 0,
+              display: "grid",
+              placeItems: "center",
+              padding: compact ? "2px 0" : "3px 0",
+              background: "rgba(0, 0, 0, 0.66)",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(255,255,255,0.06)",
             }}
           >
-            {overlay.label}
+            <span
+              className="label"
+              style={{
+                fontSize: d.tagFont,
+                fontWeight: 800,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: overlay.color,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {overlay.label}
+            </span>
           </span>
         </span>
       )}
@@ -319,7 +363,18 @@ export function SeatPod({
 
   return (
     <motion.div
-      layout
+      /*
+       * Deliberately NOT `layout`.
+       *
+       * A hand ending unmounts two cards from the top of this column, and with
+       * layout animation on, framer implements the resulting height change by
+       * scaling the whole subtree and easing it back — so every seat's avatar
+       * and name visibly squashed and stretched at the end of every hand, then
+       * settled. That is the "weird animation" and it was never a design, just
+       * a side effect. The pod is absolutely positioned by the felt, so it has
+       * nothing to gain from layout animation; the cards below reserve their
+       * own space instead, and nothing moves at all.
+       */
       initial={{ opacity: 0, scale: 0.94 }}
       animate={{ opacity: dimmed || s.folded ? 0.55 : 1, scale: isTurn ? 1.03 : 1 }}
       transition={spring.snappy}
@@ -331,12 +386,19 @@ export function SeatPod({
       }}
     >
       {/* Cards, fanned over the seat's top edge. Centred on the column now
-          that nothing stands proud of one end. */}
+          that nothing stands proud of one end.
+
+          The height is reserved whether or not a hand is out. It used to
+          collapse to nothing between hands, which moved the avatar, the name
+          and the stack of every seat up and down the felt twice a hand — the
+          table breathing in and out around a game nobody had moved. A chair at
+          a real table does not shuffle backwards when the cards are collected. */}
       <div
         style={{
           display: "flex",
           gap: 3,
-          height: dealtIn ? undefined : 0,
+          height: cardHeight,
+          alignItems: "flex-end",
           marginBottom: cardsOn === "above" ? (compact ? -8 : -10) : 0,
           marginTop: cardsOn === "below" ? (compact ? -6 : -8) : 0,
           zIndex: 0,
@@ -358,9 +420,9 @@ export function SeatPod({
                   <PlayingCard
                     card={known ? card : undefined}
                     faceDown={!known}
-                    size={isMe && !compact ? "md" : "sm"}
+                    size={cardSize}
                     highlighted={known && winning?.has(card)}
-                    dimmed={dimmed}
+                    dimmed={dimmed || s.folded}
                   />
                 </motion.div>
               );
@@ -379,36 +441,51 @@ export function SeatPod({
         cryptographically guaranteed, and the interface must not say more than
         the docs do.
       */}
-      {isMe && dealtIn && secured !== undefined && !compact && (
+      {isMe && secured !== undefined && !compact && (
+        // The row holds its height whether or not it is saying anything, for
+        // the same reason the cards above it do: this sits between your hand
+        // and your avatar, so letting it come and go with the deal moved your
+        // own seat up and down the felt every hand.
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
+            height: 22,
             marginBottom: cardsOn === "above" ? 4 : 0,
             marginTop: cardsOn === "below" ? 4 : 0,
-            // Positioned, or the z-index is ignored and the cards land on top
-            // of the words. Its own dark pill, like every other label here:
-            // bare green text vanished the day the cards turned white.
             position: "relative",
             zIndex: 3,
-            padding: "2px 8px",
-            borderRadius: "var(--r-pill)",
-            background: "rgba(0, 0, 0, 0.6)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
+            display: "grid",
+            placeItems: "center",
           }}
         >
-          <PrivacyRing secured={!!secured} size={13} />
-          <span
-            className="label"
+          <div
             style={{
-              fontSize: 10,
-              letterSpacing: "0.08em",
-              color: secured ? "var(--c-green)" : "var(--c-ink-faint)",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              // The claim is about cards you are holding, so it says nothing
+              // between hands — but it keeps its place while it is quiet.
+              opacity: dealtIn ? 1 : 0,
+              transition: "opacity 220ms ease",
+              // Its own dark pill, like every other label here: bare green text
+              // vanished the day the cards turned white.
+              padding: "2px 8px",
+              borderRadius: "var(--r-pill)",
+              background: "rgba(0, 0, 0, 0.6)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
             }}
           >
-            {secured ? "Cards secured" : "Not secured"}
-          </span>
+            <PrivacyRing secured={!!secured} size={13} />
+            <span
+              className="label"
+              style={{
+                fontSize: 10,
+                letterSpacing: "0.08em",
+                color: secured ? "var(--c-green)" : "var(--c-ink-faint)",
+              }}
+            >
+              {secured ? "Cards secured" : "Not secured"}
+            </span>
+          </div>
         </div>
       )}
 

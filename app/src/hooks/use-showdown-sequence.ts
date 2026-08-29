@@ -31,9 +31,23 @@ export interface Award {
 /** How long each beat holds, in milliseconds. */
 const REVEAL_MS = 1100;
 const COMPARE_MS = 1600;
-const AWARD_MS = 1500;
 /** Cards turn over this far apart during the reveal. */
 const REVEAL_STAGGER_MS = 260;
+
+/**
+ * How long the award beat has to hold, given how many piles are moving.
+ *
+ * Not a constant, because it never was one in practice. The felt throws up to
+ * ten chips per winner 90ms apart, each taking 750ms to cross, and it staggers
+ * a second winner 200ms behind the first — so a single pot needs about 1,560ms
+ * and a split needs about 1,760ms. The flat 1,500 that used to sit here cut
+ * both off: a hand ended with the last chips of the pot still in the air,
+ * deleted mid-flight, and a split pot lost most of the second player's payment.
+ * A split is exactly the moment a player most needs to see where the money
+ * went, so the beat is now measured from what is actually being animated.
+ */
+const awardHold = (winners: number) =>
+  200 * Math.max(0, winners - 1) + 10 * 90 + 750 + 250;
 
 interface LiveSnapshot {
   handNumber: number;
@@ -128,22 +142,48 @@ export function useShowdownSequence(
 
     const revealDone = Math.max(REVEAL_MS, toShow.length * REVEAL_STAGGER_MS + 500);
     at(revealDone, () => setStage("compare"));
-    at(revealDone + COMPARE_MS, () => {
-      // What each seat won is what its stack gained across settlement, read
-      // now that the payout has certainly arrived.
+    // What each seat won is what its stack gained across settlement, read now
+    // that the payout has certainly arrived. Every seat that gained gets its
+    // own stream, so a split pot animates as the two payments it actually was.
+    const readPayouts = (): Award[] => {
       const now = seatsRef.current;
       const paid: Award[] = [];
       for (let i = 0; i < MAX_SEATS; i++) {
         const gained = (now[i]?.stack ?? 0) - snapshot.stacks[i];
         if (gained > 0) paid.push({ seat: i, amount: gained });
       }
-      setAwards(paid);
-      setStage("award");
-    });
-    at(revealDone + COMPARE_MS + AWARD_MS, () => {
-      setStage(null);
-      setAwards([]);
-      setShown(new Set());
+      return paid;
+    };
+
+    at(revealDone + COMPARE_MS, () => {
+      let paid = readPayouts();
+      /*
+       * One late notification must not swallow the whole payment.
+       *
+       * Stacks arrive as their own account updates, and a winner whose update
+       * has not landed by this beat reads as having gained nothing — so their
+       * stream is simply not drawn, and on a split that means the pot visibly
+       * pays one of the two winners. Rather than guess an amount, look again a
+       * beat later: the figures stay the ones the chain reported, and the only
+       * thing that changes is how long we were willing to wait for them.
+       */
+      const start = (list: Award[]) => {
+        setAwards(list);
+        setStage("award");
+        at(awardHold(list.length), () => {
+          setStage(null);
+          setAwards([]);
+          setShown(new Set());
+        });
+      };
+      if (paid.length === 0) {
+        at(600, () => {
+          paid = readPayouts();
+          start(paid);
+        });
+        return;
+      }
+      start(paid);
     });
   }, [hand, table, seats]);
 
