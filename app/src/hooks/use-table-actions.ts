@@ -371,6 +371,23 @@ export function useTableActions(args: {
 
         phase("start:funding");
         /*
+         * Ask the house first.
+         *
+         * When the funder wallet is configured and holds enough, it pays the
+         * delegation rent directly and the player signs nothing at all — no
+         * transfer, no prompt, no 0.05 SOL leaving their wallet for something
+         * they had no way to recognise as a deposit. The player-funded path
+         * below stays as the fallback, so a room with no funder still works
+         * exactly as it did.
+         */
+        let houseFunds = false;
+        try {
+          const res = await fetch("/api/delegate", { method: "GET", cache: "no-store" });
+          houseFunds = res.ok && (await res.json()).available === true;
+        } catch {
+          // No answer means no house funding; the player path covers it.
+        }
+        /*
          * The session key pays for everything below, and the old check here is
          * why NO fresh wallet could start a table on mainnet.
          *
@@ -403,7 +420,7 @@ export function useTableActions(args: {
         const PER_SEAT_LAMPORTS = 7_000_000;
         const CUSHION_LAMPORTS = 4_000_000;
         const needed = CORE_LAMPORTS + MAX_SEATS * PER_SEAT_LAMPORTS + CUSHION_LAMPORTS;
-        const bal = await conn.getBalance(session.publicKey);
+        const bal = houseFunds ? needed : await conn.getBalance(session.publicKey);
         if (bal < needed) {
           if (!signTransaction) throw new Error("connect a wallet first");
           /*
@@ -452,6 +469,25 @@ export function useTableActions(args: {
         // an already-done step is tolerated, and the truth is checked at the
         // end: either the rollup serves the table or the start failed.
         phase("start:delegating");
+        /*
+         * One delegation step, paid for by whoever is paying.
+         *
+         * The house route signs as payer on the server; the instruction takes
+         * the payer as its only signer, so nothing else is needed from here.
+         * The orchestration — which steps, in what order, and the rollback if
+         * one fails — stays on this side, because undoing a delegation happens
+         * on the rollup and needs the session key.
+         */
+        const houseDelegate = async (step: "core" | "seat", index?: number) => {
+          const res = await fetch("/api/delegate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tableId: tableId.toString(), step, index }),
+          });
+          if (!res.ok) {
+            throw new Error((await res.json().catch(() => ({}))).error ?? `house ${step} failed`);
+          }
+        };
         const sendAsSession = async (ix: Awaited<ReturnType<typeof delegateCoreIx>>, label: string) => {
           const tx = new Transaction().add(ix);
           const bh = await conn.getLatestBlockhash();
@@ -520,10 +556,14 @@ export function useTableActions(args: {
         try {
           if (!coreDelegated) {
             try {
-              await sendAsSession(
-                await delegateCoreIx(program, tableId, session.publicKey),
-                "delegate table",
-              );
+              if (houseFunds) {
+                await houseDelegate("core");
+              } else {
+                await sendAsSession(
+                  await delegateCoreIx(program, tableId, session.publicKey),
+                  "delegate table",
+                );
+              }
               coreDelegated = true;
             } catch (e) {
               if (!(await delegatedAlready(table))) throw e;
@@ -534,10 +574,14 @@ export function useTableActions(args: {
             const seat = seatPda(table, i);
             if (await delegatedAlready(seat)) continue;
             try {
-              await sendAsSession(
-                await delegateSeatIx(program, table, i, session.publicKey),
-                `delegate seat ${i}`,
-              );
+              if (houseFunds) {
+                await houseDelegate("seat", i);
+              } else {
+                await sendAsSession(
+                  await delegateSeatIx(program, table, i, session.publicKey),
+                  `delegate seat ${i}`,
+                );
+              }
               delegatedNow.push(i);
             } catch (e) {
               if (!(await delegatedAlready(seat))) throw e;
