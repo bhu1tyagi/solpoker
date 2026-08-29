@@ -10,6 +10,7 @@ import { READINESS_STEPS, useReadiness } from "@/hooks/use-readiness";
 import { shortKey } from "@/components/primitives/Avatar";
 import { ChipSpinner } from "@/components/primitives/ChipRing";
 import { ChipGlyph } from "@/components/primitives/Chip";
+import { Skeleton } from "@/components/primitives/Surface";
 import { CheckIcon, CopyIcon, UsdcMark } from "@/components/primitives/Icons";
 import { SolanaMark } from "@/components/primitives/StackCredit";
 import { Button } from "@/components/primitives/Button";
@@ -110,18 +111,33 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
    * they arrived to watch a game, and greeting them with a form is the same
    * mistake the old refusal page made, in a smaller box.
    */
-  const open = onlyWhenAsked
-    ? mounted && !resolving && active !== -1 && forced
-    : mounted && !resolving && active !== -1 && (forced || !dismissed);
+  const wanted = onlyWhenAsked ? forced : forced || !dismissed;
+  /*
+   * Somebody asked for the gate and the balances have not landed yet.
+   *
+   * This is not a second modal. Opening the full gate here would accuse a
+   * player of steps the data cannot yet confirm, so the gate opens with its
+   * rail drawn as skeletons instead: the same card, the same place, with the
+   * parts it does not know yet visibly still loading. It used to be its own
+   * "One moment" dialog, which meant a player walking between pages got a
+   * card thrown at them every time — and with balances now remembered per
+   * wallet, this state is close to unreachable anyway.
+   */
+  const pending = mounted && wanted && resolving;
+  const open = pending || (mounted && !resolving && active !== -1 && wanted);
 
   /*
-   * The player pressed "Connect wallet" while the balances are still being
-   * read. Saying nothing there reads as a dead button, and opening the full
-   * gate would accuse them of steps the data cannot yet confirm — the exact
-   * malfunction this used to have. A small holding card is the honest state:
-   * something is happening, nothing is being claimed.
+   * A satisfied player must not leave the flag armed behind them.
+   *
+   * `openGate` was only ever cleared by dismissing, so once anything opened
+   * it — a seat click, the connect button — it stayed true for the rest of
+   * the visit. Every later page whose balances were briefly unknown then saw
+   * a gate asking to open again, which is exactly the card that kept
+   * reappearing. Nothing needed, nothing armed.
    */
-  const holding = mounted && resolving && forced;
+  useEffect(() => {
+    if (!resolving && active === -1 && forced) dismissGate();
+  }, [resolving, active, forced, dismissGate]);
 
   // Deposits land from outside this tab; poll while a funding step shows.
   useEffect(() => {
@@ -152,45 +168,6 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
     return () => window.removeEventListener("keydown", onKey);
   }, [open, dismissGate]);
 
-  if (holding) {
-    return (
-      <div className="gate-scrim" onClick={dismissGate}>
-        <motion.div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Checking your wallet"
-          className="gate glass glass-blur"
-          onClick={(e) => e.stopPropagation()}
-          initial={reduce ? false : { opacity: 0, y: 14, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
-          style={{ maxWidth: 420 }}
-        >
-          <header className="gate-head">
-            <h2>One moment</h2>
-            <p>Reading your wallet&rsquo;s balances from the chain.</p>
-          </header>
-          {/* Three shimmering bars where the steps will be. */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "6px 0 10px" }} aria-hidden>
-            {[76, 58, 66].map((w, i) => (
-              <motion.div
-                key={i}
-                animate={reduce ? undefined : { opacity: [0.35, 0.7, 0.35] }}
-                transition={{ repeat: Infinity, duration: 1.4, delay: i * 0.18 }}
-                style={{
-                  height: 14,
-                  width: `${w}%`,
-                  borderRadius: "var(--r-pill)",
-                  background: "var(--c-felt-edge)",
-                }}
-              />
-            ))}
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
   if (!open) return null;
 
   const installed = wallets.filter(
@@ -218,12 +195,31 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
       >
         <header className="gate-head">
           <h2 id="gate-title">Take a seat</h2>
-          <p>One thing at a time. This is the only step in your way.</p>
+          <p>
+            {pending
+              ? "Checking where you are up to."
+              : "One thing at a time. This is the only step in your way."}
+          </p>
         </header>
 
         <div className="gate-body">
           <ol className="gate-rail" aria-label="Progress">
-            {READINESS_STEPS.map((s, i) => (
+            {/* Still reading: the rail shows its shape without claiming which
+                step anyone is on. Accusing a funded wallet of holding nothing
+                is the exact malfunction this replaced. */}
+            {pending
+              ? READINESS_STEPS.map((s) => (
+                  <li key={s.title} className="gate-step is-loading">
+                    <span className="gate-node" aria-hidden>
+                      <ChipSpinner size={15} thickness={2} color="currentColor" />
+                    </span>
+                    <span className="gate-step-text">
+                      <Skeleton height={11} width="52%" />
+                      <Skeleton height={9} width="76%" />
+                    </span>
+                  </li>
+                ))
+              : READINESS_STEPS.map((s, i) => (
               <li
                 key={s.title}
                 className={
@@ -249,11 +245,23 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
                   <span>{s.short}</span>
                 </span>
               </li>
-            ))}
+                ))}
           </ol>
 
           <div className="gate-panel">
-            {active === 0 && (
+            {/* While the balances are still landing, the panel says nothing
+                about which step is next — the rail beside it is already
+                showing that it does not know yet. */}
+            {pending && (
+              <>
+                <Skeleton height={15} width="46%" />
+                <div style={{ height: 10 }} />
+                <Skeleton height={11} width="82%" />
+                <div style={{ height: 18 }} />
+                <Skeleton height={40} />
+              </>
+            )}
+            {!pending && active === 0 && (
               <>
                 <h3>Connect a wallet</h3>
                 <p className="gate-note">
@@ -325,7 +333,7 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
               </>
             )}
 
-            {active === 1 && (
+            {!pending && active === 1 && (
               <FundStep
                 mark={<SolanaMark size={30} />}
                 title="Add SOL for fees"
@@ -338,7 +346,7 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
               />
             )}
 
-            {active === 2 && (
+            {!pending && active === 2 && (
               <FundStep
                 mark={<UsdcMark size={36} />}
                 title="Add USDC for chips"
@@ -357,7 +365,7 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
               player stuck between them used to be told to go and fetch USDC
               they already had.
             */}
-            {active === 3 && (
+            {!pending && active === 3 && (
               <div className="gate-buy">
                 <span className="gate-buy-mark" aria-hidden>
                   <ChipGlyph size={36} />

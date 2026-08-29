@@ -3635,3 +3635,16 @@ input[type="range"]::-moz-range-thumb {
     animation: none;
   }
 }
+
+/* A rail step whose answer has not arrived: the shape of a step, claiming
+   nothing about it. Never accuse a funded wallet of holding nothing. */
+.gate-step.is-loading .gate-node {
+  border-color: var(--c-rule);
+  color: var(--c-ink-faint);
+}
+.gate-step.is-loading .gate-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}

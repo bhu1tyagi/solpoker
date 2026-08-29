@@ -13,6 +13,41 @@ import { formatUsd, microUsdcToChips } from "@/lib/money";
 import { friendlyError } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
 
+/**
+ * The last balances this browser saw, per wallet.
+ *
+ * Balances used to start every page as unknown and be re-read from scratch,
+ * which is why walking from the lobby to a table and back put a "reading your
+ * wallet" card on the screen each time: nothing downstream could tell "not
+ * known yet" from "not known ever". They are plain numbers and the wallet is
+ * the key, so the previous answer goes up immediately and the fresh read —
+ * plus the account subscriptions below — corrects it within the second.
+ *
+ * Held per wallet on purpose. Switching wallets must never show the previous
+ * one's money, so a miss is simply a miss.
+ */
+const BALANCE_CACHE_KEY = "solpoker:balances";
+
+function readBalanceCache(wallet: string): PlayerState | null {
+  try {
+    const all = JSON.parse(localStorage.getItem(BALANCE_CACHE_KEY) ?? "{}");
+    const hit = all[wallet];
+    return hit && typeof hit.lamports === "number" ? (hit as PlayerState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeBalanceCache(wallet: string, state: PlayerState) {
+  try {
+    const all = JSON.parse(localStorage.getItem(BALANCE_CACHE_KEY) ?? "{}");
+    all[wallet] = state;
+    localStorage.setItem(BALANCE_CACHE_KEY, JSON.stringify(all));
+  } catch {
+    // Storage being unavailable only costs the warm start.
+  }
+}
+
 /** Amount lives at offset 64 of an SPL token account: mint(32) + owner(32). */
 const TOKEN_AMOUNT_OFFSET = 64;
 
@@ -158,26 +193,27 @@ export function usePlayer() {
         const hasUsdcAccount = ataInfo !== null;
         const microUsdc = ataInfo ? readTokenAmount(new Uint8Array(ataInfo.data)) : 0;
 
-        if (!info) {
-          setState({
-            exists: false,
-            chips: 0,
-            handsPlayed: 0,
-            microUsdc,
-            hasUsdcAccount,
-            lamports,
-          });
-          return;
-        }
-        const p = decodePlayer(new Uint8Array(info.data));
-        setState({
-          exists: true,
-          chips: p.chips,
-          handsPlayed: p.handsPlayed,
-          microUsdc,
-          hasUsdcAccount,
-          lamports,
-        });
+        const fresh: PlayerState = info
+          ? {
+              exists: true,
+              ...(() => {
+                const p = decodePlayer(new Uint8Array(info.data));
+                return { chips: p.chips, handsPlayed: p.handsPlayed };
+              })(),
+              microUsdc,
+              hasUsdcAccount,
+              lamports,
+            }
+          : {
+              exists: false,
+              chips: 0,
+              handsPlayed: 0,
+              microUsdc,
+              hasUsdcAccount,
+              lamports,
+            };
+        setState(fresh);
+        writeBalanceCache(publicKey.toBase58(), fresh);
         return;
       } catch {
         // A failed read is not "no account". Wait out the weather and try
@@ -185,6 +221,17 @@ export function usePlayer() {
         await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
       }
     }
+  }, [publicKey]);
+
+  // Warm start: whatever this wallet last held, up before the first read even
+  // begins, so nothing downstream has to sit in an "unknown" state.
+  useEffect(() => {
+    if (!publicKey) {
+      setState(null);
+      return;
+    }
+    const cached = readBalanceCache(publicKey.toBase58());
+    if (cached) setState((cur) => cur ?? cached);
   }, [publicKey]);
 
   useEffect(() => {
