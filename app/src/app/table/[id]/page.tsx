@@ -599,7 +599,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   return (
     <>
       {/* Mounted, not shown. A seat click is the only thing that opens it. */}
-      <LobbyGate onlyWhenAsked />
+      <LobbyGate onlyWhenAsked lockWhenSignedOut />
       {/* The room fills the screen. The table sits in the middle of it and the
           controls live in the four corners, the way a real client is laid out,
           so nothing floats in a panel and nothing competes with the felt. */}

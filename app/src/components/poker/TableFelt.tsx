@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { SPADE_PATH } from "@/components/primitives/Logo";
 import { PlayingCard, CardSlot } from "@/components/primitives/PlayingCard";
 import { ChipStack, Coin, chipsFor } from "@/components/primitives/Chip";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { SeatPod } from "./SeatPod";
+import { toast } from "@/stores/ui-store";
 import { TABLE_GEOMETRY, spring, stagger } from "@/styles/theme";
 import { MAX_SEATS, STREET_NAMES } from "@/lib/constants";
 import { NO_CARD } from "@/lib/engine/cards";
@@ -601,6 +603,35 @@ function StatusLine({
    */
   const stageMoment = !busy && stage !== null;
 
+  /*
+   * Long sentences leave the cloth.
+   *
+   * This was set `nowrap` at 0.3em tracking, so anything past a few words ran
+   * straight off the felt and was clipped by the rail — "next hand has not
+   * started, so try reloading, or pause the table" arrived as "...pause the
+   * TA". Lettering screened onto a table can wrap; it cannot run off the edge.
+   *
+   * Three lengths, three treatments. A short label keeps the wide tracking it
+   * was designed for. A medium one tightens slightly and is allowed a second
+   * line. Anything longer is not upholstery at all — it is a sentence asking
+   * the player to do something, and it goes to a toast where it can be read at
+   * a readable width, leaving a short stand-in on the felt.
+   */
+  const LONG = 56;
+  const MEDIUM = 26;
+  const tooLong = label.length > LONG;
+  const shown = tooLong ? "something needs a look" : label;
+
+  // Fired once per distinct message, not once per render.
+  const announced = useRef<string | null>(null);
+  useEffect(() => {
+    if (tooLong && announced.current !== label) {
+      announced.current = label;
+      toast(label, "info");
+    }
+    if (!tooLong) announced.current = null;
+  }, [tooLong, label]);
+
   return (
     <div
       style={{
@@ -609,11 +640,15 @@ function StatusLine({
         justifyContent: "center",
         minHeight: 18,
         marginTop: 30,
+        // Never wider than the felt it is printed on.
+        maxWidth: "72%",
+        marginLeft: "auto",
+        marginRight: "auto",
       }}
     >
       <AnimatePresence mode="wait">
         <motion.span
-          key={label}
+          key={shown}
           initial={{ opacity: 0, y: 3 }}
           animate={{ opacity: stageMoment ? 0.6 : 0.34, y: 0 }}
           exit={{ opacity: 0, y: -3 }}
@@ -624,12 +659,18 @@ function StatusLine({
             fontWeight: 800,
             color: stageMoment ? "var(--c-green)" : "var(--c-ink)",
             textTransform: "uppercase",
-            letterSpacing: "0.3em",
+            letterSpacing: shown.length > MEDIUM ? "0.16em" : "0.3em",
             filter: "blur(0.5px)",
-            whiteSpace: "nowrap",
+            textAlign: "center",
+            // Two lines at most; a third would reach the board.
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            lineHeight: 1.5,
           }}
         >
-          {label}
+          {shown}
         </motion.span>
       </AnimatePresence>
     </div>

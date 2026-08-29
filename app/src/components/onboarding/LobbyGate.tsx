@@ -52,7 +52,10 @@ const POLL_MS = 4000;
 
 const fmtUsdc = (micro: number) => `$${(micro / 1e6).toFixed(2)}`;
 
-export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean } = {}) {
+export function LobbyGate({
+  onlyWhenAsked = false,
+  lockWhenSignedOut = false,
+}: { onlyWhenAsked?: boolean; lockWhenSignedOut?: boolean } = {}) {
   const reduce = useReducedMotion();
   const toast = useUiStore((s) => s.toast);
   const forced = useUiStore((s) => s.gateOpen);
@@ -111,7 +114,22 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
    * they arrived to watch a game, and greeting them with a form is the same
    * mistake the old refusal page made, in a smaller box.
    */
-  const wanted = onlyWhenAsked ? forced : forced || !dismissed;
+  /*
+   * A wallet that vanishes from under a table is not something to look past.
+   *
+   * Everywhere else the gate is a doorman and dismissing it is deliberately
+   * cheap — a stranger should be able to walk around a poker room. A table is
+   * different: the player may have chips on a seat and a hand in progress, and
+   * every verb on the screen needs a signature they no longer have. Browsing
+   * that is not exploring, it is watching a game they cannot act in while
+   * their money sits on the felt.
+   *
+   * So on the table page a disconnect locks the gate open: no scrim click, no
+   * Escape, no way past it but connecting. It unlocks the moment a wallet is
+   * back.
+   */
+  const locked = lockWhenSignedOut && mounted && !connected;
+  const wanted = locked || (onlyWhenAsked ? forced : forced || !dismissed);
   /*
    * Somebody asked for the gate and the balances have not landed yet.
    *
@@ -136,8 +154,8 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
    * reappearing. Nothing needed, nothing armed.
    */
   useEffect(() => {
-    if (!resolving && active === -1 && forced) dismissGate();
-  }, [resolving, active, forced, dismissGate]);
+    if (!locked && !resolving && active === -1 && forced) dismissGate();
+  }, [locked, resolving, active, forced, dismissGate]);
 
   // Deposits land from outside this tab; poll while a funding step shows.
   useEffect(() => {
@@ -163,10 +181,12 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
   // Escape closes it, like any other dialog.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && dismissGate();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !locked) dismissGate();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, dismissGate]);
+  }, [open, locked, dismissGate]);
 
   if (!open) return null;
 
@@ -180,7 +200,7 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
     // Clicking the ground behind it closes it. The gate is a doorman, not a
     // lock: looking around costs nothing, and the refusal that matters
     // happens at the table.
-    <div className="gate-scrim" onClick={dismissGate}>
+    <div className="gate-scrim" onClick={locked ? undefined : dismissGate}>
       <motion.div
         ref={dialogRef}
         role="dialog"
@@ -196,9 +216,11 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
         <header className="gate-head">
           <h2 id="gate-title">Take a seat</h2>
           <p>
-            {pending
-              ? "Checking where you are up to."
-              : "One thing at a time. This is the only step in your way."}
+            {locked
+              ? "Your wallet disconnected. Reconnect it to keep playing — your chips are safe on the table."
+              : pending
+                ? "Checking where you are up to."
+                : "One thing at a time. This is the only step in your way."}
           </p>
         </header>
 
@@ -398,11 +420,15 @@ export function LobbyGate({ onlyWhenAsked = false }: { onlyWhenAsked?: boolean }
           </div>
         </div>
 
-        <footer className="gate-foot">
-          <button type="button" className="gate-skip" onClick={dismissGate}>
-            Close and look around
-          </button>
-        </footer>
+        {/* An offer to leave, only where leaving is possible. Locked, this
+            read as a way out that quietly did nothing when pressed. */}
+        {!locked && (
+          <footer className="gate-foot">
+            <button type="button" className="gate-skip" onClick={dismissGate}>
+              Close and look around
+            </button>
+          </footer>
+        )}
       </motion.div>
     </div>
   );

@@ -570,10 +570,32 @@ export function useTableActions(args: {
               coreDelegated = true;
             }
           }
-          for (let i = 0; i < MAX_SEATS; i++) {
-            const seat = seatPda(table, i);
-            if (await delegatedAlready(seat)) continue;
-            try {
+          /*
+           * Six seats at once, after one look rather than six.
+           *
+           * This was a sequential loop and each turn of it cost two round
+           * trips — a check, then a send waited out to confirmation — so a
+           * start spent twelve to fifteen seconds delegating seats one after
+           * another while the player watched a spinner. Nothing about them is
+           * ordered: they are six independent accounts in six independent
+           * transactions, and only the core has to land first.
+           *
+           * So the checks collapse into a single batched read, and the sends
+           * go together. Wall time becomes the slowest seat instead of the sum
+           * of all six.
+           */
+          const seatKeys = Array.from({ length: MAX_SEATS }, (_, i) => seatPda(table, i));
+          const seatInfos = await conn.getMultipleAccountsInfo(seatKeys);
+          const pending = seatKeys
+            .map((_, i) => i)
+            .filter((i) => {
+              const info = seatInfos[i];
+              // Owned by someone else already means already delegated.
+              return !info || info.owner.equals(PROGRAM_ID);
+            });
+
+          const settled = await Promise.allSettled(
+            pending.map(async (i) => {
               if (houseFunds) {
                 await houseDelegate("seat", i);
               } else {
@@ -582,12 +604,27 @@ export function useTableActions(args: {
                   `delegate seat ${i}`,
                 );
               }
+              return i;
+            }),
+          );
+
+          // Seats already delegated by this run are recorded whether or not
+          // their send reported success, because the rollback has to know
+          // about every account that actually moved.
+          const failures: unknown[] = [];
+          for (let k = 0; k < settled.length; k++) {
+            const i = pending[k];
+            const r = settled[k];
+            if (r.status === "fulfilled") {
               delegatedNow.push(i);
-            } catch (e) {
-              if (!(await delegatedAlready(seat))) throw e;
+            } else if (await delegatedAlready(seatKeys[i])) {
+              // Landed anyway — a lost confirmation, not a failed delegation.
               delegatedNow.push(i);
+            } else {
+              failures.push(r.reason);
             }
           }
+          if (failures.length) throw failures[0];
         } catch (e) {
           phase("start:rollback");
           console.error("delegation failed, returning the table to Solana:", e);
