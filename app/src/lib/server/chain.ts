@@ -20,6 +20,7 @@
 
 import { Connection, PublicKey } from "@solana/web3.js";
 import idl from "@/lib/idl/solpoker.json";
+import { serverRpc } from "./rpc";
 
 /** Byte offsets into a `Table` account. Mirrors decode.ts, which is the client's copy. */
 const TABLE_ID_AT = 8;
@@ -42,7 +43,7 @@ const TABLE_DISCRIMINATOR = new Uint8Array(
  * this cannot drift from the chain the app is actually playing on.
  */
 function rpc(): string | null {
-  return process.env.NEXT_PUBLIC_BASE_RPC || null;
+  return serverRpc() || null;
 }
 
 export interface TableHands {

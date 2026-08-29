@@ -7,6 +7,7 @@ import { delegateCoreIx, delegateSeatIx } from "@/lib/instructions";
 import { tablePda } from "@/lib/pdas";
 import { MAX_SEATS, PROGRAM_ID } from "@/lib/constants";
 import { getFunder, recordSpend, withinDailyCap } from "@/lib/server/funder";
+import { serverRpc } from "@/lib/server/rpc";
 
 export const runtime = "nodejs";
 
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
   if (!funder) {
     return NextResponse.json({ error: "no funder configured" }, { status: 503 });
   }
-  const url = process.env.NEXT_PUBLIC_BASE_RPC;
+  const url = serverRpc();
   if (!url) return NextResponse.json({ error: "no rpc configured" }, { status: 503 });
 
   let body: { tableId?: string; step?: string; index?: number };
@@ -161,7 +162,7 @@ export async function POST(req: Request) {
 /** Whether the house is funding starts, and what it has left to do it with. */
 export async function GET() {
   const funder = getFunder();
-  const url = process.env.NEXT_PUBLIC_BASE_RPC;
+  const url = serverRpc();
   if (!funder || !url || process.env.FUNDER_DISABLED === "1") {
     return NextResponse.json({ available: false });
   }
