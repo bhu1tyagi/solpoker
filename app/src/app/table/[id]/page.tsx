@@ -47,7 +47,7 @@ import {
   SHUFFLE_REQUESTED,
 } from "@/lib/constants";
 import { formatUsd } from "@/lib/money";
-import { friendlyError, isRaceLost } from "@/lib/net";
+import { friendlyError, isRaceLost, net } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
 import { spring } from "@/styles/theme";
 import { useTableLayout } from "@/hooks/use-viewport";
@@ -170,12 +170,33 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     return () => resetStore();
   }, [table, resetStore]);
 
-  // Config never changes, so read it once.
+  /*
+   * The table's own terms: blinds, and the buy-in this table allows.
+   *
+   * Config never changes, so one good read is enough — but it has to BE a
+   * good read. This used to be a single unguarded `getAccountInfo`, and one
+   * rate-limited response left the stakes unknown for the whole visit, with
+   * invented numbers standing in for them downstream. Retried through the
+   * weather now, like every other read that something depends on.
+   */
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
-      const info = await getBaseConnection().getAccountInfo(config);
-      if (info) setConfig(decodeConfig(new Uint8Array(info.data)));
+      try {
+        const info = await net(
+          () => getBaseConnection().getAccountInfo(config),
+          "table config",
+        );
+        if (info && !cancelled) setConfig(decodeConfig(new Uint8Array(info.data)));
+      } catch (e) {
+        // Nothing invented in its place; the sit modal says it is still
+        // reading rather than offering a buy-in this table may refuse.
+        console.error("could not read the table's stakes:", e);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [config, setConfig]);
 
   useEffect(() => {
@@ -370,9 +391,20 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   // What this player can actually put on the table: the table's limits capped
   // by what they hold. A modal that opens above their balance produces a join
   // that the program refuses.
-  const minBuyIn = tableConfig?.minBuyIn ?? 40;
-  const maxAffordable = Math.min(tableConfig?.maxBuyIn ?? 200, player.state?.chips ?? 0);
-  const canAfford = maxAffordable >= minBuyIn;
+  /*
+   * Never invent a table's terms.
+   *
+   * These used to fall back to 40 and 200 whenever the config had not
+   * arrived, which is not a safe guess in either direction: at a table whose
+   * real minimum is 400, the modal offered to sit for 200 — a buy-in the
+   * program rejects outright — and capped a player holding 659 chips at 200
+   * when the table would have taken all of them. Unknown stakes are now
+   * unknown, and the modal waits instead of guessing.
+   */
+  const stakesKnown = tableConfig !== null;
+  const minBuyIn = tableConfig?.minBuyIn ?? 0;
+  const maxAffordable = Math.min(tableConfig?.maxBuyIn ?? 0, player.state?.chips ?? 0);
+  const canAfford = stakesKnown && maxAffordable >= minBuyIn;
   const affordableBuyIn = Math.max(minBuyIn, maxAffordable);
 
   const seatedCount = seats.filter((s) => s?.occupant).length;
@@ -931,7 +963,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
                 lineHeight: 1.05,
               }}
             >
-              {buyIn.toLocaleString()}
+              {stakesKnown ? buyIn.toLocaleString() : "—"}
             </span>
             <span style={{ fontSize: "var(--t-body-sm-size)", color: "var(--c-ink-muted)" }}>
               chips · <span className="num">{formatUsd(buyIn)}</span>
@@ -984,16 +1016,28 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <TableIcon size={13} />
-            Blinds <span className="num">{tableConfig?.smallBlind ?? "?"}/{tableConfig?.bigBlind ?? "?"}</span>
-            {" · "}
-            buy-in <span className="num">{minBuyIn.toLocaleString()}–{(tableConfig?.maxBuyIn ?? 0).toLocaleString()}</span>
+            {stakesKnown ? (
+              <>
+                Blinds{" "}
+                <span className="num">
+                  {tableConfig!.smallBlind}/{tableConfig!.bigBlind}
+                </span>
+                {" · "}
+                buy-in{" "}
+                <span className="num">
+                  {minBuyIn.toLocaleString()}–{tableConfig!.maxBuyIn.toLocaleString()}
+                </span>
+              </>
+            ) : (
+              "reading this table's stakes…"
+            )}
           </span>
           <span>
             you hold <span className="num">{(player.state?.chips ?? 0).toLocaleString()}</span> chips
           </span>
         </div>
 
-        {!canAfford && (
+        {stakesKnown && !canAfford && (
           <p
             role="status"
             style={{
@@ -1033,7 +1077,12 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             await player.refresh();
           }}
         >
-          Sit down with {Math.min(Math.max(buyIn, minBuyIn), Math.max(minBuyIn, maxAffordable)).toLocaleString()} chips
+          {stakesKnown
+            ? `Sit down with ${Math.min(
+                Math.max(buyIn, minBuyIn),
+                Math.max(minBuyIn, maxAffordable),
+              ).toLocaleString()} chips`
+            : "Reading this table…"}
         </Button>
       </Modal>
     </>
