@@ -23,6 +23,16 @@ export const runtime = "nodejs";
 const PLAYER_DISCRIMINATOR = Uint8Array.from([205, 222, 112, 7, 165, 155, 206, 218]);
 
 let memo: { at: number; payload: unknown } | null = null;
+/**
+ * One scan at a time, however many callers arrive.
+ *
+ * The cache only helps once something has filled it. A cold start with
+ * several readers turning up together had each of them begin their own
+ * sweep — which is precisely the burst the scan limit exists to refuse, so
+ * they all queued behind 429s and the first response took eleven seconds.
+ * Callers now share the sweep that is already running.
+ */
+let inFlight: Promise<unknown> | null = null;
 const MEMO_MS = 10_000;
 
 export async function GET() {
@@ -35,7 +45,15 @@ export async function GET() {
     return NextResponse.json(memo.payload, { headers });
   }
 
-  try {
+  if (inFlight) {
+    try {
+      return NextResponse.json(await inFlight, { headers });
+    } catch {
+      // Their sweep failed; fall through and try our own.
+    }
+  }
+
+  const sweep = (async () => {
     const conn = new Connection(url, "confirmed");
     const accounts = await conn.getProgramAccounts(PROGRAM_ID, {
       filters: [{ memcmp: { offset: 0, bytes: bs58.encode(PLAYER_DISCRIMINATOR) } }],
@@ -62,12 +80,19 @@ export async function GET() {
       .sort((a, b) => b.chips - a.chips || b.handsPlayed - a.handsPlayed);
 
     const payload = { rows };
-    memo = { at: now, payload };
-    return NextResponse.json(payload, { headers });
+    memo = { at: Date.now(), payload };
+    return payload;
+  })();
+
+  inFlight = sweep;
+  try {
+    return NextResponse.json(await sweep, { headers });
   } catch (e) {
     console.error("leaderboard listing failed:", e);
     // The last good board beats an empty one.
     if (memo) return NextResponse.json(memo.payload, { headers });
     return NextResponse.json({ error: "listing failed" }, { status: 502 });
+  } finally {
+    if (inFlight === sweep) inFlight = null;
   }
 }

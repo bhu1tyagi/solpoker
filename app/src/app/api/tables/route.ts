@@ -50,6 +50,16 @@ const createdAt = (tableId: number) => Math.floor(tableId / 1000);
  * readers turn up at once.
  */
 let memo: { at: number; payload: unknown } | null = null;
+/**
+ * One scan at a time, however many callers arrive.
+ *
+ * The cache only helps once something has filled it. A cold start with
+ * several readers turning up together had each of them begin their own
+ * sweep — which is precisely the burst the scan limit exists to refuse, so
+ * they all queued behind 429s and the first response took eleven seconds.
+ * Callers now share the sweep that is already running.
+ */
+let inFlight: Promise<unknown> | null = null;
 const MEMO_MS = 4_000;
 
 /** Solana caps getMultipleAccounts at 100 keys and web3.js does not chunk. */
@@ -74,7 +84,18 @@ export async function GET() {
     });
   }
 
-  try {
+  const headers = { "Cache-Control": "s-maxage=5, stale-while-revalidate=25" };
+
+  // Somebody else's sweep is already running: wait for theirs.
+  if (inFlight) {
+    try {
+      return NextResponse.json(await inFlight, { headers });
+    } catch {
+      // Their sweep failed; fall through and try our own.
+    }
+  }
+
+  const sweep = (async () => {
     const conn = new Connection(url, "confirmed");
     const filters = [
       { memcmp: { offset: 0, bytes: bs58.encode(TABLE_DISCRIMINATOR) } },
@@ -177,20 +198,21 @@ export async function GET() {
       .sort((a, b) => b.table.tableId - a.table.tableId);
 
     const payload = { tables };
-    memo = { at: now, payload };
-    return NextResponse.json(payload, {
-      headers: { "Cache-Control": "s-maxage=5, stale-while-revalidate=25" },
-    });
+    memo = { at: Date.now(), payload };
+    return payload;
+  })();
+
+  inFlight = sweep;
+  try {
+    return NextResponse.json(await sweep, { headers });
   } catch (e) {
     console.error("table listing failed:", e);
     // Serve the last good sweep rather than an empty room: a lobby that
     // briefly shows stale seat counts is worth more than one that claims
     // there are no tables.
-    if (memo) {
-      return NextResponse.json(memo.payload, {
-        headers: { "Cache-Control": "s-maxage=5, stale-while-revalidate=25" },
-      });
-    }
+    if (memo) return NextResponse.json(memo.payload, { headers });
     return NextResponse.json({ error: "listing failed" }, { status: 502 });
+  } finally {
+    if (inFlight === sweep) inFlight = null;
   }
 }
