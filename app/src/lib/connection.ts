@@ -12,13 +12,20 @@
 
 import { Connection } from "@solana/web3.js";
 import { BASE_RPC, TEE_URL, TEE_WS } from "./constants";
+import { loggingFetch } from "./rpc-log";
 
 let baseConnection: Connection | null = null;
 
 /** Custody and anything that must be durable. Confirmed, not processed. */
 export function getBaseConnection(): Connection {
   if (!baseConnection) {
-    baseConnection = new Connection(BASE_RPC, { commitment: "confirmed" });
+    // Every call goes through the log. `fetch` is the seam web3.js already
+    // offers, so this covers Anchor's calls and web3.js's own internal retries
+    // too — nothing has to remember to report itself.
+    baseConnection = new Connection(BASE_RPC, {
+      commitment: "confirmed",
+      fetch: loggingFetch("base"),
+    });
   }
   return baseConnection;
 }
@@ -34,6 +41,7 @@ export function makeErConnection(token: string): Connection {
   return new Connection(`${TEE_URL}?token=${token}`, {
     commitment: "processed",
     wsEndpoint: `${TEE_WS}?token=${token}`,
+    fetch: loggingFetch("rollup"),
     // The default 30s is longer than a player will wait to see their own action.
     confirmTransactionInitialTimeout: 20_000,
   });

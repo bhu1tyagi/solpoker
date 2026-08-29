@@ -37,6 +37,7 @@ import {
 import { configPda, deckPda, tablePda } from "@/lib/pdas";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeConfig } from "@/lib/decode";
+import { readConfigCache, writeConfigCache } from "@/lib/config-cache";
 import { clearSession, ensureSession, loadSession } from "@/lib/session";
 import { bestFive, describe, evaluate } from "@/lib/engine/evaluate";
 import { NO_CARD } from "@/lib/engine/cards";
@@ -173,12 +174,22 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   /*
    * The table's own terms: blinds, and the buy-in this table allows.
    *
-   * Config never changes, so one good read is enough — but it has to BE a
-   * good read. This used to be a single unguarded `getAccountInfo`, and one
-   * rate-limited response left the stakes unknown for the whole visit, with
-   * invented numbers standing in for them downstream. Retried through the
-   * weather now, like every other read that something depends on.
+   * A config is written once at creation and no instruction can ever change
+   * it, so the remembered copy goes up first and the page opens already
+   * knowing its own stakes. This is what "stakes arrive late" actually was:
+   * not the network, but a page asking the chain for something immutable that
+   * it had already been told, and having nowhere to keep the answer.
+   *
+   * The read still runs behind it. It corrects a config written by an older
+   * build, and on a first visit it is the only source — retried through the
+   * weather, because everything downstream treats "no data" as an answer and
+   * a buy-in offered below this table's minimum is one the program rejects.
    */
+  useEffect(() => {
+    const cached = readConfigCache(config.toBase58());
+    if (cached) setConfig(cached);
+  }, [config, setConfig]);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -187,11 +198,19 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           () => getBaseConnection().getAccountInfo(config),
           "table config",
         );
-        if (info && !cancelled) setConfig(decodeConfig(new Uint8Array(info.data)));
+        if (!info) {
+          console.warn(`table config ${config.toBase58()} does not exist on the base layer`);
+          return;
+        }
+        if (cancelled) return;
+        const decoded = decodeConfig(new Uint8Array(info.data));
+        setConfig(decoded);
+        writeConfigCache(config.toBase58(), decoded);
       } catch (e) {
         // Nothing invented in its place; the sit modal says it is still
-        // reading rather than offering a buy-in this table may refuse.
-        console.error("could not read the table's stakes:", e);
+        // reading rather than offering a buy-in this table may refuse. With a
+        // cached copy already showing, this is invisible and harmless.
+        console.error(`could not read table config ${config.toBase58()}:`, e);
       }
     })();
     return () => {
@@ -228,20 +247,13 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   }, [refreshDelegation]);
 
 
-  // Only the creator gets a delete button. The config is immutable, so this is
-  // read once alongside it.
-  const [creator, setCreator] = useState<string | null>(null);
-  useEffect(() => {
-    void getBaseConnection()
-      .getAccountInfo(config)
-      .then((info) => {
-        if (info && info.data.length >= 48) {
-          setCreator(new PublicKey(info.data.subarray(16, 48)).toBase58());
-        }
-      })
-      .catch(() => {});
-  }, [config]);
-  const isCreator = !!me && creator === me;
+  /*
+   * Only the creator gets a delete button — and the config already says who
+   * that is. This used to be a second `getAccountInfo` on the very same
+   * account, parsing bytes 16..48 by hand: two round trips, on every visit,
+   * for one immutable record. The decoder has read that field the whole time.
+   */
+  const isCreator = !!me && tableConfig?.creator === me;
 
   const capture = useHandCapture(tableView?.tableId ?? null, erConnection, table);
 

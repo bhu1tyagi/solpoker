@@ -5,6 +5,7 @@ import { PublicKey, type KeyedAccountInfo } from "@solana/web3.js";
 import bs58 from "bs58";
 import { getBaseConnection } from "@/lib/connection";
 import { decodeTable } from "@/lib/decode";
+import { seedConfigCache } from "@/lib/config-cache";
 import { isTransient, net } from "@/lib/net";
 import {
   ABANDONED_AFTER_SECS,
@@ -287,6 +288,15 @@ export function useTables() {
         configCache.set(t.table.address, t.config);
         outdatedCache.set(t.table.address, t.outdated);
       }
+      /*
+       * And hand the same terms to the table pages.
+       *
+       * This sweep has already read every table's config. A player clicking
+       * into one of these tables should not then wait on a round trip for
+       * blinds this listing is displaying to them right now — that wait was
+       * the whole of "stakes arrive late".
+       */
+      seedConfigCache(visible.map((t) => [t.table.config, t.config]));
 
       setTables(visible);
       writeListCache(visible);
