@@ -32,20 +32,34 @@ export function useLeaderboard() {
 
   const refresh = useCallback(async () => {
     try {
-      /*
-       * One sweep, served to everybody.
-       *
-       * Ranking every player means a full `getProgramAccounts` scan — the
-       * method Helius bills at ten credits and rate-limits separately from
-       * everything else — and running it in every browser made the cost of
-       * the lobby scale with its audience. The scan lives on the server now,
-       * behind a cache; the browser reads the result and the websocket below
-       * keeps it honest.
-       */
-      const res = await fetch("/api/leaderboard", { cache: "no-store" });
-      if (!res.ok) throw new Error(`leaderboard ${res.status}`);
-      const body = (await res.json()) as { rows?: LeaderRow[] };
-      setRows(body.rows ?? []);
+      const conn = getBaseConnection();
+      const accounts = await conn.getProgramAccounts(PROGRAM_ID, {
+        filters: [{ memcmp: { offset: 0, bytes: bs58.encode(PLAYER_DISCRIMINATOR) } }],
+      });
+
+      const decoded = accounts.flatMap((a) => {
+        try {
+          const p = decodePlayer(new Uint8Array(a.account.data));
+          return [{ authority: p.authority, chips: p.chips, handsPlayed: p.handsPlayed }];
+        } catch {
+          // One unreadable account must not empty the whole board.
+          return [];
+        }
+      });
+
+      // Rank only players who actually hold chips. A Player account can never
+      // be closed — the program has no instruction for it, and `sell_chips`
+      // only zeroes the balance — so every wallet that has ever bought in is
+      // on chain permanently. Without this the board fills with accounts
+      // holding nothing, including abandoned test wallets whose keys are gone.
+      //
+      // `handsPlayed` is not used to rescue them, because it is dead: the
+      // program sets it to 0 in `init_player` and never increments it. It
+      // stays in the sort as a tiebreaker so that ranking starts working on
+      // its own if the program ever begins recording it.
+      const ranked = decoded.filter((p) => p.chips > 0);
+      ranked.sort((a, b) => b.chips - a.chips || b.handsPlayed - a.handsPlayed);
+      setRows(ranked);
     } catch {
       // Leave the previous board up rather than blanking it on a failed read.
     } finally {

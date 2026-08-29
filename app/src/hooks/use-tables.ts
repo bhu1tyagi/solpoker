@@ -4,15 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PublicKey, type KeyedAccountInfo } from "@solana/web3.js";
 import bs58 from "bs58";
 import { getBaseConnection } from "@/lib/connection";
-import { decodeTable } from "@/lib/decode";
+import { decodeConfig, decodeTable } from "@/lib/decode";
 import { seedConfigCache } from "@/lib/config-cache";
 import { isTransient, net } from "@/lib/net";
 import {
   ABANDONED_AFTER_SECS,
+  DECK_ACCOUNT_SIZE,
   DELEGATION_PROGRAM,
   PROGRAM_ID,
   TREASURY_AUTHORITY,
 } from "@/lib/constants";
+import { deckPda, holePda } from "@/lib/pdas";
 import type { ConfigView, TableView } from "@/stores/table-store";
 
 /** Anchor account discriminator for Table, from the IDL. */
@@ -149,6 +151,31 @@ const measured = (address: string) =>
   configCache.has(address) && outdatedCache.has(address);
 
 /**
+ * The three creation-time reads for one table, when it first appears over the
+ * websocket rather than in a listing. One call, three keys.
+ */
+async function measureTable(table: TableView): Promise<void> {
+  if (measured(table.address)) return;
+  const conn = getBaseConnection();
+  const addr = new PublicKey(table.address);
+  const [config, hole, deck] = await conn.getMultipleAccountsInfo([
+    new PublicKey(table.config),
+    holePda(addr, 0),
+    deckPda(addr),
+  ]);
+  try {
+    if (config) configCache.set(table.address, decodeConfig(new Uint8Array(config.data)));
+  } catch {
+    // Show the table without its stakes rather than not at all.
+    configCache.set(table.address, null);
+  }
+  outdatedCache.set(
+    table.address,
+    !deck || deck.data.length < DECK_ACCOUNT_SIZE || hole === null,
+  );
+}
+
+/**
  * One row of the lobby, from a table account plus the remembered
  * creation-time facts. Shared by the full listing and the websocket path, so
  * a table looks the same however news of it arrived.
@@ -239,11 +266,6 @@ export function useTables() {
    * an RPC that is already rate-limiting us.
    */
   const inFlight = useRef(false);
-  /**
-   * The socket effect subscribes once and must never re-subscribe, so it
-   * reaches `refresh` through a ref rather than closing over it.
-   */
-  const refreshRef = useRef<((showLoading?: boolean) => Promise<void>) | null>(null);
 
   /**
    * Reload the list.
@@ -256,58 +278,124 @@ export function useTables() {
   const refresh = useCallback(async (showLoading = false) => {
     if (inFlight.current) return;
     inFlight.current = true;
+    const conn = getBaseConnection();
     if (showLoading) setLoading(true);
     try {
       setError(null);
       /*
-       * One sweep, served to everybody.
+       * The whole listing, retried in place through transient failures.
        *
-       * The two `getProgramAccounts` scans this listing needs used to run in
-       * every browser. Helius bills that method at ten times a normal call
-       * and gives it its own much lower ceiling — 25/s on Developer against
-       * 50/s for everything else — so the cost of the lobby scaled with the
-       * number of people reading it, and eight simultaneous arrivals would
-       * exhaust the budget on any plan. The scan lives on the server now,
-       * behind a cache; the browser reads the result.
+       * The first load is a burst — two program sweeps plus three batched
+       * reads, landing alongside everything else the page fetches — and the
+       * public RPC rate-limits bursts. That is weather, not an outage: the
+       * next attempt a second later almost always succeeds. Before this, the
+       * very first blip on a browser with no cached list went straight to
+       * "Could not reach the network", which the six-second poll then quietly
+       * disproved — an error that fixes itself is worse than a skeleton that
+       * takes two seconds longer.
        */
       const list = await net(async () => {
-        const res = await fetch("/api/tables", { cache: "no-store" });
-        if (!res.ok) throw new Error(`table listing ${res.status}`);
-        const body = (await res.json()) as { tables?: LobbyTable[] };
-        return body.tables ?? [];
+        const filters = [{ memcmp: { offset: 0, bytes: bs58.encode(TABLE_DISCRIMINATOR) } }];
+        const [ownAccounts, delegatedAccounts] = await Promise.all([
+          conn.getProgramAccounts(PROGRAM_ID, { filters }),
+          conn.getProgramAccounts(DELEGATION_PROGRAM, { filters }),
+        ]);
+        const accounts = [...ownAccounts, ...delegatedAccounts].filter((a) =>
+          verifiedTableAddress(new Uint8Array(a.account.data))?.equals(a.pubkey),
+        );
+
+        // One unreadable account must not take the lobby down with it. Older
+        // builds of the program left accounts with a different layout, and a
+        // failed listing is indistinguishable from an empty one on screen.
+        const dead = tombstonedIds();
+        const decoded = accounts.flatMap((a) => {
+          try {
+            const table = decodeTable(new Uint8Array(a.account.data), a.pubkey.toBase58());
+            if (dead.has(String(table.tableId))) return [];
+            return [
+              {
+                table,
+                delegated: a.account.owner.equals(DELEGATION_PROGRAM),
+              },
+            ];
+          } catch {
+            return [];
+          }
+        });
+
+        // Solana RPC caps getMultipleAccountsInfo at 100 keys and web3.js does
+        // not chunk for you: key 101 is not a partial answer but an error, which
+        // would blank the whole lobby — including for people already seated —
+        // the day the room grows past a hundred tables. Chunk, preserving order.
+        const batched = async (keys: PublicKey[]) => {
+          const out: Awaited<ReturnType<typeof conn.getMultipleAccountsInfo>> = [];
+          for (let i = 0; i < keys.length; i += 100) {
+            out.push(...(await conn.getMultipleAccountsInfo(keys.slice(i, i + 100))));
+          }
+          return out;
+        };
+
+        // Only the tables this browser has not measured yet. Config, deck and
+        // card slots are set at creation and never change, so on a steady
+        // lobby these three reads happen once and every later poll is just the
+        // two ownership sweeps above.
+        const unseen = decoded.filter((d) => !measured(d.table.address));
+        if (unseen.length) {
+          const [configs, holes, decks] = [
+            await batched(unseen.map((d) => new PublicKey(d.table.config))),
+            await batched(unseen.map((d) => holePda(new PublicKey(d.table.address), 0))),
+            await batched(unseen.map((d) => deckPda(new PublicKey(d.table.address)))),
+          ];
+          unseen.forEach((d, i) => {
+            try {
+              const info = configs[i];
+              // Only a read that actually found the account is remembered; a
+              // missing config retries next poll rather than sticking.
+              if (info) configCache.set(d.table.address, decodeConfig(new Uint8Array(info.data)));
+            } catch {
+              // Show the table without its stakes rather than not at all.
+              configCache.set(d.table.address, null);
+            }
+            const deck = decks[i];
+            // A table whose card slots were never created cannot deal a hand,
+            // and looks completely normal until somebody sits at it and waits.
+            // Seat 0's slot is the cheap probe: creation makes all six in one
+            // transaction, so either they all exist or none do.
+            outdatedCache.set(
+              d.table.address,
+              !deck || deck.data.length < DECK_ACCOUNT_SIZE || holes[i] === null,
+            );
+          });
+        }
+
+        return decoded
+          .map((d) => buildEntry(d.table, d.delegated))
+          .sort((a, b) => b.table.tableId - a.table.tableId);
       }, "table listing", { tries: 3 });
-
-      // Tombstones are this browser's own knowledge — the server cannot know
-      // which tables THIS person just deleted — so they are applied here.
-      const dead = tombstonedIds();
-      const visible = list.filter((t) => !dead.has(String(t.table.tableId)));
-
-      // Remember the creation-time facts, so a websocket update can rebuild a
-      // row without asking anybody anything.
-      for (const t of visible) {
-        configCache.set(t.table.address, t.config);
-        outdatedCache.set(t.table.address, t.outdated);
-      }
       /*
-       * And hand the same terms to the table pages.
+       * Hand the terms to the table pages while we have them.
        *
-       * This sweep has already read every table's config. A player clicking
-       * into one of these tables should not then wait on a round trip for
-       * blinds this listing is displaying to them right now — that wait was
-       * the whole of "stakes arrive late".
+       * This sweep has already read every table's config, and a config cannot
+       * change once written. Somebody clicking into one of these tables should
+       * not then wait a round trip for blinds this listing is showing them.
        */
-      seedConfigCache(visible.map((t) => [t.table.config, t.config]));
+      seedConfigCache(list.map((t) => [t.table.config, t.config]));
 
-      setTables(visible);
-      writeListCache(visible);
+      setTables(list);
+      writeListCache(list);
       hadTables.current = true;
       failures.current = 0;
     } catch (e) {
-      // Loud only when it matters. A transient with a good list showing is
-      // weather, not news — and anything transient has already been retried
-      // three times by `net` before it lands here. Loud is reserved for
-      // failing with nothing to show, and for failures that repeat or are not
-      // network-shaped, which are real and worth a stack trace.
+      // Loud only when it matters. This used to console.error every failure,
+      // and with a poll every six seconds, one network blip put the dev
+      // overlay over a lobby that was fine: the last good list was still on
+      // screen and the next tick replaced it. A transient with a good list
+      // showing is weather, not news — and anything transient has now already
+      // been retried three times by `net` before it even lands here. Loud is
+      // reserved for failing with nothing to show — the case that once read
+      // as an empty lobby to a player who had just created a table — and for
+      // failures that repeat or are not network-shaped, which are real and
+      // worth a stack trace.
       failures.current += 1;
       if (!hadTables.current || failures.current >= 3 || !isTransient(e)) {
         console.error("table listing failed:", e);
@@ -318,8 +406,6 @@ export function useTables() {
       inFlight.current = false;
     }
   }, []);
-
-  refreshRef.current = refresh;
 
   // Warm start: the previous visit's list, up before the first round trip
   // even begins. In an effect rather than the state initialiser on purpose —
@@ -377,10 +463,15 @@ export function useTables() {
       if (tombstonedIds().has(String(table.tableId))) return;
       const delegated = accountInfo.owner.equals(DELEGATION_PROGRAM);
       upsert(buildEntry(table, delegated));
-      // A table born since the last listing has no remembered stakes, and
-      // this client is not going to scan for them: the shared sweep knows,
-      // and one extra call to a cached route costs nothing.
-      if (!measured(table.address)) void refreshRef.current?.();
+      // A table born after the last listing has no measured facts yet. Show
+      // it at once — stakes arrive a beat later — and measure exactly once.
+      if (!measured(table.address)) {
+        void measureTable(table)
+          .then(() => upsert(buildEntry(table, delegated)))
+          .catch(() => {
+            // The next reconcile listing measures it instead.
+          });
+      }
     };
 
     const subs = [
