@@ -31,11 +31,27 @@ let baseConnection: Connection | null = null;
  */
 function smartFetch(): typeof fetch {
   const log = loggingFetch("base");
+  /*
+   * Development takes the proxy straight away.
+   *
+   * The fast main endpoint is domain-locked and Helius will not allowlist
+   * localhost, so a dev browser calling it gets a 403 — but the proxy attaches
+   * the site's own origin, so the same endpoint answers 200 through it. Its 150
+   * TPS is far past anything local testing needs, so there is no per-IP limit
+   * to dance around and no reason for the slow keyless endpoint here.
+   */
+  const dev = process.env.NODE_ENV === "development";
   return async (input, init) => {
+    if (dev) return log("/api/rpc", init);
+    /*
+     * Production reads go direct to the keyless endpoint, which is rate-limited
+     * per IP — a single attacker is capped, and there is no key on it to lift.
+     * A burst past that per-IP limit comes back 429, and only then does the
+     * call fall back to the proxy, where the key lives and the plan's higher
+     * limits apply.
+     */
     const res = await log(input, init);
     if (res.status !== 429) return res;
-    // The direct endpoint is throttling this IP. The proxy has the key and the
-    // plan's own, higher limits; send the identical body there instead.
     return log("/api/rpc", init);
   };
 }
