@@ -564,12 +564,13 @@ input[type="range"]::-moz-range-thumb {
   padding: 44px var(--sp-6) 160px;
   container-type: size;
 }
-/* 2.2:1 landscape, capped at --table-max-w. The cqh coefficient is the aspect
-   ratio itself (2.2), so the table is limited by whichever of the stage's two
-   axes runs out first. Keep it in step with LAYOUT.tableRatio. */
+/* Capped at --table-max-w, and otherwise limited by whichever of the stage's
+   two axes runs out first — the cqh coefficient IS the aspect ratio, so it
+   comes from the same token the table is drawn at rather than being retyped
+   here. The first pair are fallbacks for a browser without container units. */
 .felt-sizer {
-  width: min(1120px, 94vw, 220vh);
-  width: min(var(--table-max-w), 100cqw, 220cqh);
+  width: min(1120px, 94vw, calc(var(--table-ratio) * 92vh));
+  width: min(var(--table-max-w), 100cqw, calc(var(--table-ratio) * 100cqh));
 }
 
 /* The four corners of the room. On a desktop they are corners; on a phone
@@ -654,6 +655,12 @@ input[type="range"]::-moz-range-thumb {
   gap: 8px;
   min-width: 0;
 }
+/* A full --sp-4 between fold and everything else: 8px of gap plus this. The
+   rule is in the design system and it is about money, not rhythm — a fold is
+   the one action with no undo. */
+.bar-verb-fold {
+  margin-right: var(--sp-2);
+}
 /* The slider, drawn from scratch — the native control is invisible on
    near-black. A sunken rail, filled in green up to the thumb (--pct is set
    from the live value), and a thumb that reads as a chip: green core, dark
@@ -730,8 +737,18 @@ input[type="range"]::-moz-range-thumb {
    flattens into one row along the bottom edge, or its full column would stand
    in front of half the table. */
 @media (max-height: 520px) {
+  /* Sideways, height is the whole budget and the felt is measured against it,
+     so every pixel reserved here comes straight off the table. 68/118 was
+     reserving a band and a half for chrome that is one 44px row at the top and
+     one at the bottom: on an 844x390 phone it left the table 408px wide on an
+     844px screen — under half the glass, with the seats scaled down to match.
+     These two numbers clear the same rows and hand the rest back.
+
+     The bottom is the heavier of the two because your own seat hangs about
+     3.5% of the table's width below the felt's box — that is where the hero's
+     stack pill lives — and it has to clear the verbs sitting in the corner. */
   .felt-stage {
-    padding: 68px var(--sp-3) 118px;
+    padding: 46px var(--sp-3) 82px;
   }
   .hud-tl {
     top: 10px;
@@ -757,9 +774,14 @@ input[type="range"]::-moz-range-thumb {
     /* Back to the corner: a sideways phone has no band under the table. */
     left: auto;
     transform: none;
-    align-items: flex-end;
-    width: auto;
-    max-width: min(720px, 82vw);
+    align-items: stretch;
+    /* A definite width, not shrink-to-fit.
+       As `auto` this measured itself from four flex items whose basis is 0, so
+       it settled around 340px and then clipped its own labels — the raise read
+       "RAISE TO 20". 58vw is as wide as the corner can go before it reaches
+       under your own seat, which hangs below the felt just to its left. */
+    width: min(720px, 58vw);
+    max-width: none;
   }
   /* Sideways there is no room for the sizing card at all; the verbs alone
      span the corner, and the raise still carries its figure. */
@@ -772,6 +794,12 @@ input[type="range"]::-moz-range-thumb {
   }
   .bar-verbs {
     flex: 0 1 auto;
+  }
+  /* Smaller lettering on the one screen where the verbs cannot have more
+     room. Still the full 46px tall, so the tap target is untouched. */
+  .bar-verb {
+    font-size: 11px !important;
+    letter-spacing: 0.03em !important;
   }
 }
 
@@ -800,6 +828,19 @@ input[type="range"]::-moz-range-thumb {
   .table-room > .felt-stage {
     position: static;
   }
+  /*
+   * The grid's one column is `auto`, so it is sized by the widest thing in it
+   * and a row that cannot shrink drags the whole room wider than the phone.
+   * That is what put the verbs off the side of the screen: the console's own
+   * minimum was 390px inside a 366px room, so every row — including the felt —
+   * was laid out 24px too wide and the last button fell off the edge.
+   *
+   * A grid item's min-width is `auto` by default, which means "as small as
+   * your content allows"; on a phone the room decides, not the content.
+   */
+  .table-room > * {
+    min-width: 0;
+  }
   .hud-tl {
     grid-row: 1;
     justify-content: space-between;
@@ -819,10 +860,14 @@ input[type="range"]::-moz-range-thumb {
     grid-row: 3;
     padding: 14px 0;
   }
-  /* 10:16, so the coefficient is 0.625. Same rule as the landscape sizer. */
+  /* Same rule as the landscape sizer, against the upright ratio. */
   .felt-sizer {
-    width: min(430px, 92vw, 62.5vh);
-    width: min(430px, 100cqw, 62.5cqh);
+    width: min(430px, 92vw, calc(var(--table-ratio-portrait) * 92vh));
+    width: min(
+      var(--table-portrait-max-w),
+      100cqw,
+      calc(var(--table-ratio-portrait) * 100cqh)
+    );
   }
   .hud-bl {
     display: none;
@@ -843,6 +888,21 @@ input[type="range"]::-moz-range-thumb {
   }
   .bar-sizing {
     flex: none;
+  }
+  /* And the raise takes a line of its own.
+     Four verbs across a 360px screen cannot hold their labels: "RAISE TO
+     1,600" and "CALL (100)" both ran past their buttons, and what got cut was
+     the figure — the player could not read what they were about to commit.
+     Wrapped, the three quiet verbs share the first line and the raise gets the
+     full width of the second, which is also the biggest thumb target on the
+     screen given to the action that needs the most deliberate press. */
+  .bar-verbs {
+    flex-wrap: wrap;
+  }
+  /* !important because the component sets `flex` inline, and a shorthand
+     inline beats a longhand in a stylesheet. Same reason as .m-btn above. */
+  .bar-verb-raise {
+    flex: 1 0 100% !important;
   }
 }
 

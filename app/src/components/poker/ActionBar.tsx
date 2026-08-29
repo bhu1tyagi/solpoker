@@ -160,8 +160,12 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
       </div>
 
       <div className="bar-verbs">
+        {/* Fold keeps its own air. A misplaced fold costs real money and there
+            is no undo, so it is the one verb the thumb must not find by
+            accident — the gap is the guard rail. */}
         <BigButton
           tone="dark"
+          className="bar-verb-fold"
           disabled={busy || !la.canFold}
           onClick={() => onAct("fold", 0)}
           flex={1}
@@ -184,8 +188,13 @@ export function ActionBar({ hand, seat, seatIndex, pot, busy, onAct }: Props) {
         >
           {canCall ? `Call (${la.callAmount.toLocaleString()})` : "Call"}
         </BigButton>
+        {/* On a phone this one takes a line of its own — see .bar-verbs in
+            globals.css. Its label is the longest thing on the bar and the only
+            one that carries a figure the player is about to commit, so it is
+            the last control that may ever be clipped to make room. */}
         <BigButton
           tone="gradient"
+          className="bar-verb-raise"
           disabled={busy || !la.canRaise}
           onClick={() => onAct(raiseTo >= la.maxRaiseTo ? "allin" : "raise", raiseTo)}
           flex={1.4}
@@ -265,12 +274,14 @@ function BigButton({
   disabled,
   onClick,
   flex,
+  className,
   children,
 }: {
   tone: keyof typeof TONES;
   disabled?: boolean;
   onClick: () => void;
   flex: number;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -280,10 +291,15 @@ function BigButton({
       whileTap={disabled ? undefined : { scale: 0.97 }}
       whileHover={disabled ? undefined : { y: -1 }}
       transition={spring.snappy}
-      className="num"
+      className={className ? `num bar-verb ${className}` : "num bar-verb"}
       style={{
         ...TONES[tone],
         flex,
+        // Without this the label's own width is the floor a flex item may
+        // shrink to, and four nowrap verbs simply ran off the side of a
+        // phone: the raise, with the figure on it, was the half that went.
+        minWidth: 0,
+        padding: "0 10px",
         // A hand's height, exactly. The verbs once stretched to whatever
         // stood beside them and turned into billboards.
         height: 46,

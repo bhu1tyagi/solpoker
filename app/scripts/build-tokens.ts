@@ -56,6 +56,12 @@ for (const [k, v] of Object.entries(BREAKPOINTS)) lines.push(`  --bp-${k}: ${v}p
 
 lines.push('\n  /* layout */');
 lines.push(`  --table-max-w: ${LAYOUT.tableMaxW};`);
+lines.push(`  --table-portrait-max-w: ${LAYOUT.tablePortraitMaxW};`);
+// The felt sizes itself against whichever of its two axes runs out first, so
+// the ratio has to be readable from CSS. It used to be typed into globals.css
+// as a bare "220cqh" beside a comment asking whoever changed it to remember.
+lines.push(`  --table-ratio: ${LAYOUT.tableRatio};`);
+lines.push(`  --table-ratio-portrait: ${LAYOUT.tableRatioPortrait};`);
 lines.push(`  --page-max-w: ${LAYOUT.pageMaxW};`);
 lines.push(`  --touch-target: ${LAYOUT.touchTarget}px;`);
 

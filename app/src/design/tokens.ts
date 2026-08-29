@@ -35,6 +35,17 @@ export const COLOR = {
   // whatever happens to be behind the panel, so a card scrolling over the orbs
   // would silently lose text contrast. Contrast is measured against glassSolid.
   glassSolid: '#101013',
+
+  /*
+   * Loading placeholder fill.
+   *
+   * Translucent white rather than a named colour, so it composites over
+   * whatever surface it is drawn on and takes that surface's own hue. A fixed
+   * colour cannot do this: --c-rule (#232B3D) was tried and reads distinctly
+   * blue-purple against the neutral panels it stood on, so every skeleton
+   * looked like it belonged to a different product.
+   */
+  skeleton: 'rgba(255,255,255,0.07)',
   glassFill: 'rgba(255,255,255,0.03)',
   glassBorder: 'rgba(255,255,255,0.08)',
 
@@ -61,6 +72,30 @@ export const COLOR = {
   loss: '#FF5C5C',       //  6.38:1
   warn: '#FFB020',       // 10.56:1
   info: '#4DA3FF',
+
+  /*
+   * Chart series, in fixed order.
+   *
+   * A separate set from the semantic colours above, and not a matter of taste:
+   * these were run through a colour-vision validator against the chart surface
+   * (#101013) and every one of the interface colours FAILED it. The obvious
+   * pick — brand green with `info` blue and `purpleText` — put blue and purple
+   * at ΔE 0.7 under deuteranopia, which is to say identical for roughly one man
+   * in twelve, on a chart about their own money.
+   *
+   * These four pass all five checks: lightness band, chroma floor, adjacent
+   * separation under three kinds of colour blindness (worst pair ΔE 16.8
+   * against a target of 8), normal-vision separation, and 3:1 against the
+   * surface. Slot order is fixed and never cycled — a series keeps its colour
+   * when its neighbours are filtered away.
+   *
+   * Re-validate before changing any of them:
+   *   node scripts/validate_palette.js "<hex,…>" --mode dark --surface "#101013"
+   */
+  series1: '#0DA968',    // green  — the headline measure
+  series2: '#9945FF',    // purple — Solana's own, unmodified
+  series3: '#D9722A',    // orange
+  series4: '#3987E5',    // blue
 
   // Playing card faces. Cards are LIGHT objects on a dark table, like real
   // cards. A dark card on dark felt reads as a hole, not a card. Pure white
@@ -291,13 +326,29 @@ export const mq = {
 
 export const LAYOUT = {
   tableMaxW: '1120px',
+  /**
+   * The upright table's cap. Reached only on a large phone; anything wider
+   * than the phone breakpoint gets the landscape table instead.
+   */
+  tablePortraitMaxW: '430px',
   // Marketing pages run wider than the table. 1120px was tuned for a poker
   // room; on a landing page it left a third of a desktop viewport empty on
   // each side and the content read as a column floating in a void.
   pageMaxW: '1400px',
-  tableRatio: 2.2,          // landscape — nearly the draft's 21:9 length, with
-                            // enough height that the middle of the cloth is a
-                            // playing surface rather than a strip
+  /**
+   * The landscape table's proportions.
+   *
+   * 2.2 was the draft's near-21:9 length, and it was measured wrong: at 1120px
+   * wide it left the cloth 509px tall, and the hero's own bet had nowhere to
+   * sit but on top of the hero's hole cards — the chips physically covered the
+   * rank of the second card. 2.0 buys 51px of height, which is exactly the
+   * band the bet needed, and the table still reads as a long stadium rather
+   * than an oval.
+   *
+   * Mirrored into --table-ratio, which is what .felt-sizer measures the
+   * table's height against. Change it here and both move.
+   */
+  tableRatio: 2.0,
   tableRatioPortrait: 10 / 16,
   seatSize: { phone: 68, laptop: 96 },
   cardSize: { phone: { w: 34, h: 48 }, laptop: { w: 46, h: 64 } },

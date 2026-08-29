@@ -11,6 +11,7 @@
   --c-felt-cloth-deep: #05140d;
   --c-felt-rail: #1a1a1a;
   --c-glass-solid: #101013;
+  --c-skeleton: rgba(255,255,255,0.07);
   --c-glass-fill: rgba(255,255,255,0.03);
   --c-glass-border: rgba(255,255,255,0.08);
   --c-rule: #232B3D;
@@ -26,6 +27,10 @@
   --c-loss: #FF5C5C;
   --c-warn: #FFB020;
   --c-info: #4DA3FF;
+  --c-series1: #0DA968;
+  --c-series2: #9945FF;
+  --c-series3: #D9722A;
+  --c-series4: #3987E5;
   --c-card-face: #FFFFFF;
   --c-card-face-edge: #E4E4E7;
   --c-card-back: #27272A;
@@ -163,6 +168,9 @@
 
   /* layout */
   --table-max-w: 1120px;
+  --table-portrait-max-w: 430px;
+  --table-ratio: 2;
+  --table-ratio-portrait: 0.625;
   --page-max-w: 1400px;
   --touch-target: 44px;
 }

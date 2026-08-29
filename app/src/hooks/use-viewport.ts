@@ -1,7 +1,48 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from "react";
 import { BREAKPOINTS } from "@/design/tokens";
+
+/**
+ * useLayoutEffect, except on the server, where it does not exist and React
+ * says so in the console. Measuring has to happen before paint or the table is
+ * drawn once at the wrong size; on the server there is nothing to measure.
+ */
+const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/**
+ * How wide an element actually ended up, in CSS pixels.
+ *
+ * The felt's width is a CSS expression over two container axes and a cap, so
+ * nothing in JS can predict it — but the table has to be drawn at a known size
+ * and scaled to fit, and the scale is that width divided by the canvas. Hence
+ * a measurement rather than a calculation.
+ *
+ * `null` until it has been measured, so a caller can hold the table back for
+ * the one frame before layout rather than flashing it at the wrong size. The
+ * measurement runs in useLayoutEffect, so that frame is never painted.
+ */
+export function useElementWidth(ref: RefObject<HTMLElement | null>): number | null {
+  const [width, setWidth] = useState<number | null>(null);
+
+  useBeforePaint(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => setWidth(el.getBoundingClientRect().width || null);
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+
+  return width;
+}
 
 /**
  * A media query as React state.

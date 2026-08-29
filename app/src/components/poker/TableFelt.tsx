@@ -2,13 +2,14 @@
 
 import { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { useElementWidth } from "@/hooks/use-viewport";
 import { SPADE_PATH } from "@/components/primitives/Logo";
 import { PlayingCard, CardSlot } from "@/components/primitives/PlayingCard";
 import { ChipStack, Coin, chipsFor } from "@/components/primitives/Chip";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { SeatPod } from "./SeatPod";
 import { toast } from "@/stores/ui-store";
-import { TABLE_GEOMETRY, spring, stagger } from "@/styles/theme";
+import { TABLE_CANVAS, TABLE_GEOMETRY, spring, stagger } from "@/styles/theme";
 import { MAX_SEATS, STREET_NAMES } from "@/lib/constants";
 import { NO_CARD } from "@/lib/engine/cards";
 import type { HandView, SeatView, TableView } from "@/stores/table-store";
@@ -45,7 +46,11 @@ interface Props {
   handNames?: Map<number, string>;
   /** Stand the table on end, for a phone held upright. */
   portrait?: boolean;
-  /** Phone-sized seats and cards, whichever way the table stands. */
+  /**
+   * A hint that this is a phone-sized room, used only for the first frame.
+   * From the frame after, the felt measures itself and decides — see the note
+   * on TABLE_CANVAS.
+   */
   compact?: boolean;
   /** Your seat's TEE permission is confirmed, so your hole cards are secured. */
   secured?: boolean;
@@ -69,7 +74,7 @@ export function TableFelt({
   showdown,
   handNames,
   portrait = false,
-  compact = false,
+  compact: compactHint = false,
   secured,
 }: Props) {
   // Rotate the table so the local player sits at the bottom. Spectators get the
@@ -80,6 +85,33 @@ export function TableFelt({
   // compact table also deals the small board: full-size cards would leave no
   // clear lane between the board and the seats for bets to sit in.
   const geo = TABLE_GEOMETRY[portrait ? "portrait" : "wide"];
+
+  /*
+   * Draw the table once, at its canvas size, and scale the whole thing to
+   * whatever width the room gives it.
+   *
+   * The felt was fluid and everything standing on it was not, so any width
+   * short of 1120px drew furniture too big for the cloth — on a tablet the
+   * seats' hands lay across the board, and on a phone held sideways the table
+   * was unreadable. Scaling as one object is how a real client does it, and it
+   * is what lets one set of seat percentages serve every screen.
+   */
+  const box = useRef<HTMLDivElement>(null);
+  const measured = useElementWidth(box);
+  // Below the compact threshold the furniture switches to its phone sizes on a
+  // smaller canvas, so labels stay proportionally larger than a straight scale
+  // would leave them. Until the first measurement the caller's hint stands in.
+  const compact =
+    portrait ||
+    (measured === null ? compactHint : measured < TABLE_CANVAS.wideCompactBelow);
+  const canvasW = portrait
+    ? TABLE_CANVAS.portrait
+    : compact
+      ? TABLE_CANVAS.wideCompact
+      : TABLE_CANVAS.wide;
+  const canvasH = canvasW / geo.ratio;
+  const scale = measured === null ? 1 : measured / canvasW;
+
   const boardSize = compact ? "sm" : "lg";
 
   const stage = showdown?.stage ?? null;
@@ -160,6 +192,7 @@ export function TableFelt({
 
   return (
     <div
+      ref={box}
       style={{
         position: "relative",
         width: "100%",
@@ -229,7 +262,17 @@ export function TableFelt({
             top: "50%",
             transform: "translate(-50%, -50%)",
             width: "19%",
-            opacity: tableBusy ? 0.22 : 0.09,
+            /*
+             * Printed into the cloth, and it knows when to get out of the way.
+             *
+             * Once a hand is out, the mark is directly behind the board and the
+             * status line, and at 0.09 its ring was reading as a shape between
+             * the community cards rather than as weave. A real table's print is
+             * only ever noticed when nothing is on it. So: nearly gone while
+             * cards are on the felt, its usual quiet self between hands, and up
+             * again only when it is doing its other job and turning.
+             */
+            opacity: tableBusy ? 0.22 : showBoard ? 0.03 : 0.09,
             filter: "blur(1px)",
             color: "var(--c-ink)",
             pointerEvents: "none",
@@ -254,311 +297,335 @@ export function TableFelt({
         </svg>
       </div>
 
-      {/* Board and pot, centred. Absolute centring shrink-wraps to half the
-          felt, so the column takes its content's width or the status line
-          would fold under a small board. */}
+      {/* Everything that stands ON the table, drawn at canvas size and scaled
+          as one object. The cloth and its rail above are percentages and were
+          always fluid; it is the furniture that needed this. Held back for the
+          single frame before the felt has been measured, so the table never
+          appears at the wrong size and then jumps. */}
       <div
         style={{
           position: "absolute",
-          left: "50%",
-          top: geo.boardTop,
-          transform: "translate(-50%, -50%)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: compact ? 10 : 12,
-          width: "max-content",
-          // Above the chair canvas: the pot, board and status are the game,
-          // and no piece of furniture may stand in front of them.
-          zIndex: 8,
+          left: 0,
+          top: 0,
+          width: canvasW,
+          height: canvasH,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+          visibility: measured === null ? "hidden" : undefined,
         }}
       >
-        {/* Settlement zeroes the live pot, so through the reveal and the
-            comparison the figure comes from the snapshot taken just before it.
-            It disappears when the chips themselves fly to the winner. */}
-        <AnimatePresence mode="wait">
-          {displayPot > 0 && stage !== "award" && (
-            <motion.div
-              key="pot"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={spring.snappy}
-              // The pot sits on the cloth, not in a box. It used to be a black
-              // pill — a container floating over a table full of containers —
-              // and the emphasis now comes from the money itself: the pile of
-              // real chips, and a figure set larger than anything else on the
-              // felt with the table's green light behind it. On cloth,
-              // emphasis is weight and light, not chrome.
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: compact ? 8 : 11,
-              }}
-            >
-              <ChipStack
-                amount={displayPot}
-                size={compact ? 14 : 18}
-                showAmount={false}
-              />
-              <span
-                className="num"
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: compact ? 16 : 22,
-                  fontWeight: 800,
-                  color: "var(--c-green)",
-                  textShadow:
-                    "0 0 22px color-mix(in srgb, var(--c-green) 55%, transparent), 0 1px 2px rgba(0,0,0,0.6)",
-                }}
-              >
-                <AnimatedNumber value={displayPot} />
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* The slots only exist while there is a hand to hold. Between hands
-            the mark stands alone on the cloth — five empty frames parked on
-            top of it read as clutter, and while the table is working they sat
-            exactly over the turning ring. A spacer holds their height so the
-            pot and the status line never jump when the board arrives. */}
-        {showBoard ? (
-          <div style={{ display: "flex", gap: compact ? 4 : 6 }}>
-            {board.map((card, i) => (
-              <div key={i}>
-                {card === NO_CARD ? (
-                  <CardSlot size={boardSize} />
-                ) : (
-                  <motion.div
-                    initial={{ opacity: 0, y: -14, rotateY: 180 }}
-                    animate={{ opacity: 1, y: 0, rotateY: 0 }}
-                    transition={{ ...spring.deal, delay: (i % 3) * stagger.board }}
-                  >
-                    <PlayingCard
-                      card={card}
-                      size={boardSize}
-                      highlighted={highlight?.has(card)}
-                    />
-                  </motion.div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          // Taller than the board it stands in for, on purpose: the column is
-          // centre-anchored, so this pushes the status line below the mark's
-          // lower arc instead of across it while the ring turns.
-          <div aria-hidden style={{ height: boardSize === "sm" ? 130 : 210 }} />
-        )}
-
-        <StatusLine stage={stage} busy={overlay} fallback={fallbackLabel} />
-      </div>
-
-      {/* Seats. */}
-      {Array.from({ length: MAX_SEATS }, (_, i) => {
-        const pos = geo.seats[view(i)];
-        const isMe = i === mySeat;
-        const cards = isMe ? myCards() : revealed(i);
-        return (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              left: `${pos.x}%`,
-              top: `${pos.y}%`,
-              transform: "translate(-50%, -50%)",
-              zIndex: hand?.toAct === i && handLive ? 12 : 10,
-            }}
-          >
-            <SeatPod
-              seat={seats[i]}
-              index={i}
-              isMe={isMe}
-              isTurn={hand?.toAct === i && handLive}
-              isButton={table?.button === i}
-              dealtIn={dealt(i)}
-              cards={cards}
-              winning={highlight}
-              dimmed={
-                dimLosers &&
-                winners !== undefined &&
-                winners.size > 0 &&
-                !winners.has(i) &&
-                dealt(i)
-              }
-              deadline={hand?.deadline ?? 0}
-              timeoutSecs={timeoutSecs}
-              handLive={handLive}
-              // Only your own seat carries the indicator: it is a claim about
-              // the cards you can read, not about anybody else's.
-              secured={isMe ? secured : undefined}
-              avatarOn={pos.x > 50 ? "left" : "right"}
-              cardsOn={pos.y < 50 ? "below" : "above"}
-              winner={awardBySeat.has(i)}
-              compact={compact}
-              onSit={onSit}
-            />
-
-            {/* What this hand actually was, named, while the table compares. */}
-            <AnimatePresence>
-              {comparing && handNames?.has(i) && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  style={{
-                    position: "absolute",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    bottom: compact ? -24 : -30,
-                    background: winners?.has(i) ? "var(--c-win)" : "var(--c-felt-edge)",
-                    color: winners?.has(i) ? "var(--c-felt)" : "var(--c-ink)",
-                    borderRadius: "var(--r-lg)",
-                    fontFamily: "var(--font-display)",
-                    fontSize: compact ? 9 : 10,
-                    letterSpacing: "0.04em",
-                    textTransform: "uppercase",
-                    padding: "4px 10px",
-                    whiteSpace: "nowrap",
-                    backdropFilter: "blur(8px)",
-                  }}
-                >
-                  {handNames.get(i)}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        );
-      })}
-
-      {/* Long operations no longer get a card over the felt: the mark's ring
-          turning says the table is working, and the status line under the
-          board says what at. Nothing floats over a table; the table itself
-          tells the story. */}
-
-      {/* Chips each seat has put in on this street, on their way to the pot. */}
-      {stage === null &&
-        Array.from({ length: MAX_SEATS }, (_, i) => {
-          const seat = seats[i];
-          if (!seat || seat.committedStreet <= 0) return null;
-          const pos = geo.bets[view(i)];
-          return (
-            <motion.div
-              key={`bet-${i}`}
-              layoutId={`bet-${i}`}
-              initial={{
-                left: `${geo.seats[view(i)].x}%`,
-                top: `${geo.seats[view(i)].y}%`,
-                opacity: 0,
-              }}
-              animate={{ left: `${pos.x}%`, top: `${pos.y}%`, opacity: 1 }}
-              exit={{
-                left: `${geo.pot.x}%`,
-                top: `${geo.pot.y}%`,
-                opacity: 0,
-                scale: 0.6,
-              }}
-              transition={spring.snappy}
-              style={{ position: "absolute", transform: "translate(-50%, -50%)", zIndex: 20 }}
-            >
-              <ChipStack
-                amount={seat.committedStreet}
-                size={compact ? 13 : 18}
-                compact
-                pill
-              />
-            </motion.div>
-          );
-        })}
-
-      {/* The pot going home, chip by chip.
-          A single pile sliding across the felt read as an icon moving; chips
-          leaving the pot one after another and landing on the winner read as
-          money being pushed to them, which is the moment being staged. Each
-          chip fades as it lands — the winner's stack is counting up at the
-          same time, so the chips are absorbed rather than piling on the
-          avatar — and the figure arrives last, after the money. One stream
-          per winner, so a split pot reads as a split. */}
-      <AnimatePresence>
-        {stage === "award" &&
-          (showdown?.awards ?? []).flatMap((award, a) => {
-            const pos = geo.seats[view(award.seat)];
-            const from = { x: geo.pot.x, y: geo.pot.y };
-            const coins = chipsFor(award.amount)
-              .flatMap(({ count, token }) => Array.from({ length: count }, () => token))
-              .slice(0, 10);
-            const perChip = 0.09;
-            return [
-              ...coins.map((token, i) => {
-                // Deterministic scatter, so the stream has a little hand-flung
-                // looseness without a random number changing every render.
-                const dx = ((i * 53 + a * 29) % 17) - 8;
-                const dy = ((i * 31 + a * 41) % 11) - 5;
-                return (
-                  <motion.div
-                    key={`award-${award.seat}-chip-${i}`}
-                    initial={{ left: `${from.x}%`, top: `${from.y}%`, opacity: 0 }}
-                    animate={{
-                      left: `${pos.x}%`,
-                      top: `${pos.y}%`,
-                      opacity: [0, 1, 1, 0],
-                    }}
-                    exit={{ opacity: 0 }}
-                    transition={{
-                      duration: 0.75,
-                      delay: a * 0.2 + i * perChip,
-                      times: [0, 0.2, 0.8, 1],
-                      ease: "easeInOut",
-                    }}
-                    style={{
-                      position: "absolute",
-                      transform: "translate(-50%, -50%)",
-                      zIndex: 30,
-                      pointerEvents: "none",
-                    }}
-                  >
-                    <div style={{ transform: `translate(${dx}px, ${dy}px)` }}>
-                      <Coin size={compact ? 15 : 19} token={token} />
-                    </div>
-                  </motion.div>
-                );
-              }),
+        {/* Board and pot, centred. Absolute centring shrink-wraps to half the
+            felt, so the column takes its content's width or the status line
+            would fold under a small board. */}
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: geo.boardTop,
+            transform: "translate(-50%, -50%)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: compact ? 10 : 12,
+            width: "max-content",
+            // Above the chair canvas: the pot, board and status are the game,
+            // and no piece of furniture may stand in front of them.
+            zIndex: 8,
+          }}
+        >
+          {/* Settlement zeroes the live pot, so through the reveal and the
+              comparison the figure comes from the snapshot taken just before it.
+              It disappears when the chips themselves fly to the winner. */}
+          <AnimatePresence mode="wait">
+            {displayPot > 0 && stage !== "award" && (
               <motion.div
-                key={`award-${award.seat}-sum`}
-                initial={{ left: `${from.x}%`, top: `${from.y}%`, opacity: 0, scale: 0.8 }}
-                animate={{ left: `${pos.x}%`, top: `${pos.y}%`, opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.6 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 150,
-                  damping: 20,
-                  delay: a * 0.2 + coins.length * perChip * 0.6,
-                }}
+                key="pot"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={spring.snappy}
+                // The pot sits on the cloth, not in a box. It used to be a black
+                // pill — a container floating over a table full of containers —
+                // and the emphasis now comes from the money itself: the pile of
+                // real chips, and a figure set larger than anything else on the
+                // felt with the table's green light behind it. On cloth,
+                // emphasis is weight and light, not chrome.
                 style={{
-                  position: "absolute",
-                  transform: "translate(-50%, -50%)",
-                  zIndex: 31,
-                  pointerEvents: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: compact ? 8 : 11,
                 }}
               >
+                <ChipStack
+                  amount={displayPot}
+                  size={compact ? 14 : 18}
+                  showAmount={false}
+                />
                 <span
                   className="num"
                   style={{
                     fontFamily: "var(--font-mono)",
-                    fontSize: compact ? 15 : 19,
+                    fontSize: compact ? 16 : 22,
                     fontWeight: 800,
                     color: "var(--c-green)",
                     textShadow:
-                      "0 0 20px color-mix(in srgb, var(--c-green) 55%, transparent), 0 1px 2px rgba(0,0,0,0.6)",
+                      "0 0 22px color-mix(in srgb, var(--c-green) 55%, transparent), 0 1px 2px rgba(0,0,0,0.6)",
                   }}
                 >
-                  +{award.amount.toLocaleString()}
+                  <AnimatedNumber value={displayPot} />
                 </span>
-              </motion.div>,
-            ];
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* The slots only exist while there is a hand to hold. Between hands
+              the mark stands alone on the cloth — five empty frames parked on
+              top of it read as clutter, and while the table is working they sat
+              exactly over the turning ring. A spacer holds their height so the
+              pot and the status line never jump when the board arrives. */}
+          {showBoard ? (
+            <div style={{ display: "flex", gap: compact ? 4 : 6 }}>
+              {board.map((card, i) => (
+                <div key={i}>
+                  {card === NO_CARD ? (
+                    <CardSlot size={boardSize} />
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0, y: -14, rotateY: 180 }}
+                      animate={{ opacity: 1, y: 0, rotateY: 0 }}
+                      transition={{ ...spring.deal, delay: (i % 3) * stagger.board }}
+                    >
+                      <PlayingCard
+                        card={card}
+                        size={boardSize}
+                        highlighted={highlight?.has(card)}
+                      />
+                    </motion.div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            // Taller than the board it stands in for, on purpose: the column is
+            // centre-anchored, so this pushes the status line below the mark's
+            // lower arc instead of across it while the ring turns.
+            <div aria-hidden style={{ height: boardSize === "sm" ? 130 : 210 }} />
+          )}
+
+          <StatusLine
+            stage={stage}
+            busy={overlay}
+            fallback={fallbackLabel}
+            width={Math.min(460, canvasW * 0.82)}
+            gap={compact ? 16 : 30}
+          />
+        </div>
+
+        {/* Seats. */}
+        {Array.from({ length: MAX_SEATS }, (_, i) => {
+          const pos = geo.seats[view(i)];
+          const isMe = i === mySeat;
+          const cards = isMe ? myCards() : revealed(i);
+          return (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                left: `${pos.x}%`,
+                top: `${pos.y}%`,
+                transform: "translate(-50%, -50%)",
+                zIndex: hand?.toAct === i && handLive ? 12 : 10,
+              }}
+            >
+              <SeatPod
+                seat={seats[i]}
+                index={i}
+                isMe={isMe}
+                isTurn={hand?.toAct === i && handLive}
+                isButton={table?.button === i}
+                dealtIn={dealt(i)}
+                cards={cards}
+                winning={highlight}
+                dimmed={
+                  dimLosers &&
+                  winners !== undefined &&
+                  winners.size > 0 &&
+                  !winners.has(i) &&
+                  dealt(i)
+                }
+                deadline={hand?.deadline ?? 0}
+                timeoutSecs={timeoutSecs}
+                handLive={handLive}
+                // Only your own seat carries the indicator: it is a claim about
+                // the cards you can read, not about anybody else's.
+                secured={isMe ? secured : undefined}
+                avatarOn={pos.x > 50 ? "left" : "right"}
+                cardsOn={pos.y < 50 ? "below" : "above"}
+                winner={awardBySeat.has(i)}
+                compact={compact}
+                onSit={onSit}
+              />
+
+              {/* What this hand actually was, named, while the table compares. */}
+              <AnimatePresence>
+                {comparing && handNames?.has(i) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    style={{
+                      position: "absolute",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      bottom: compact ? -24 : -30,
+                      background: winners?.has(i) ? "var(--c-win)" : "var(--c-felt-edge)",
+                      color: winners?.has(i) ? "var(--c-felt)" : "var(--c-ink)",
+                      borderRadius: "var(--r-lg)",
+                      fontFamily: "var(--font-display)",
+                      fontSize: compact ? 9 : 10,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      padding: "4px 10px",
+                      whiteSpace: "nowrap",
+                      backdropFilter: "blur(8px)",
+                    }}
+                  >
+                    {handNames.get(i)}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+
+        {/* Long operations no longer get a card over the felt: the mark's ring
+            turning says the table is working, and the status line under the
+            board says what at. Nothing floats over a table; the table itself
+            tells the story. */}
+
+        {/* Chips each seat has put in on this street, on their way to the pot. */}
+        {stage === null &&
+          Array.from({ length: MAX_SEATS }, (_, i) => {
+            const seat = seats[i];
+            if (!seat || seat.committedStreet <= 0) return null;
+            const pos = geo.bets[view(i)];
+            return (
+              <motion.div
+                key={`bet-${i}`}
+                layoutId={`bet-${i}`}
+                initial={{
+                  left: `${geo.seats[view(i)].x}%`,
+                  top: `${geo.seats[view(i)].y}%`,
+                  opacity: 0,
+                }}
+                animate={{ left: `${pos.x}%`, top: `${pos.y}%`, opacity: 1 }}
+                exit={{
+                  left: `${geo.pot.x}%`,
+                  top: `${geo.pot.y}%`,
+                  opacity: 0,
+                  scale: 0.6,
+                }}
+                transition={spring.snappy}
+                style={{ position: "absolute", transform: "translate(-50%, -50%)", zIndex: 20 }}
+              >
+                <ChipStack
+                  amount={seat.committedStreet}
+                  size={compact ? 13 : 18}
+                  compact
+                  pill
+                />
+              </motion.div>
+            );
           })}
-      </AnimatePresence>
+
+        {/* The pot going home, chip by chip.
+            A single pile sliding across the felt read as an icon moving; chips
+            leaving the pot one after another and landing on the winner read as
+            money being pushed to them, which is the moment being staged. Each
+            chip fades as it lands — the winner's stack is counting up at the
+            same time, so the chips are absorbed rather than piling on the
+            avatar — and the figure arrives last, after the money. One stream
+            per winner, so a split pot reads as a split. */}
+        <AnimatePresence>
+          {stage === "award" &&
+            (showdown?.awards ?? []).flatMap((award, a) => {
+              const pos = geo.seats[view(award.seat)];
+              const from = { x: geo.pot.x, y: geo.pot.y };
+              const coins = chipsFor(award.amount)
+                .flatMap(({ count, token }) => Array.from({ length: count }, () => token))
+                .slice(0, 10);
+              const perChip = 0.09;
+              return [
+                ...coins.map((token, i) => {
+                  // Deterministic scatter, so the stream has a little hand-flung
+                  // looseness without a random number changing every render.
+                  const dx = ((i * 53 + a * 29) % 17) - 8;
+                  const dy = ((i * 31 + a * 41) % 11) - 5;
+                  return (
+                    <motion.div
+                      key={`award-${award.seat}-chip-${i}`}
+                      initial={{ left: `${from.x}%`, top: `${from.y}%`, opacity: 0 }}
+                      animate={{
+                        left: `${pos.x}%`,
+                        top: `${pos.y}%`,
+                        opacity: [0, 1, 1, 0],
+                      }}
+                      exit={{ opacity: 0 }}
+                      transition={{
+                        duration: 0.75,
+                        delay: a * 0.2 + i * perChip,
+                        times: [0, 0.2, 0.8, 1],
+                        ease: "easeInOut",
+                      }}
+                      style={{
+                        position: "absolute",
+                        transform: "translate(-50%, -50%)",
+                        zIndex: 30,
+                        pointerEvents: "none",
+                      }}
+                    >
+                      <div style={{ transform: `translate(${dx}px, ${dy}px)` }}>
+                        <Coin size={compact ? 15 : 19} token={token} />
+                      </div>
+                    </motion.div>
+                  );
+                }),
+                <motion.div
+                  key={`award-${award.seat}-sum`}
+                  initial={{ left: `${from.x}%`, top: `${from.y}%`, opacity: 0, scale: 0.8 }}
+                  animate={{ left: `${pos.x}%`, top: `${pos.y}%`, opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.6 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 150,
+                    damping: 20,
+                    delay: a * 0.2 + coins.length * perChip * 0.6,
+                  }}
+                  style={{
+                    position: "absolute",
+                    transform: "translate(-50%, -50%)",
+                    zIndex: 31,
+                    pointerEvents: "none",
+                  }}
+                >
+                  <span
+                    className="num"
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: compact ? 15 : 19,
+                      fontWeight: 800,
+                      color: "var(--c-green)",
+                      textShadow:
+                        "0 0 20px color-mix(in srgb, var(--c-green) 55%, transparent), 0 1px 2px rgba(0,0,0,0.6)",
+                    }}
+                  >
+                    +{award.amount.toLocaleString()}
+                  </span>
+                </motion.div>,
+              ];
+            })}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -575,10 +642,16 @@ function StatusLine({
   stage,
   fallback,
   busy,
+  width,
+  gap,
 }: {
   stage: ShowdownStage;
   fallback: string;
   busy?: string;
+  /** How wide the line may run, in canvas pixels. */
+  width: number;
+  /** Clear air between the board and the line, in canvas pixels. */
+  gap: number;
 }) {
   const label =
     busy ??
@@ -639,7 +712,7 @@ function StatusLine({
         alignItems: "center",
         justifyContent: "center",
         minHeight: 18,
-        marginTop: 30,
+        marginTop: gap,
         /*
          * Sized against the felt, not against the board column above it.
          *
@@ -649,9 +722,13 @@ function StatusLine({
          * to the table, so it is measured against the table: wide enough for
          * an ordinary label to stay on one line, and still well inside the
          * rail on the narrowest phone.
+         *
+         * In canvas pixels, not vw. The table is scaled as a whole now, so a
+         * viewport unit in here would be read at the screen's scale and the
+         * felt's at the canvas's — the line would size itself against a
+         * different table from the one it is printed on.
          */
-        width: 460,
-        maxWidth: "82vw",
+        width,
         marginLeft: "auto",
         marginRight: "auto",
       }}

@@ -130,7 +130,17 @@ export function SeatPod({
         style={{
           border: "none",
           background: "none",
-          padding: 0,
+          /*
+           * Invisible room around the plate, so the chair stays a fingertip.
+           *
+           * The felt is scaled as one object, which scales this button with
+           * it: a 40px compact plate on a phone-sized table lands at 34 real
+           * pixels, well under the 44px floor. The padding is drawn from
+           * nothing and costs nothing — the pod is centred as a column, so the
+           * plate does not move — and it keeps the hit area over the floor at
+           * every scale the table is drawn at.
+           */
+          padding: compact ? 12 : 8,
           cursor: onSit ? "pointer" : "default",
           display: "flex",
           flexDirection: labelAbove ? "column-reverse" : "column",
