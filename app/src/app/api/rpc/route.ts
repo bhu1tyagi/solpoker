@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { serverRpc, serverFetch } from "@/lib/server/rpc";
+import { sameOriginish, verifyRpcToken } from "@/lib/server/rpc-token";
 
 export const runtime = "nodejs";
 
@@ -65,6 +66,21 @@ export async function POST(req: Request) {
       { error: "too many requests" },
       { status: 429, headers: { "Retry-After": "10" } },
     );
+  }
+
+  /*
+   * A signed, short-lived ticket, and a browser-set origin hint.
+   *
+   * Neither is unforgeable by a script, and neither is meant to be — see the
+   * note in rpc-token.ts. Together they mean a scraped value stops working
+   * within minutes and cross-site use is refused outright, so the cheap attack
+   * (copy one string, point your own app at it) stops paying.
+   */
+  if (!sameOriginish(req)) {
+    return NextResponse.json({ error: "cross-site" }, { status: 403 });
+  }
+  if (!verifyRpcToken(req.headers.get("x-rpc-token"))) {
+    return NextResponse.json({ error: "bad or expired token" }, { status: 401 });
   }
 
   const body = await req.text();

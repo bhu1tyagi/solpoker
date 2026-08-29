@@ -29,6 +29,47 @@ let baseConnection: Connection | null = null;
  * one; the fallback swaps in our own origin. Everything else about the request
  * — body, headers, method — is passed straight through.
  */
+/**
+ * The proxy ticket, fetched once and reused until it is close to expiring.
+ *
+ * Minting is a round trip, so doing it per call would put the hop back that the
+ * direct path exists to avoid. One ticket covers fifteen minutes; it is renewed
+ * a minute early so a call never arrives holding one that has just died.
+ */
+let ticket: { token: string; until: number } | null = null;
+let minting: Promise<string | null> | null = null;
+
+async function rpcTicket(): Promise<string | null> {
+  const now = Date.now();
+  if (ticket && now < ticket.until) return ticket.token;
+  // Concurrent callers share one mint rather than each asking for their own.
+  if (!minting) {
+    minting = (async () => {
+      try {
+        const res = await fetch("/api/rpc-token", { cache: "no-store" });
+        if (!res.ok) return null;
+        const { token } = (await res.json()) as { token?: string };
+        if (!token) return null;
+        ticket = { token, until: Date.now() + 14 * 60 * 1000 };
+        return token;
+      } catch {
+        return null;
+      } finally {
+        minting = null;
+      }
+    })();
+  }
+  return minting;
+}
+
+/** Send a call to our own proxy, carrying the ticket it requires. */
+async function viaProxy(log: typeof fetch, init?: RequestInit) {
+  const token = await rpcTicket();
+  const headers = new Headers(init?.headers);
+  if (token) headers.set("x-rpc-token", token);
+  return log("/api/rpc", { ...init, headers });
+}
+
 function smartFetch(): typeof fetch {
   const log = loggingFetch("base");
   /*
@@ -42,7 +83,7 @@ function smartFetch(): typeof fetch {
    */
   const dev = process.env.NODE_ENV === "development";
   return async (input, init) => {
-    if (dev) return log("/api/rpc", init);
+    if (dev) return viaProxy(log, init);
     /*
      * Production reads go direct to the keyless endpoint, which is rate-limited
      * per IP — a single attacker is capped, and there is no key on it to lift.
@@ -52,7 +93,7 @@ function smartFetch(): typeof fetch {
      */
     const res = await log(input, init);
     if (res.status !== 429) return res;
-    return log("/api/rpc", init);
+    return viaProxy(log, init);
   };
 }
 
