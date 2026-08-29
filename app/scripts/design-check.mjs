@@ -132,11 +132,11 @@ const browser = await chromium.launch();
     hasTouch: true,
   });
   const page = await ctx.newPage();
-  for (const path of ["/", "/table/1"]) {
+  for (const path of ["/", "/rewards", "/table/1"]) {
     // The table page keeps chain subscriptions open, so networkidle never
     // fires there; wait for the room to actually paint instead.
     await page.goto(`${base}${path}`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector(path === "/" ? "h1" : "[aria-label^='Seat ']");
+    await page.waitForSelector(path === "/table/1" ? "[aria-label^='Seat ']" : "h1");
 
     /*
      * Wait for the emulated viewport to actually settle before measuring.

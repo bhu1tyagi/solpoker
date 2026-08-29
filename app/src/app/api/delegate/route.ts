@@ -4,7 +4,7 @@ import BN from "bn.js";
 import { makeProgram } from "@/lib/anchor";
 import { decodeTable } from "@/lib/decode";
 import { delegateCoreIx, delegateSeatIx } from "@/lib/instructions";
-import { tablePda } from "@/lib/pdas";
+import { seatPda, tablePda } from "@/lib/pdas";
 import { MAX_SEATS, PROGRAM_ID } from "@/lib/constants";
 import { getFunder, recordSpend, withinDailyCap } from "@/lib/server/funder";
 import { serverRpc, serverFetch } from "@/lib/server/rpc";
@@ -86,8 +86,26 @@ export async function POST(req: Request) {
     // is the whole of the griefing case.
     const info = await conn.getAccountInfo(table);
     if (!info) return NextResponse.json({ error: "no such table" }, { status: 404 });
-    if (!info.owner.equals(PROGRAM_ID)) {
-      // Already delegated, or not ours. Either way there is nothing to pay for.
+
+    /*
+     * "Already delegated" is a question about the account being asked for, not
+     * about the table.
+     *
+     * This checked the table for every step — and `delegate_core` is what makes
+     * the table delegation-owned, so once it succeeded every following seat
+     * request saw a table that was no longer ours and returned ok, having done
+     * nothing. Six seats reported success, none moved, and the start went on to
+     * secure hole accounts still sitting on Solana. That is the half-delegated
+     * table this route was supposed to help build, not create: core on the
+     * rollup, seats behind, and a room where nobody can be dealt in.
+     *
+     * So a seat step asks about its own seat, and a delegated table is exactly
+     * what it should expect to find.
+     */
+    const subject =
+      step === "core" ? info : await conn.getAccountInfo(seatPda(table, index as number));
+    if (!subject) return NextResponse.json({ error: "no such account" }, { status: 404 });
+    if (!subject.owner.equals(PROGRAM_ID)) {
       return NextResponse.json({ ok: true, alreadyDelegated: true });
     }
     const view = decodeTable(new Uint8Array(info.data), table.toBase58());
