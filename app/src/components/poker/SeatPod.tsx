@@ -155,10 +155,16 @@ export function SeatPod({
             />
           </svg>
         </span>
-        {/* A verb, not a status: "sit" is the only question an empty seat
-            answers. Spectators and live tables read "open" instead, because
-            for them there is nothing to do. Overlaps the plate's edge the
-            same way a seated player's name pill does. */}
+        {/* An instruction, not a status. "Sit here" is the whole thing an
+            empty seat has to say, and it has to say it without a glossary —
+            "sit · 3" read as a seat number attached to an ambiguous verb, and
+            in poker "sitting out" is a different thing entirely. The seat
+            number lives in the aria-label, where it is useful, rather than on
+            the felt, where position already identifies the chair.
+
+            Spectators and live tables read "open" instead, because for them
+            there is nothing to do. Overlaps the plate's edge the same way a
+            seated player's name pill does. */}
         <span
           className="seat-cta"
           style={{
@@ -168,7 +174,7 @@ export function SeatPod({
             marginBottom: labelAbove ? (compact ? -7 : -10) : 0,
           }}
         >
-          {onSit ? "sit" : "open"} · {index + 1}
+          {onSit ? "sit here" : "open"}
         </span>
       </motion.button>
     );
