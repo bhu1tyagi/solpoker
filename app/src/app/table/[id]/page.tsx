@@ -222,9 +222,28 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
     setMySeat(mySeat);
   }, [mySeat, setMySeat]);
 
-  // Delegation decides whether this is a lobby view or a live game.
+  /*
+   * Delegation decides whether this is a lobby view or a live game.
+   *
+   * This ran every ten seconds with nothing catching it. One failed read —
+   * and a rate-limited response reaches the browser as a bare "Failed to
+   * fetch", because an error response carries no CORS headers — became an
+   * unhandled rejection, which is what put a runtime error over the table and
+   * made the seats unclickable while it sat there. Every other background read
+   * on this page was already wrapped; this one had been missed.
+   *
+   * Two rules now. It is retried, because a blip is not an answer. And a
+   * failure LEAVES THE LAST KNOWN VALUE ALONE: reporting "not delegated"
+   * because a read failed would redraw a live game as an empty lobby, which is
+   * far worse than briefly showing a stale one.
+   */
   const refreshDelegation = useCallback(async () => {
-    setDelegated(await isDelegated(getBaseConnection(), table));
+    try {
+      const on = await net(() => isDelegated(getBaseConnection(), table), "delegation");
+      setDelegated(on);
+    } catch (e) {
+      console.warn(`delegation check failed for ${table.toBase58()}, keeping last known:`, e);
+    }
   }, [table]);
 
   // A table whose deck predates the current program cannot deal. Spot it here

@@ -27,6 +27,26 @@ export const isTransient = (e: unknown) => TRANSIENT.test(String(e));
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * How long to wait before trying again: exponential, with jitter.
+ *
+ * The jitter is the part that matters and the part that was missing. Retries
+ * were spaced 1.5s, 3s, 4.5s — the same delays, to the millisecond, in every
+ * browser. A rate limit refuses several clients at once by definition, so they
+ * would all back off together and then all return together, re-creating the
+ * burst that got them refused and keeping the limit tripped. Spreading the
+ * returns is what breaks that cycle, and it costs nothing.
+ *
+ * Doubling from 400ms rather than climbing by 1.5s: a genuine blip clears in
+ * well under a second, and five linear retries made a reader wait fifteen
+ * seconds to find that out. This reaches the same number of attempts in six.
+ */
+export function backoff(attempt: number): number {
+  const base = Math.min(400 * 2 ** attempt, 8_000);
+  // ±25%, so no two clients come back at the same moment.
+  return Math.round(base * (0.75 + Math.random() * 0.5));
+}
+
 /** The program error name behind a failure, if there is one. */
 export function errorName(e: unknown): string | null {
   const s = String(e);
@@ -164,7 +184,7 @@ export async function net<T>(
     } catch (e) {
       last = e;
       if (!isTransient(e)) throw e;
-      await sleep(1500 * (i + 1));
+      await sleep(backoff(i));
       if (opts.onRetry) {
         try {
           await opts.onRetry();
