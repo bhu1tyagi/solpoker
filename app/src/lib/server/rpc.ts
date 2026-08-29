@@ -30,3 +30,27 @@ import "server-only";
 export function serverRpc(): string | null {
   return process.env.BASE_RPC || process.env.NEXT_PUBLIC_BASE_RPC || null;
 }
+
+/**
+ * The origin this server claims when it calls the RPC.
+ *
+ * A domain allowlist is enforced against the `Origin` header, and a server has
+ * no browser to set one — so a locked key answers a server request with 403,
+ * exactly as it answers a stranger's. That is the one thing standing between
+ * our own backend and the fast, locked endpoint, and it is a header.
+ *
+ * So the server sends its own site's origin. It is not a bypass: the key is
+ * ours, the origin is ours, and anyone else forging the same header still
+ * needs the key. It just means the sweeps and the funder can use the endpoint
+ * that is both restricted and three times quicker, rather than being pushed
+ * onto an unrestricted one to get served at all.
+ */
+const SERVER_ORIGIN = process.env.SITE_ORIGIN || "https://pokerable.fun";
+
+export function serverFetch(): typeof fetch {
+  return (input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("Origin")) headers.set("Origin", SERVER_ORIGIN);
+    return fetch(input, { ...init, headers });
+  };
+}

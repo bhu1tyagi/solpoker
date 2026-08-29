@@ -20,7 +20,7 @@
 
 import { Connection, PublicKey } from "@solana/web3.js";
 import idl from "@/lib/idl/solpoker.json";
-import { serverRpc } from "./rpc";
+import { serverRpc, serverFetch } from "./rpc";
 
 /** Byte offsets into a `Table` account. Mirrors decode.ts, which is the client's copy. */
 const TABLE_ID_AT = 8;
@@ -73,7 +73,7 @@ export async function readChain(): Promise<ChainRead | null> {
   const url = rpc();
   if (!url) return null;
   try {
-    const conn = new Connection(url, "confirmed");
+    const conn = new Connection(url, { commitment: "confirmed", fetch: serverFetch() });
     const tableAccounts = await conn.getProgramAccounts(PROGRAM, {
       commitment: "confirmed",
       // Only Table accounts, and only the prefix carrying the fields read

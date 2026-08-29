@@ -7,7 +7,7 @@ import { delegateCoreIx, delegateSeatIx } from "@/lib/instructions";
 import { tablePda } from "@/lib/pdas";
 import { MAX_SEATS, PROGRAM_ID } from "@/lib/constants";
 import { getFunder, recordSpend, withinDailyCap } from "@/lib/server/funder";
-import { serverRpc } from "@/lib/server/rpc";
+import { serverRpc, serverFetch } from "@/lib/server/rpc";
 
 export const runtime = "nodejs";
 
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const conn = new Connection(url, "confirmed");
+    const conn = new Connection(url, { commitment: "confirmed", fetch: serverFetch() });
     const id = new BN(tableId);
     const table = tablePda(id);
 
@@ -167,7 +167,7 @@ export async function GET() {
     return NextResponse.json({ available: false });
   }
   try {
-    const conn = new Connection(url, "confirmed");
+    const conn = new Connection(url, { commitment: "confirmed", fetch: serverFetch() });
     const lamports = await conn.getBalance(funder.publicKey);
     // One whole start, or the client should ask the player instead of
     // discovering the shortfall halfway through delegating.
