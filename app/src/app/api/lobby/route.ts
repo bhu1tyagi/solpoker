@@ -231,7 +231,24 @@ export async function GET() {
 
   phase("queries");
 
-  const window: "24h" | "all" = Number(all.hands_24h) > 0 ? "24h" : "all";
+  /*
+   * Always all time. These figures are cumulative, and a cumulative figure
+   * that goes down is simply wrong.
+   *
+   * This used to read `hands_24h > 0 ? "24h" : "all"`, meaning to show recent
+   * activity when there was any and fall back to the lifetime total so a quiet
+   * room did not look empty. The effect was the opposite of the intent: while
+   * the room was quiet it showed $12.11 of lifetime volume, and the moment
+   * somebody played their first hand of the day the whole tile set switched to
+   * a 24-hour window and the headline dropped to $4.40 -- four hands' worth.
+   * Playing made the room look smaller, which is the one thing these tiles
+   * must never do. Nothing was lost either time; the window moved underneath
+   * the number.
+   *
+   * Recency is worth showing, but not by quietly redefining "volume" -- it
+   * belongs beside the lifetime figure, not in place of it.
+   */
+  const window: "24h" | "all" = "all";
 
   const names: Record<string, string> = {};
   for (const r of nameRows) names[String(r.table_id)] = r.name as string;
