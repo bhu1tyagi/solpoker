@@ -48,7 +48,7 @@ import {
   SHUFFLE_REQUESTED,
 } from "@/lib/constants";
 import { formatUsd } from "@/lib/money";
-import { friendlyError, isRaceLost, net } from "@/lib/net";
+import { friendlyError, isRaceLost, net, isWrongLayer } from "@/lib/net";
 import { toast } from "@/stores/ui-store";
 import { spring } from "@/styles/theme";
 import { useTableLayout } from "@/hooks/use-viewport";
@@ -501,7 +501,17 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         // the clock ran out and a timeout acted for you, and telling the player
         // their own click was an error reads as a broken table when nothing
         // went wrong. The felt already shows what actually happened.
-        if (!isRaceLost(e)) toast(friendlyError(e), "bad");
+        /*
+         * Nor is being a moment early. A table spends a few seconds with its
+         * accounts split across the two layers while it starts or pauses, and
+         * an action pressed inside that window fails for a reason that has
+         * nothing to do with the player — it is the same non-event the crank
+         * has always swallowed, and it was reaching the screen from here as
+         * "this table is part-way between Solana and the game validator" in
+         * the middle of an otherwise successful start.
+         */
+        if (!isRaceLost(e) && !isWrongLayer(e)) toast(friendlyError(e), "bad");
+        else console.warn("action skipped, table mid-handover or race lost:", e);
         // A failed action shows the truth again at once.
         setPending(null);
       } finally {
@@ -1483,7 +1493,10 @@ function useStatusLine(
   // it to be, and the overlay is already saying so.
   if (chair && !quiescing) {
     return chair === "stuck"
-      ? "this chair still belongs to its last player, so take another seat to be dealt in"
+      // Short on purpose: over the long-message threshold this becomes a
+      // toast, and a routine self-healing wait has no business interrupting
+      // anyone. It says the same thing in a third of the words.
+      ? "this chair is still locked — try another seat"
       : "locking your cards down";
   }
 
