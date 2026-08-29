@@ -16,6 +16,30 @@ import { loggingFetch } from "./rpc-log";
 
 let baseConnection: Connection | null = null;
 
+/**
+ * Read direct, overflow through the proxy.
+ *
+ * The browser talks to the keyless Secure endpoint, which Helius rate-limits
+ * per IP — so a burst past that limit comes back 429, and only then does the
+ * call fall back to `/api/rpc`, where the server holds the real key. Two things
+ * fall out of that: the api-key url is never in the browser, and the steady
+ * state pays no server hop, because the direct path carries it.
+ *
+ * web3.js hands this the endpoint it was configured with, which is the direct
+ * one; the fallback swaps in our own origin. Everything else about the request
+ * — body, headers, method — is passed straight through.
+ */
+function smartFetch(): typeof fetch {
+  const log = loggingFetch("base");
+  return async (input, init) => {
+    const res = await log(input, init);
+    if (res.status !== 429) return res;
+    // The direct endpoint is throttling this IP. The proxy has the key and the
+    // plan's own, higher limits; send the identical body there instead.
+    return log("/api/rpc", init);
+  };
+}
+
 /** Custody and anything that must be durable. Confirmed, not processed. */
 export function getBaseConnection(): Connection {
   if (!baseConnection) {
@@ -24,7 +48,7 @@ export function getBaseConnection(): Connection {
     // too — nothing has to remember to report itself.
     baseConnection = new Connection(BASE_RPC, {
       commitment: "confirmed",
-      fetch: loggingFetch("base"),
+      fetch: smartFetch(),
     });
   }
   return baseConnection;
