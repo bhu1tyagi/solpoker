@@ -8,8 +8,18 @@ import { seatPda, tablePda } from "@/lib/pdas";
 import { MAX_SEATS, PROGRAM_ID } from "@/lib/constants";
 import { getFunder, recordSpend, withinDailyCap } from "@/lib/server/funder";
 import { serverRpc, serverFetch } from "@/lib/server/rpc";
+import { sendSolana } from "@/lib/net";
 
 export const runtime = "nodejs";
+
+/**
+ * Long enough to outlive a blockhash, because that is the only honest deadline.
+ *
+ * A delegation is worth waiting for: it either lands or it provably cannot,
+ * and the wait is what tells the two apart. The send below rebroadcasts for up
+ * to 45 seconds, so the function has to be allowed to sit there for it.
+ */
+export const maxDuration = 60;
 
 /**
  * The house pays the table's rent.
@@ -128,43 +138,24 @@ export async function POST(req: Request) {
         ? await delegateCoreIx(program, id, funder.publicKey)
         : await delegateSeatIx(program, table, index as number, funder.publicKey);
 
-    const tx = new Transaction().add(ix);
-    const bh = await conn.getLatestBlockhash();
-    tx.feePayer = funder.publicKey;
-    tx.recentBlockhash = bh.blockhash;
-    tx.sign(funder);
-
-    const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-
     /*
-     * Confirmed by asking, not by subscribing.
+     * Sent to land, not merely sent.
      *
-     * `confirmTransaction` opens a websocket and waits on `signatureSubscribe`.
-     * On a server that is the wrong shape twice over: it fails outright in this
-     * Node build (`bufferUtil.mask is not a function`) and, worse, it fails by
-     * retrying forever rather than throwing, which wedges the whole route and
-     * every request behind it. Polling is a handful of cheap calls and it
-     * cannot hang: it has a deadline.
+     * This used to sign, broadcast once, and poll for thirty seconds — and on
+     * 2026-08-30 in production that produced a signature that was never
+     * included in any block. No priority fee to survive a leader's queue, and
+     * no rebroadcast, so a single dropped packet is the whole start. `sendSolana`
+     * bids, keeps sending, and reports the difference between a slow
+     * confirmation and a transaction that can no longer land; the note above it
+     * has the measurements. Confirmation is still polled rather than
+     * subscribed, because `confirmTransaction` opens a websocket that fails in
+     * this Node build and fails by retrying forever, wedging the route.
      */
-    const deadline = Date.now() + 30_000;
-    let err: unknown = null;
-    let landed = false;
-    while (Date.now() < deadline) {
-      const { value } = await conn.getSignatureStatus(sig, { searchTransactionHistory: false });
-      if (value?.confirmationStatus === "confirmed" || value?.confirmationStatus === "finalized") {
-        err = value.err;
-        landed = true;
-        break;
-      }
-      if (value?.err) {
-        err = value.err;
-        landed = true;
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 700));
-    }
-    if (!landed) throw new Error(`${step} did not confirm within 30s (${sig})`);
-    if (err) throw new Error(JSON.stringify(err));
+    const sig = await sendSolana(conn, new Transaction().add(ix), {
+      signers: [funder],
+      feePayer: funder.publicKey,
+      label: step,
+    });
 
     recordSpend(cost);
     if (step === "core") lastDelegatedAt.set(tableId, Date.now());

@@ -12,8 +12,10 @@
  */
 
 import {
+  ComputeBudgetProgram,
   Connection,
   Keypair,
+  PublicKey,
   Transaction,
   VersionedTransaction,
 } from "@solana/web3.js";
@@ -232,6 +234,201 @@ export async function step(
     }
   }
   throw new Error(`${label} failed after ${tries} attempts: ${last}`);
+}
+
+/* ------------------------------------------------------------------ */
+/* Landing a transaction on SOLANA.                                    */
+/*                                                                     */
+/* The rollup is a private validator with no fee market and no packet  */
+/* loss, so `sendEr` below can send once and wait. The base layer is a */
+/* public chain, and everything this file did there — one send, no     */
+/* priority fee, no rebroadcast — is the shape of a transaction that   */
+/* mainnet is free to drop on the floor without a trace.               */
+/*                                                                     */
+/* It did exactly that, in production, on 2026-08-30. The house funder */
+/* sent DelegateCore, the RPC returned signature 3dW6zeGq…, and the    */
+/* transaction was never included in any block: null from              */
+/* getSignatureStatuses with searchTransactionHistory, null from       */
+/* getTransaction, on two independent endpoints. The route waited its  */
+/* 30 seconds, reported "core did not confirm", returned 502, and the  */
+/* client correctly rolled a start back that had never begun. Nothing  */
+/* was broken and nothing was lost — the table simply could not start, */
+/* and pressing the button again would have rolled the same dice.      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Compute budget for a base-layer instruction.
+ *
+ * Measured from landed mainnet transactions rather than guessed: DelegateCore
+ * consumed 125,027 and 149,027 units on its two recorded runs, DelegateSeat
+ * between 77,291 and 140,292. 200,000 clears the worst of those with room and
+ * is also what the runtime would have assumed anyway — stating it is what
+ * makes the fee below a known quantity rather than a multiple of a default.
+ */
+const BASE_CU_LIMIT = 200_000;
+
+/**
+ * What we are willing to pay to be scheduled, in micro-lamports per unit.
+ *
+ * Every base-layer transaction this app has ever sent paid 5,000 lamports —
+ * the bare signature fee, with no priority fee at all. That is not free; it is
+ * last in the queue. A leader under load drops from the bottom, and a
+ * zero-priority transaction is the bottom by definition, which is why one can
+ * vanish on a chain whose recent prioritization fees read zero: that statistic
+ * reports what got in, not what was turned away.
+ *
+ * The floor costs 200,000 x 20,000 / 1e6 = 4,000 lamports — call it 0.000004
+ * SOL, against the 0.047 SOL of refundable rent the same transaction parks.
+ * The ceiling exists so a fee spike somewhere else on the chain can never turn
+ * one delegation into a meaningful cost.
+ */
+const MIN_CU_PRICE = 20_000;
+const MAX_CU_PRICE = 250_000;
+
+/**
+ * Ask the chain what the accounts we are about to write are going for.
+ *
+ * Best effort by design: this runs on the path of a player pressing a button,
+ * and a slow or missing answer must cost the send nothing. No answer means the
+ * floor, which is already far above where we were.
+ */
+async function computeUnitPrice(
+  connection: Connection,
+  writable: PublicKey[],
+): Promise<number> {
+  try {
+    const recent = await connection.getRecentPrioritizationFees({
+      lockedWritableAccounts: writable.slice(0, 128),
+    });
+    const fees = recent.map((f) => f.prioritizationFee).sort((a, b) => a - b);
+    if (fees.length === 0) return MIN_CU_PRICE;
+    // The 75th percentile: enough to sit above three quarters of recent
+    // traffic for these accounts without bidding against the outliers.
+    const p75 = fees[Math.min(fees.length - 1, Math.floor(fees.length * 0.75))];
+    return Math.max(MIN_CU_PRICE, Math.min(MAX_CU_PRICE, p75));
+  } catch {
+    return MIN_CU_PRICE;
+  }
+}
+
+/** How often the same signed bytes go back out while we wait. */
+const REBROADCAST_MS = 2_000;
+/** How often we ask whether the blockhash is dead yet. */
+const HEIGHT_CHECK_MS = 5_000;
+
+export interface SolanaSendOptions {
+  /** Extra keypairs that must sign, e.g. the funder or a session key. */
+  signers?: Keypair[];
+  /** Wallet signer, when the transaction needs the actual wallet. */
+  signTransaction?: <T extends Transaction>(tx: T) => Promise<T>;
+  feePayer: PublicKey;
+  label: string;
+  /** Override the measured default when an instruction is known to be heavier. */
+  computeUnits?: number;
+  /** Stop waiting after this long even if the blockhash is still alive. */
+  timeoutMs?: number;
+}
+
+/**
+ * Sign, send, and keep sending until Solana has it or the blockhash is dead.
+ *
+ * Three things this does that a bare `sendRawTransaction` does not:
+ *
+ *   - It bids. See the note on MIN_CU_PRICE.
+ *   - It rebroadcasts. The same signed bytes go out every couple of seconds,
+ *     so a dropped packet costs two seconds instead of the whole start. The
+ *     signature is fixed at signing time, so this cannot double-apply: every
+ *     resend is a duplicate of one transaction, and the chain accepts it once.
+ *   - It knows the difference between "not yet" and "never". Waiting a flat
+ *     thirty seconds cannot tell a slow confirmation from a transaction that
+ *     can no longer land, so both were reported the same way. The blockhash's
+ *     own `lastValidBlockHeight` is the honest deadline, and past it the
+ *     transaction is genuinely dead rather than merely late.
+ *
+ * The transaction is modified in place: the compute budget instructions go on
+ * the front of the one you passed in.
+ */
+export async function sendSolana(
+  connection: Connection,
+  tx: Transaction,
+  opts: SolanaSendOptions,
+): Promise<string> {
+  const writable = tx.instructions
+    .flatMap((ix) => ix.keys)
+    .filter((k) => k.isWritable)
+    .map((k) => k.pubkey);
+
+  const price = await computeUnitPrice(connection, writable);
+  // Prepended, not appended: the runtime reads the compute budget before it
+  // runs anything, and an instruction cannot raise its own limit halfway.
+  tx.instructions.unshift(
+    ComputeBudgetProgram.setComputeUnitLimit({
+      units: opts.computeUnits ?? BASE_CU_LIMIT,
+    }),
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: price }),
+  );
+
+  const { blockhash, lastValidBlockHeight } =
+    await connection.getLatestBlockhash("confirmed");
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = opts.feePayer;
+
+  let signed = tx;
+  if (opts.signTransaction) signed = await opts.signTransaction(tx);
+  if (opts.signers?.length) signed.partialSign(...opts.signers);
+  const raw = signed.serialize();
+
+  // maxRetries 0 on purpose: rebroadcasting is this loop's job, and leaving
+  // the RPC to do it as well means two schedules nobody is watching. One
+  // broadcaster that can be reasoned about beats two that cannot.
+  const send = () =>
+    connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 });
+
+  const sig = await send();
+  const deadline = Date.now() + (opts.timeoutMs ?? 45_000);
+  let lastSend = Date.now();
+  let lastHeightCheck = Date.now();
+  let expired = false;
+
+  for (;;) {
+    const { value } = await connection.getSignatureStatus(sig);
+    if (value?.err) {
+      throw new Error(`${opts.label} failed: ${JSON.stringify(value.err)}`);
+    }
+    if (
+      value?.confirmationStatus === "confirmed" ||
+      value?.confirmationStatus === "finalized"
+    ) {
+      return sig;
+    }
+
+    // Checked after the status read, so a transaction that landed on the very
+    // last valid block is still reported as landed rather than as expired.
+    if (expired) {
+      throw new Error(
+        `${opts.label} was not accepted before its blockhash expired (${sig}) — ` +
+          `the network dropped it, so nothing happened and it is safe to retry`,
+      );
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`${opts.label} did not confirm in time (${sig})`);
+    }
+
+    if (Date.now() - lastSend >= REBROADCAST_MS) {
+      lastSend = Date.now();
+      // A resend that fails is not news; the next one is two seconds away.
+      await send().catch(() => {});
+    }
+    if (Date.now() - lastHeightCheck >= HEIGHT_CHECK_MS) {
+      lastHeightCheck = Date.now();
+      try {
+        expired = (await connection.getBlockHeight("confirmed")) > lastValidBlockHeight;
+      } catch {
+        // Keep waiting on the clock instead.
+      }
+    }
+    await sleep(700);
+  }
 }
 
 export interface SendOptions {

@@ -37,7 +37,7 @@ import {
 } from "@/lib/constants";
 import { useTableStore } from "@/stores/table-store";
 import { handPda, holePda, seatPda } from "@/lib/pdas";
-import { friendlyError, sendEr, sleep } from "@/lib/net";
+import { friendlyError, sendEr, sendSolana, sleep } from "@/lib/net";
 import { tombstoneTable } from "@/hooks/use-tables";
 import {
   SESSION_COST_LAMPORTS,
@@ -488,17 +488,16 @@ export function useTableActions(args: {
             throw new Error((await res.json().catch(() => ({}))).error ?? `house ${step} failed`);
           }
         };
+        // The same send the house route makes, from the browser: a priority
+        // fee so a leader under load does not drop it first, and rebroadcast
+        // until it lands or its blockhash dies. One send at zero priority is
+        // what silently lost a start in production; see the note on sendBase.
         const sendAsSession = async (ix: Awaited<ReturnType<typeof delegateCoreIx>>, label: string) => {
-          const tx = new Transaction().add(ix);
-          const bh = await conn.getLatestBlockhash();
-          tx.feePayer = session.publicKey;
-          tx.recentBlockhash = bh.blockhash;
-          tx.sign(session);
-          const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
-          const conf = await conn.confirmTransaction({ signature: sig, ...bh }, "confirmed");
-          if (conf.value.err) {
-            throw new Error(`${label} failed: ${JSON.stringify(conf.value.err)}`);
-          }
+          await sendSolana(conn, new Transaction().add(ix), {
+            signers: [session],
+            feePayer: session.publicKey,
+            label,
+          });
         };
         const delegatedAlready = async (account: PublicKey) => {
           const info = await conn.getAccountInfo(account);
