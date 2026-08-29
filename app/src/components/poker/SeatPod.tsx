@@ -155,26 +155,32 @@ export function SeatPod({
             />
           </svg>
         </span>
-        {/* An instruction, not a status. "Sit here" is the whole thing an
-            empty seat has to say, and it has to say it without a glossary —
-            "sit · 3" read as a seat number attached to an ambiguous verb, and
-            in poker "sitting out" is a different thing entirely. The seat
-            number lives in the aria-label, where it is useful, rather than on
-            the felt, where position already identifies the chair.
+        {/* One quiet word.
 
-            Spectators and live tables read "open" instead, because for them
-            there is nothing to do. Overlaps the plate's edge the same way a
-            seated player's name pill does. */}
+            An empty seat does not need to be sold. Instructions were tried
+            here — "sit · 3", then "sit here" — and both shouted at a player
+            who is looking at a poker table and can already see which chairs
+            are free. "Open" states the fact and gets out of the way; the
+            seat's own hover, and the pointer, say the rest. Set in the felt's
+            own ink rather than the brand's green, so six free chairs read as
+            a calm room instead of six buttons.
+
+            The seat number lives in the aria-label, where it is useful,
+            rather than on the felt, where position already identifies the
+            chair. */}
         <span
           className="seat-cta"
           style={{
             fontSize: d.nameFont,
             padding: compact ? "2px 9px" : "3px 12px",
-            marginTop: labelAbove ? 0 : compact ? -7 : -10,
-            marginBottom: labelAbove ? (compact ? -7 : -10) : 0,
+            // Clean air, not the pill's old overlap: without a background to
+            // tuck under the plate's edge, a negative margin just lands the
+            // word on the silhouette.
+            marginTop: labelAbove ? 0 : compact ? 4 : 6,
+            marginBottom: labelAbove ? (compact ? 4 : 6) : 0,
           }}
         >
-          {onSit ? "sit here" : "open"}
+          open
         </span>
       </motion.button>
     );

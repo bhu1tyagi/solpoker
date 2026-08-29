@@ -3589,25 +3589,19 @@ input[type="range"]::-moz-range-thumb {
   position: relative;
   z-index: 1;
   font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: 700;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--c-ink-muted);
+  /* The felt's own ink at low opacity, the way the table's mark and status
+     line are printed into the cloth. A word, not a button. */
+  color: color-mix(in srgb, var(--c-ink) 52%, transparent);
   border-radius: var(--r-pill);
-  background: rgba(0, 0, 0, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(6px);
+  background: none;
+  border: none;
   white-space: nowrap;
   transition:
     color 0.2s ease,
-    background 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.seat-open:not(.is-quiet) .seat-cta {
-  color: var(--c-green);
-  border-color: color-mix(in srgb, var(--c-green) 34%, transparent);
+    letter-spacing 0.2s ease;
 }
 
 /* The slow breath, only while the seat is actually offering itself. */
@@ -3632,10 +3626,8 @@ input[type="range"]::-moz-range-thumb {
   opacity: 0.44;
 }
 .seat-open:not(.is-quiet):hover .seat-cta {
-  color: var(--c-felt);
-  background: linear-gradient(135deg, var(--c-purple), var(--c-green));
-  border-color: transparent;
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--c-green) 26%, transparent);
+  color: var(--c-green);
+  letter-spacing: 0.22em;
 }
 
 @media (prefers-reduced-motion: reduce) {
