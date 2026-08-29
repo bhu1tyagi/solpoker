@@ -17,6 +17,18 @@ type Sql = NonNullable<ReturnType<typeof db>>;
 let syncedAt = 0;
 const SYNC_EVERY_MS = 60_000;
 
+/**
+ * The finished payload, briefly remembered, and built only once at a time.
+ *
+ * The other two routes got this and this one did not, which is why it was the
+ * slowest thing on the page by a wide margin: every reader rebuilt it from
+ * scratch, and rebuilding means a chain sweep plus a handful of queries to a
+ * database on the other side of the world.
+ */
+let memo: { at: number; payload: unknown } | null = null;
+let inFlight: Promise<unknown> | null = null;
+const MEMO_MS = 15_000;
+
 async function syncChainHands(s: Sql, now: number) {
   if (now - syncedAt < SYNC_EVERY_MS) return;
   const live = await readChain();
@@ -118,14 +130,56 @@ export async function GET() {
     );
   }
 
+  const headers = { "Cache-Control": "s-maxage=30, stale-while-revalidate=60" };
+  if (memo && Date.now() - memo.at < MEMO_MS) {
+    return NextResponse.json(memo.payload, { headers });
+  }
+  if (inFlight) {
+    try {
+      return NextResponse.json(await inFlight, { headers });
+    } catch {
+      // Their build failed; fall through and try our own.
+    }
+  }
+  const buildStart = Date.now();
+  const build = (async () => {
+  /*
+   * Timed by phase, because "the lobby is slow" was never one thing.
+   *
+   * The database is in us-east-1 and this is not, so every round trip to it
+   * costs about 250ms before it does any work at all, and a cold Neon
+   * connection costs nearer four seconds. Without a breakdown that is
+   * indistinguishable from a slow query or a slow chain read, and guessing
+   * between them wasted real time.
+   */
+  const t0 = Date.now();
+  let mark = t0;
+  const phase = (name: string) => {
+    const now = Date.now();
+    console.log(`[lobby] ${name.padEnd(14)} ${String(now - mark).padStart(6)}ms`);
+    mark = now;
+  };
+
   await ensureSchema(s);
+  phase("schema");
   // Before counting anything, take whatever the chain will tell us. A failure
   // in here must not take the lobby down with it.
   await syncChainHands(s, Date.now()).catch(() => {});
+  phase("chain sync");
 
-  // Both windows in one pass, so the choice between them costs no round trip
-  // and the two can never be read a second apart from each other.
-  const [all] = await s`
+  /*
+   * All four reads at once.
+   *
+   * They do not depend on each other — `window` is derived from the first but
+   * only used afterwards, when the rows are turned into totals — and they were
+   * being awaited one after another. Against a database in us-east-1 that is
+   * four sequential round trips of about 250ms each, which is most of the
+   * time this route took and none of it work. Measured on this connection:
+   * five sequential trivial queries take 1638ms, the same five together take
+   * 262ms.
+   */
+  const [[all], perTable, nameRows, [dealt]] = await Promise.all([
+    s`
     SELECT
       count(*) FILTER (WHERE recent)::int                        AS hands_24h,
       count(pot_chips) FILTER (WHERE recent)::int                AS potted_24h,
@@ -140,13 +194,10 @@ export async function GET() {
     FROM (
       SELECT pot_chips, settled_at > now() - interval '24 hours' AS recent
       FROM hands WHERE cluster = ${CLUSTER_TAG}
-    ) h`;
-
-  const window: "24h" | "all" = Number(all.hands_24h) > 0 ? "24h" : "all";
-
-  // Per table, same shape and same window, so a card and the tiles above it
-  // are always measuring the same stretch of time.
-  const perTable = await s`
+    ) h`,
+    // Per table, same shape and same window, so a card and the tiles above it
+    // are always measuring the same stretch of time.
+    s`
     SELECT
       table_id::text                                             AS table_id,
       count(*) FILTER (WHERE recent)::int                        AS hands_24h,
@@ -165,18 +216,22 @@ export async function GET() {
              settled_at > now() - interval '24 hours' AS recent
       FROM hands WHERE cluster = ${CLUSTER_TAG}
     ) h
-    GROUP BY table_id`;
-
-  const nameRows = await s`SELECT table_id, name FROM table_names`;
+    GROUP BY table_id`,
+    s`SELECT table_id, name FROM table_names`,
 
   // Hands, from the program's own counters rather than from hand reports.
   //
   // This is deliberately not windowed. The counter is a running total with no
   // timestamps behind it, so there is no honest way to ask it about the last
   // 24 hours — the tile says "all time" and means it.
-  const [dealt] = await s`
+    s`
     SELECT coalesce(sum(hands), 0)::bigint AS hands
-    FROM table_hands WHERE cluster = ${CLUSTER_TAG}`;
+    FROM table_hands WHERE cluster = ${CLUSTER_TAG}`,
+  ]);
+
+  phase("queries");
+
+  const window: "24h" | "all" = Number(all.hands_24h) > 0 ? "24h" : "all";
 
   const names: Record<string, string> = {};
   for (const r of nameRows) names[String(r.table_id)] = r.name as string;
@@ -193,8 +248,7 @@ export async function GET() {
     };
   }
 
-  return NextResponse.json(
-    {
+  return {
       names,
       window,
       stored: true,
@@ -211,7 +265,26 @@ export async function GET() {
       // built by inverting the rake moved only when the house got paid, which
       // made "volume" a statement about rake wearing volume's label.
       tables,
-    },
-    { headers: { "Cache-Control": "s-maxage=30, stale-while-revalidate=60" } },
-  );
+    };
+  })().then((payload) => {
+    console.log(`[lobby] TOTAL cold build ${Date.now() - buildStart}ms`);
+    return payload;
+  });
+
+  inFlight = build;
+  try {
+    const payload = await build;
+    memo = { at: Date.now(), payload };
+    return NextResponse.json(payload, { headers });
+  } catch (e) {
+    console.error("lobby stats failed:", e);
+    // The last good numbers beat an empty room.
+    if (memo) return NextResponse.json(memo.payload, { headers });
+    return NextResponse.json(
+      { names: {}, window: "24h", stored: false, ...NOTHING, tables: {} },
+      { headers },
+    );
+  } finally {
+    if (inFlight === build) inFlight = null;
+  }
 }

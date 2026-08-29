@@ -43,10 +43,21 @@ export function db(): Sql | null {
     sql = null;
     return sql;
   }
-  // max: 1 and prepare: false are what make this safe on serverless behind a
-  // connection pooler: one socket per invocation, and no prepared statements
-  // to be orphaned when the pooler hands the connection to someone else.
-  sql = postgres(url, { max: 1, prepare: false });
+  /*
+   * `prepare: false` is the safety-critical half and stays: behind transaction
+   * pooling a prepared statement can be orphaned the moment the pooler hands
+   * the connection to somebody else.
+   *
+   * `max` was 1, which is a different claim and a costly one. It does not
+   * make anything safer behind a pooler — a pooler exists precisely so many
+   * client connections can share few server ones — but it does mean every
+   * concurrent query queues behind a single socket, so a route reading four
+   * independent things pays four round trips no matter how carefully they are
+   * issued together. This database is in us-east-1 and each of those trips
+   * costs about 250ms. Measured: the lobby's four queries take 2170ms through
+   * one connection and 496ms through four.
+   */
+  sql = postgres(url, { max: 4, prepare: false });
   return sql;
 }
 
