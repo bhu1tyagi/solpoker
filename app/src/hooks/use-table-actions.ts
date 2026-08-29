@@ -653,10 +653,22 @@ export function useTableActions(args: {
         // hole — which is what the old check was really after, from the one
         // account it is never allowed to see.
         phase("start:waiting");
+        /*
+         * Including the holes, which is what the next step actually writes to.
+         *
+         * This waited on the table, the hand and the seats — and then secured
+         * the HOLE accounts, which were never checked for. A hole that had not
+         * landed yet failed its secure, the seat was recorded unsecured, and
+         * with both players' chairs in that state the table went live with
+         * everyone sat out and no hand able to start. The comment below has
+         * warned about assuming the rest since the day it was written; the
+         * holes were the part still being assumed.
+         */
         const mustBeThere = [
           table,
           handPda(table),
           ...Array.from({ length: MAX_SEATS }, (_, i) => seatPda(table, i)),
+          ...occupiedSeats.map((i) => holePda(table, i)),
         ];
         let allArrived = false;
         for (let t = 0; t < 40; t++) {
@@ -727,7 +739,13 @@ export function useTableActions(args: {
               await secureHoleIx(erProgram, table, i, session.publicKey),
               `secure seat ${i}`,
             );
-          } catch {
+          } catch (e) {
+            // The reason was being discarded, which made this the one failure
+            // in the start sequence that could not be diagnosed from a report:
+            // the table said two chairs belonged to somebody else and nothing
+            // anywhere said why. It is still not fatal — the others play on —
+            // but it is on the record now.
+            console.error(`could not secure seat ${i}:`, e);
             unsecured.push(i);
           }
         }
