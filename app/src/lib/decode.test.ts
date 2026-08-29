@@ -53,6 +53,11 @@ describe("decoding truncated accounts", () => {
     const cfg = decodeConfig(full);
     expect(cfg).toEqual({
       tableId: 777,
+      // Bytes 16..48, left as zeroes here, which is the system program's
+      // address. The decoder started reading this field when house tables
+      // needed telling apart from a player's own, and this expectation was
+      // never brought along.
+      creator: "11111111111111111111111111111111",
       smallBlind: 25,
       bigBlind: 50,
       minBuyIn: 1000,
