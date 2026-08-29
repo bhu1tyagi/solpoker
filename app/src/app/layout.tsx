@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Archivo, JetBrains_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { COLOR } from "@/design/tokens";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -89,6 +90,21 @@ export default function RootLayout({
           or anything the trust page makes a claim about.
         */}
         {process.env.VERCEL_ENV ? <Analytics /> : null}
+        {/*
+          Speed Insights: real Core Web Vitals from real players, rather than
+          a lab score from a machine sitting next to the server.
+
+          Gated on VERCEL_ENV for the same reason Analytics is — off Vercel the
+          endpoint it posts to does not exist, so it logs a console error, and
+          the design check fails on exactly that.
+
+          It reports the ROUTE, not the URL: /table/[id] rather than
+          /table/6, so one slow room does not read as a hundred slow pages —
+          and a table id never leaves the client attached to a measurement.
+          No CSP change is needed; both the script and the beacon are
+          same-origin under /_vercel, which `'self'` already allows.
+        */}
+        {process.env.VERCEL_ENV ? <SpeedInsights /> : null}
       </body>
     </html>
   );

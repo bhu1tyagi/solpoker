@@ -136,17 +136,27 @@ export function Modal({
 }
 
 /** Loading placeholder that shimmers rather than blinking. */
-export function Skeleton({ width = "100%", height = 16 }: { width?: number | string; height?: number }) {
-  return (
-    <motion.div
-      animate={{ opacity: [0.35, 0.6, 0.35] }}
-      transition={{ repeat: Infinity, duration: 1.6, ease: "easeInOut" }}
-      style={{
-        width,
-        height,
-        borderRadius: "var(--r-sm)",
-        background: "var(--c-felt-edge)",
-      }}
-    />
-  );
+/**
+ * The loading atom.
+ *
+ * CSS rather than a motion loop, and that is a correctness fix rather than a
+ * refactor: the previous version animated opacity with `repeat: Infinity`,
+ * which keeps pulsing under `prefers-reduced-motion` because a JS animation
+ * has no idea the reader asked for stillness. The design rules say float and
+ * pulse loops stop entirely, so the sweep lives in a stylesheet where the
+ * media query can actually switch it off.
+ *
+ * Rarely used alone. A bare grey box is not a skeleton, it is a hole with a
+ * shimmer on it — see Skeletons.tsx for the shapes that mirror real layouts.
+ */
+export function Skeleton({
+  width = "100%",
+  height = 16,
+  radius = "var(--r-sm)",
+}: {
+  width?: number | string;
+  height?: number | string;
+  radius?: string;
+}) {
+  return <div className="skel" style={{ width, height, borderRadius: radius }} />;
 }

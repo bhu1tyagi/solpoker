@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/primitives/Button";
 import { CheckIcon, CopyIcon } from "@/components/primitives/Icons";
 import { shortKey } from "@/components/primitives/Avatar";
-import { formatUsd } from "@/lib/money";
+import { formatSignedUsd, formatUsd } from "@/lib/money";
 import { useUiStore } from "@/stores/ui-store";
 
 /**
@@ -25,10 +25,12 @@ import { useUiStore } from "@/stores/ui-store";
 
 export interface ShareStats {
   wallet: string;
-  wonChips: number;
+  displayName: string | null;
+  /** Profit: what came out of pots, less what went in. May be negative. */
+  netChips: number;
+  handsPlayed: number;
   handsWon: number;
-  wonRank: number;
-  rakeChips: number;
+  biggestPotChips: number;
 }
 
 const W = 1200;
@@ -111,26 +113,38 @@ function paint(canvas: HTMLCanvasElement, stats: ShareStats, origin: string) {
   // face at its largest and nothing competes with it.
   ctx.font = "500 22px Satoshi, system-ui, sans-serif";
   ctx.fillStyle = "#9CA3AF";
-  ctx.fillText("Won from pots", L, 268);
+  ctx.fillText("Profit", L, 268);
 
-  const money = formatUsd(stats.wonChips);
+  /*
+   * A losing card is drawn as readily as a winning one.
+   *
+   * The sign is in the string, so the figure states which it is without
+   * relying on the colour — the card gets posted, screenshotted and
+   * recompressed, and the one thing that must survive all of that is whether
+   * the number is a win or a loss. The glow follows the sign rather than
+   * being decoration: green when there is something to celebrate, and a plain
+   * neutral card when there is not, because a red glow on a loss would be
+   * rubbing it in.
+   */
+  const up = stats.netChips >= 0;
+  const money = formatSignedUsd(stats.netChips);
   ctx.font = "800 108px Archivo, system-ui, sans-serif";
   ctx.letterSpacing = "-0.02em";
-  // A green glow under the figure, the same affirmative signal the product
-  // uses everywhere else for money that came back.
   ctx.save();
-  ctx.shadowColor = "rgba(20,241,149,0.45)";
-  ctx.shadowBlur = 44;
-  ctx.fillStyle = "#FFFFFF";
+  if (up) {
+    ctx.shadowColor = "rgba(20,241,149,0.45)";
+    ctx.shadowBlur = 44;
+  }
+  ctx.fillStyle = up ? "#FFFFFF" : "#FF5C5C";
   ctx.fillText(money, L, 366);
   ctx.restore();
   ctx.letterSpacing = "0px";
 
   // The supporting facts, evenly spaced along the bottom of the card.
   const facts: [string, string][] = [
-    ["Pots won", String(stats.handsWon)],
-    ["Rank", stats.wonRank > 0 ? `#${stats.wonRank}` : "—"],
-    ["Rake paid", formatUsd(stats.rakeChips)],
+    ["Hands", String(stats.handsPlayed)],
+    ["Won", String(stats.handsWon)],
+    ["Biggest pot", formatUsd(stats.biggestPotChips)],
   ];
   // Spread across the full content width rather than bunched at the left
   // margin: three columns in the leftmost third of a 1200px card reads as a
@@ -156,9 +170,21 @@ function paint(canvas: HTMLCanvasElement, stats: ShareStats, origin: string) {
   ctx.lineTo(W - L, 528);
   ctx.stroke();
 
-  ctx.font = "400 19px 'JetBrains Mono', ui-monospace, monospace";
-  ctx.fillStyle = "#A8B2C6";
-  ctx.fillText(shortKey(stats.wallet), L, 562);
+  // The name, when there is one, and the address either way. A card showing
+  // only a chosen name would be a card anyone could make about anyone.
+  if (stats.displayName) {
+    ctx.font = "600 19px Satoshi, system-ui, sans-serif";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillText(stats.displayName, L, 562);
+    const nameWidth = ctx.measureText(stats.displayName).width;
+    ctx.font = "400 17px 'JetBrains Mono', ui-monospace, monospace";
+    ctx.fillStyle = "#9CA3AF";
+    ctx.fillText(shortKey(stats.wallet), L + nameWidth + 16, 562);
+  } else {
+    ctx.font = "400 19px 'JetBrains Mono', ui-monospace, monospace";
+    ctx.fillStyle = "#A8B2C6";
+    ctx.fillText(shortKey(stats.wallet), L, 562);
+  }
 
   ctx.font = "600 19px Satoshi, system-ui, sans-serif";
   ctx.fillStyle = "#B07CFF";
@@ -225,7 +251,7 @@ export function ShareCard({ stats }: { stats: ShareStats }) {
         ref={canvas}
         className="share-card-canvas"
         role="img"
-        aria-label={`Your Pokerable results: ${formatUsd(stats.wonChips)} won from ${stats.handsWon} pots`}
+        aria-label={`Your Pokerable results: ${formatSignedUsd(stats.netChips)} over ${stats.handsPlayed} hands`}
       />
       <div className="share-card-actions">
         <Button variant="quiet" size="md" onClick={copy}>

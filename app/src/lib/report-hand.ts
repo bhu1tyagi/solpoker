@@ -1,16 +1,27 @@
 import type { HandHistory } from "./verifier/verify-shuffle";
 
 /**
- * Who was paid what, when the capture could prove it.
+ * Who played, what they put in, and what they took out.
  *
  * Payouts are net of rake and cover every seat in order, zeros included,
  * because that is the array the program hashed. The wallets beside them are
  * the occupants remembered from while the hand was live.
+ *
+ * `contributed` is what each seat committed, watched while the hand ran
+ * because settlement erases it. It is what makes a loss visible at all: a
+ * payout on its own says who took money out, and profit is the difference
+ * between that and what went in. It also pins the pot exactly, which is what
+ * lets the server derive the rake without guessing.
+ *
+ * `dealtIn` is the seat mask from the hand, so a player who folded and was
+ * paid nothing still gets a row rather than vanishing from their own history.
  */
 export interface HandResults {
   bigBlind: number;
   payouts: number[];
+  contributed: number[];
   wallets: (string | null)[];
+  dealtIn: number;
 }
 
 /**

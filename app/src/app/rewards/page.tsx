@@ -33,12 +33,11 @@ export default function Rewards() {
       <main id="main" className="landing">
         <Orbs />
         <div className="landing-inner">
+          {/* One line, not a paragraph. The hero figure below states the
+              rest faster than a sentence introducing it could. */}
           <header className="rewards-hero">
             <h1 className="hero-title">Rewards</h1>
-            <p>
-              Poker pays the house a rake on every pot that sees a flop. A fifth
-              of it comes back to the people who paid it.
-            </p>
+            <p>A fifth of every rake goes back to the players who paid it.</p>
           </header>
 
           <RewardsClient />

@@ -146,9 +146,10 @@ export async function GET() {
   /*
    * Timed by phase, because "the lobby is slow" was never one thing.
    *
-   * The database is in us-east-1 and this is not, so every round trip to it
-   * costs about 250ms before it does any work at all, and a cold Neon
-   * connection costs nearer four seconds. Without a breakdown that is
+   * The database and the functions are BOTH in us-east-1 (verified with
+   * `vercel inspect`: every lambda builds to [iad1]), so in production a round
+   * trip is a local hop. From a development laptop outside that region it is
+   * about 250ms, which is the case these timings were taken in. Without a breakdown that is
    * indistinguishable from a slow query or a slow chain read, and guessing
    * between them wasted real time.
    */
@@ -172,8 +173,8 @@ export async function GET() {
    *
    * They do not depend on each other — `window` is derived from the first but
    * only used afterwards, when the rows are turned into totals — and they were
-   * being awaited one after another. Against a database in us-east-1 that is
-   * four sequential round trips of about 250ms each, which is most of the
+   * being awaited one after another. From a development machine outside
+   * us-east-1 that is four sequential round trips of about 250ms each, most of the
    * time this route took and none of it work. Measured on this connection:
    * five sequential trivial queries take 1638ms, the same five together take
    * 262ms.

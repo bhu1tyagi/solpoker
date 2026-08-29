@@ -36,6 +36,20 @@ export function formatUsd(chips: number): string {
   });
 }
 
+/**
+ * A profit or a loss, with its sign written out.
+ *
+ * The sign is part of the string rather than a colour applied to it, because
+ * green-versus-red is the one pairing the most common colour blindness cannot
+ * separate — and this is the figure a player most wants to read at a glance.
+ * A true minus sign, not a hyphen: it aligns with the digits in a tabular
+ * face, where a hyphen sits low and narrow.
+ */
+export function formatSignedUsd(chips: number): string {
+  if (chips === 0) return formatUsd(0);
+  return `${chips > 0 ? "+" : "−"}${formatUsd(Math.abs(chips))}`;
+}
+
 /** A stake range, as one string: "$4–$20". */
 export const formatUsdRange = (min: number, max: number) =>
   `${formatUsd(min)}–${formatUsd(max)}`;

@@ -10,7 +10,12 @@ import { Orbs } from "@/components/chrome/Orbs";
 import { SolanaMark } from "@/components/primitives/StackCredit";
 import { LobbyGate } from "@/components/onboarding/LobbyGate";
 import { Button } from "@/components/primitives/Button";
-import { Modal, Skeleton } from "@/components/primitives/Surface";
+import { Modal } from "@/components/primitives/Surface";
+import {
+  BoardSkeleton,
+  Loading,
+  TableCardsSkeleton,
+} from "@/components/primitives/Skeletons";
 import { ChipGlyph } from "@/components/primitives/Chip";
 import { Avatar, shortKey } from "@/components/primitives/Avatar";
 import {
@@ -321,12 +326,12 @@ export default function Lobby() {
 
             <section className="lobby-tables" aria-label="Tables">
               {loading ? (
-                <div className="lobby-cards">
-                  <Skeleton height={190} />
-                  <Skeleton height={190} />
-                  <Skeleton height={190} />
-                  <Skeleton height={190} />
-                </div>
+                // Cards with a title, the two figures a player picks a
+                // table by, and a seat strip — the real card's geometry, so
+                // the grid does not reflow when tables arrive.
+                <Loading label="Loading tables">
+                  <TableCardsSkeleton count={4} />
+                </Loading>
               ) : error ? (
                 <EmptyRow tone="var(--c-loss)">
                   <span>Could not reach the network.</span>
@@ -640,10 +645,10 @@ function Leaderboard({ me }: { me?: string }) {
 
   if (loading && rows.length === 0) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 14 }}>
-        <Skeleton height={44} />
-        <Skeleton height={44} />
-        <Skeleton height={44} />
+      <div style={{ paddingTop: 14 }}>
+        <Loading label="Loading the leaderboard">
+          <BoardSkeleton rows={4} />
+        </Loading>
       </div>
     );
   }

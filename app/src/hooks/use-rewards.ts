@@ -15,19 +15,30 @@ import { useEffect, useState } from "react";
 
 export interface RewardRow {
   wallet: string;
+  /** What they chose to be called, if anything. Never replaces the address. */
+  displayName: string | null;
   chips: number;
   hands: number;
 }
 
 export interface YouRewards {
-  wonChips: number;
-  handsWon: number;
   rakeChips: number;
-  wonRank: number;
   rakeRank: number;
+  /** Profit, and null for a wallet with no hand carrying both halves. */
+  netChips: number | null;
+  netRank: number | null;
   /** Share of the pool in basis points, or null below the eligibility floor. */
   shareBps: number | null;
   eligible: boolean;
+}
+
+/** One day, cumulative: the rake collected and the players' share of it. */
+export interface PoolPoint {
+  at: number;
+  rake: number;
+  pool: number;
+  /** The caller's own rake to date, or null when no wallet was named. */
+  yours: number | null;
 }
 
 export interface Rewards {
@@ -41,6 +52,7 @@ export interface Rewards {
   eligibleRakeChips: number | null;
   winners: RewardRow[];
   contributorsBoard: RewardRow[];
+  series: PoolPoint[];
   you: YouRewards | null;
   /** False only until the first answer arrives, so skeletons know to show. */
   loaded: boolean;
@@ -56,6 +68,7 @@ const EMPTY: Rewards = {
   eligibleRakeChips: null,
   winners: [],
   contributorsBoard: [],
+  series: [],
   you: null,
   loaded: false,
 };
@@ -107,6 +120,7 @@ export function useRewards(wallet: string | null): Rewards {
           eligibleRakeChips: body.eligibleRakeChips ?? null,
           winners: body.winners ?? [],
           contributorsBoard: body.contributorsBoard ?? [],
+          series: body.series ?? [],
           you: body.you ?? null,
           loaded: true,
         };

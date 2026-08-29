@@ -3872,7 +3872,10 @@ input[type="range"]::-moz-range-thumb {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--sp-6);
-  align-items: start;
+  /* Stretched, not content-sized. The two boards rarely hold the same number
+     of rows, and letting them end at different heights left a ragged gap
+     between the columns that read as a layout bug rather than as thin data. */
+  align-items: stretch;
 }
 @media (min-width: 1024px) {
   .rewards-boards {
@@ -3922,14 +3925,29 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .rewards-row {
+  position: relative;
   display: grid;
-  grid-template-columns: 28px 28px minmax(0, 1fr) auto;
+  grid-template-columns: 24px 28px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-3);
   /* 44px is the floor for a touch target at every viewport. */
   min-height: 52px;
-  padding: 0 var(--sp-2);
+  /* Room on the left for the accent bar a highlighted row grows. */
+  padding: 0 var(--sp-2) 0 var(--sp-4);
   border-radius: var(--r-md);
+}
+/* The bar itself. Present on every row and painted only when one of the
+   highlight classes gives it a colour, so a row never changes height or
+   alignment when it becomes first. */
+.rewards-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: var(--r-pill);
+  background: transparent;
 }
 .rewards-rank {
   font-family: var(--font-num);
@@ -3939,14 +3957,27 @@ input[type="range"]::-moz-range-thumb {
   color: var(--c-ink-faint);
   text-align: center;
 }
+/*
+ * Name, tag, address — in that order, and allowed to wrap.
+ *
+ * At 390px the row used to clip: the "You" tag fell off the end and a display
+ * name truncated to a single letter. Wrapping puts the address on a second
+ * line instead, which costs a few pixels of row height and keeps every part of
+ * the identity legible — and the address must stay legible, because a name
+ * shown without one is how a player passes for somebody else.
+ */
 .rewards-wallet {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  flex-wrap: wrap;
+  gap: 2px var(--sp-2);
   min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--t-chain-data-size);
   color: var(--c-ink-muted);
+}
+.rewards-addr {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3968,10 +3999,31 @@ input[type="range"]::-moz-range-thumb {
   color: var(--c-ink-faint);
 }
 
-/* Your own row, wherever it sits. The tag is the cue that survives colour
-   removal; the tint alone would not. */
+/*
+ * Emphasis on a list row is an EDGE, not a halo.
+ *
+ * Both of these used to be a flat wash across the whole row, and first place
+ * also carried `--e-glow-hover`. A 30px glow works on a compact object — a
+ * button, a seat, a card — where the light reads as coming off the thing. On a
+ * row spanning the full width of a panel it has no shape to describe: it
+ * bleeds into the card behind it and smears into the row underneath, so two
+ * highlighted rows in a row produced two competing soft clouds and neither one
+ * read as first.
+ *
+ * What replaces it: a hard 3px bar on the leading edge, with the tint fading
+ * away from that bar rather than flooding the row. The emphasis has an origin
+ * and an edge, it stays inside its own bounds, and it survives at a glance —
+ * which the glow never did.
+ */
 .rewards-row-me {
-  background: color-mix(in srgb, var(--c-purple) 12%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--c-purple) 16%, transparent) 0%,
+    transparent 62%
+  );
+}
+.rewards-row-me::before {
+  background: var(--c-purple);
 }
 .rewards-you-tag {
   flex: none;
@@ -3988,9 +4040,25 @@ input[type="range"]::-moz-range-thumb {
 
 /* First place, and only first place. The rank number is already the second
    cue, so this adds emphasis rather than carrying the meaning alone. */
+/*
+ * First place, and only first place. The rank number and the figure turn green
+ * as well, so the row is still first with colour removed — the bar alone would
+ * be doing it on hue.
+ *
+ * Written after `.rewards-row-me` on purpose: a reader who is also top of the
+ * board gets the green bar, and their "You" pill still marks the row. The two
+ * cues are different in kind — an edge and a label — so they coexist instead
+ * of fighting for the same surface.
+ */
 .rewards-row-top {
-  background: color-mix(in srgb, var(--c-green) 8%, transparent);
-  box-shadow: var(--e-glow-hover);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--c-green) 14%, transparent) 0%,
+    transparent 62%
+  );
+}
+.rewards-row-top::before {
+  background: var(--c-green);
 }
 .rewards-row-top .rewards-rank,
 .rewards-row-top .rewards-row-fig {
@@ -4326,4 +4394,765 @@ input[type="range"]::-moz-range-thumb {
   max-width: 76ch;
   color: var(--c-ink-muted);
   line-height: 1.65;
+}
+
+/* =========================================================================
+   PROFILE
+   ========================================================================= */
+
+/*
+ * The profile reuses the rewards stat and board grammar wholesale — same
+ * cards, same tabular figures, same one-glow-per-region rule — so what is
+ * below is only the identity block and the rename control that has no
+ * equivalent anywhere else in the product.
+ */
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  margin-bottom: var(--sp-12);
+  flex-wrap: wrap;
+}
+.profile-ident {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+.profile-name {
+  margin: 0;
+  font-size: var(--t-display-lg-size);
+  line-height: 1.05;
+  letter-spacing: var(--t-display-lg-tracking);
+  overflow-wrap: anywhere;
+}
+/* The address, always. Mono because it is chain data, and full rather than
+   truncated: this is the one screen where the whole key is the point. */
+.profile-address {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-chain-data-size);
+  color: var(--c-ink-faint);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.profile-address svg {
+  flex: none;
+  color: var(--c-green);
+}
+
+.profile-name-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  width: 100%;
+}
+.profile-name-controls {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.profile-name-input {
+  flex: 1 1 240px;
+  min-width: 0;
+  /* 44px is the touch-target floor at every viewport. */
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--c-felt);
+  border: 1px solid var(--c-rule);
+  color: var(--c-ink);
+  font-family: var(--font-body);
+  font-size: var(--t-body-lg-size);
+}
+.profile-name-input:focus-visible {
+  outline: 2px solid var(--c-green);
+  outline-offset: 2px;
+}
+.profile-name-hint,
+.profile-name-problem {
+  margin: 0;
+  max-width: 60ch;
+  font-size: var(--t-body-sm-size);
+  line-height: 1.5;
+}
+.profile-name-hint {
+  color: var(--c-ink-faint);
+}
+/* A problem is stated in words, not only in red — the sentence carries the
+   meaning and the colour only reinforces it. */
+.profile-name-problem {
+  color: var(--c-loss);
+}
+
+/* A chosen name in a list, always ahead of the address rather than instead
+   of it. */
+.rewards-display-name {
+  font-family: var(--font-body);
+  font-size: var(--t-body-size);
+  font-weight: 600;
+  color: var(--c-ink);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================================
+   CHARTS
+   ========================================================================= */
+
+/*
+ * One chart component, used twice on the profile.
+ *
+ * The emphasis behaviour is the point: every line stays drawn at all times, and
+ * selecting one dulls the others rather than hiding them. A filter that removes
+ * series changes the shape of the chart, so the reader loses the comparison
+ * they were making; dulling keeps the context and moves the attention, which is
+ * the thing they actually asked for.
+ */
+
+.chart {
+  position: relative;
+}
+.chart-svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+  touch-action: pan-y;
+}
+.chart-svg:focus-visible {
+  outline: 2px solid var(--c-green);
+  outline-offset: 4px;
+  border-radius: var(--r-sm);
+}
+
+/* Recessive by design. The grid orients the eye; it never competes with data. */
+.chart-grid {
+  stroke: var(--c-rule);
+  stroke-width: 1;
+  opacity: 0.4;
+}
+/* Zero is not a gridline. On a chart that crosses it, it is the reference
+   every value is read against. */
+.chart-zero {
+  stroke: var(--c-ink-faint);
+  stroke-width: 1;
+  opacity: 0.55;
+  stroke-dasharray: 3 3;
+}
+.chart-crosshair {
+  stroke: var(--c-ink);
+  stroke-width: 1;
+  opacity: 0.28;
+  pointer-events: none;
+}
+.chart-axis-label {
+  fill: var(--c-ink-faint);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-size: 12px;
+  text-anchor: end;
+}
+.chart-axis-x {
+  text-anchor: start;
+}
+
+.chart-line path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity var(--m-base) var(--m-ease), stroke-width var(--m-base) var(--m-ease);
+}
+.chart-line.is-dull {
+  opacity: 0.2;
+}
+.chart-line.is-dull path {
+  stroke-width: 1.5;
+}
+.chart-dot {
+  pointer-events: none;
+  /* A 2px surface ring keeps overlapping points readable where lines cross. */
+  stroke: var(--c-felt-raised);
+  stroke-width: 2;
+}
+
+/* ---------------------------------------------- legend */
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.chart-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  /* 44px is the touch-target floor; the visual chip is smaller than its
+     hit area rather than the other way round. */
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--r-pill);
+  background: transparent;
+  border: 1px solid var(--c-rule);
+  color: var(--c-ink-muted);
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm-size);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--m-fast) var(--m-ease), color var(--m-fast) var(--m-ease);
+}
+.chart-chip:focus-visible {
+  outline: 2px solid var(--c-green);
+  outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .chart-chip:hover {
+    border-color: var(--c-rule-strong);
+    color: var(--c-ink);
+  }
+}
+/* Selection is carried by border, fill and weight together, so it survives
+   with colour removed. */
+.chart-chip.is-on {
+  border-color: var(--c-ink-faint);
+  background: var(--c-felt-edge);
+  color: var(--c-ink);
+}
+.chart-key {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  flex: none;
+}
+
+/* ---------------------------------------------- tooltip */
+
+.chart-tip {
+  position: absolute;
+  top: var(--sp-8);
+  transform: translateX(-50%);
+  min-width: 168px;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--c-glass-solid);
+  border: 1px solid var(--c-glass-border);
+  box-shadow: var(--e-overlay);
+  pointer-events: none;
+  z-index: 2;
+}
+.chart-tip-day {
+  font-size: var(--t-body-sm-size);
+  color: var(--c-ink-faint);
+  margin-bottom: var(--sp-2);
+}
+.chart-tip-row {
+  display: grid;
+  grid-template-columns: 14px auto 1fr;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: 2px 0;
+}
+.chart-tip-key {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+/* The value is the strong element and the name is secondary — the legend's
+   hierarchy inverted, because here the reader already has the series. */
+.chart-tip-val {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-weight: 700;
+  color: var(--c-ink);
+}
+.chart-tip-label {
+  font-size: var(--t-body-sm-size);
+  color: var(--c-ink-muted);
+}
+
+/* ---------------------------------------------- table view */
+
+.chart-table {
+  margin-top: var(--sp-4);
+}
+.chart-table summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--c-ink-faint);
+  font-size: var(--t-body-sm-size);
+  cursor: pointer;
+}
+.chart-table summary:focus-visible {
+  outline: 2px solid var(--c-green);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+/* Wide content scrolls inside its own container; the page never scrolls
+   sideways. */
+.chart-table-scroll {
+  overflow-x: auto;
+  margin-top: var(--sp-3);
+}
+.chart-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--t-body-sm-size);
+}
+.chart-table th,
+.chart-table td {
+  padding: var(--sp-2) var(--sp-3);
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--c-felt-edge);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  color: var(--c-ink-muted);
+}
+.chart-table thead th,
+.chart-table tbody th {
+  text-align: left;
+  color: var(--c-ink-faint);
+  font-weight: 600;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-line path {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------- profile figures */
+
+/*
+ * A figure is a label and a number, and nothing else.
+ *
+ * The earlier version carried an explanatory sentence under every statistic.
+ * Six of those is not a profile, it is an essay with numbers in it, and the
+ * numbers stop being the thing you see. What a figure genuinely cannot say for
+ * itself now lives in the one note beside a chart heading.
+ */
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-8);
+}
+@media (min-width: 768px) {
+  .profile-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .profile-grid-sm {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+.fig {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--r-lg);
+  background-color: var(--c-glass-solid);
+  background-image: linear-gradient(var(--c-glass-fill), var(--c-glass-fill));
+  border: 1px solid var(--c-glass-border);
+}
+.fig-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--c-ink-faint);
+}
+.fig-val {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-size: var(--t-money-size);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--c-ink);
+  overflow-wrap: anywhere;
+}
+/* An unknown reads as a held space, never as a zero. */
+.fig-val.is-unknown {
+  color: var(--c-ink-faint);
+  opacity: 0.5;
+  font-weight: 400;
+}
+/* One glowing figure per region, and it is the headline. */
+.fig-glow {
+  border-color: color-mix(in srgb, var(--c-green) 38%, var(--c-glass-border));
+  box-shadow: var(--e-glow-cta);
+}
+.fig-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: linear-gradient(135deg, var(--c-purple) 0%, var(--c-green) 100%);
+}
+
+/* ---------------------------------------------- chart card */
+
+.chart-card {
+  padding: var(--sp-5);
+  margin-bottom: var(--sp-8);
+  border-radius: var(--r-lg);
+  background: var(--c-felt-raised);
+  border: 1px solid var(--c-rule);
+  box-shadow: var(--e-raised);
+}
+.chart-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+.chart-head h2 {
+  margin: 0;
+  font-size: var(--t-display-md-size);
+}
+.chart-note {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-size: var(--t-body-sm-size);
+  color: var(--c-ink-faint);
+}
+
+.profile-foot {
+  margin: 0 0 var(--sp-8);
+  font-size: var(--t-body-sm-size);
+  color: var(--c-ink-faint);
+}
+.profile-foot a {
+  color: var(--c-purple-text);
+}
+
+/* No lede under it, so it does not need the hero's bottom margin. */
+.profile-title {
+  margin-bottom: var(--sp-8);
+}
+
+/* =========================================================================
+   SKELETONS
+   ========================================================================= */
+
+/*
+ * A skeleton matches the layout that replaces it, or it is not a skeleton.
+ *
+ * Four grey boxes standing in for a page of figures, two charts and a share
+ * card is not a loading state — it tells the reader nothing about what is
+ * coming, and then the page jumps when the real thing lands. Every shape in
+ * Skeletons.tsx mirrors a real component's box model, so the swap is
+ * invisible: same heights, same gaps, same grid.
+ */
+
+.skel {
+  position: relative;
+  overflow: hidden;
+  /* A translucent white lift over whatever is behind it, so a placeholder is
+     always its own component's background plus a step — never a colour of its
+     own. --c-felt-edge was invisible against the panels (#17171A on #101013)
+     and --c-rule was visible but distinctly blue-purple, which read as
+     borrowed from somewhere else. */
+  background: var(--c-skeleton);
+  /* Held below the ink floor on purpose. A skeleton is furniture, not
+     content, and must never read as a value that failed to load — but it
+     still has to be visible, so this sits just above the point where the
+     shape disappears into the panel behind it. */
+  opacity: 0.8;
+}
+/* The sweep. One pass of light across the shape, the same gesture the CTA
+   uses, at a fraction of its strength. */
+.skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.07) 50%,
+    transparent 100%
+  );
+  animation: skel-sweep 1.7s var(--m-ease) infinite;
+}
+@keyframes skel-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+/* Stillness when it is asked for. The shape stays; only the motion goes. */
+@media (prefers-reduced-motion: reduce) {
+  .skel::after {
+    animation: none;
+  }
+}
+
+/* Each shape stands where its real component stands, at the same height. */
+.skel-fig {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  min-height: 92px;
+  border-radius: var(--r-lg);
+  background-color: var(--c-glass-solid);
+  background-image: linear-gradient(var(--c-glass-fill), var(--c-glass-fill));
+  border: 1px solid var(--c-glass-border);
+}
+
+.skel-card {
+  padding: var(--sp-5);
+  margin-bottom: var(--sp-8);
+  border-radius: var(--r-lg);
+  background: var(--c-felt-raised);
+  border: 1px solid var(--c-rule);
+  box-shadow: var(--e-raised);
+}
+
+.skel-row {
+  display: grid;
+  grid-template-columns: 28px 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 52px;
+  padding: 0 var(--sp-2);
+}
+
+.skel-chips {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+
+/*
+ * The chart placeholder.
+ *
+ * The grid is drawn for real, because it is chrome rather than data and it is
+ * where the axis will be either way. The curves under it are deliberately
+ * faint and deliberately smooth — enough to say "a line chart lands here",
+ * far too quiet to be mistaken for a reading. A skeleton that looked like
+ * plausible data would be the worst possible version of this component.
+ */
+.skel-plot {
+  width: 100%;
+  display: block;
+}
+.skel-plot .skel-grid {
+  stroke: var(--c-rule);
+  stroke-width: 1;
+  opacity: 0.4;
+}
+.skel-plot .skel-curve {
+  fill: none;
+  stroke: var(--c-skeleton);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+.skel-plot .skel-curve-sweep {
+  animation: skel-fade 1.7s var(--m-ease) infinite;
+}
+@keyframes skel-fade {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.95; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel-plot .skel-curve-sweep {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+.skel-table-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-height: 190px;
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  background-color: var(--c-glass-solid);
+  background-image: linear-gradient(var(--c-glass-fill), var(--c-glass-fill));
+  border: 1px solid var(--c-glass-border);
+}
+.skel-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.skel-spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+/* =========================================================================
+   REWARDS — the pool
+   ========================================================================= */
+
+/*
+ * A page with one headline should look like it has one.
+ *
+ * The previous layout ran heading, paragraph, three tiles, heading, paragraph,
+ * three identical tiles. Two blocks of the same weight and shape, so the eye
+ * had nothing to land on and the pool — the reason the page exists — was the
+ * same size as "hands recorded". The hero below is the fix: one figure at
+ * display scale, everything else supporting it.
+ */
+
+.pool-hero {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-8);
+}
+@media (min-width: 768px) {
+  .pool-hero {
+    grid-template-columns: 1.4fr 1fr;
+    align-items: stretch;
+  }
+  .pool-hero-side {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.pool-hero-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-8) var(--sp-8) var(--sp-8);
+  border-radius: var(--r-lg);
+  background-color: var(--c-glass-solid);
+  background-image: linear-gradient(var(--c-glass-fill), var(--c-glass-fill));
+  border: 1px solid color-mix(in srgb, var(--c-green) 34%, var(--c-glass-border));
+  /* The one glowing element on the page. It is the money actually set aside. */
+  box-shadow: var(--e-glow-cta);
+  overflow: hidden;
+}
+/* Gradient rule along the top edge, so the emphasis survives colour removal. */
+.pool-hero-main::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(135deg, var(--c-purple) 0%, var(--c-green) 100%);
+}
+.pool-hero-fig {
+  margin: 0;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-size: clamp(2.5rem, 7vw, var(--t-display-xl-size));
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: var(--t-display-xl-tracking);
+  color: var(--c-ink);
+}
+.pool-hero-sub {
+  margin: 0;
+  max-width: 42ch;
+  font-size: var(--t-body-sm-size);
+  line-height: 1.5;
+  color: var(--c-ink-faint);
+}
+.pool-hero-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+
+/* A note under a figure. One line, and only where the number needs it. */
+.fig-note {
+  font-size: var(--t-body-sm-size);
+  line-height: 1.4;
+  color: var(--c-ink-faint);
+}
+
+/* Section headings without the paragraph that used to follow each one. */
+.section-head {
+  font-size: var(--t-display-md-size);
+  margin: 0 0 var(--sp-4);
+}
+.rewards-yours,
+.rewards-boards-section {
+  margin-bottom: var(--sp-10);
+}
+
+/* ---------------------------------------------- terms */
+
+/*
+ * Four facts as a definition list rather than a paragraph of prose. The same
+ * information, scannable, and it stops the page ending on a wall of text.
+ */
+.rewards-terms-grid {
+  margin-bottom: var(--sp-12);
+  padding: var(--sp-6);
+  border-radius: var(--r-lg);
+  background: var(--c-felt-raised);
+  border: 1px solid var(--c-rule);
+}
+.rewards-terms-grid dl {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-5);
+  margin: 0;
+}
+@media (min-width: 768px) {
+  .rewards-terms-grid dl {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.rewards-terms-grid dt {
+  margin-bottom: var(--sp-2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--c-green);
+}
+.rewards-terms-grid dd {
+  margin: 0;
+  font-size: var(--t-body-sm-size);
+  line-height: 1.55;
+  color: var(--c-ink-muted);
 }

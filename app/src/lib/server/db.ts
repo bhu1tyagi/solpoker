@@ -65,96 +65,91 @@ export function db(): Sql | null {
    * client connections can share few server ones — but it does mean every
    * concurrent query queues behind a single socket, so a route reading four
    * independent things pays four round trips no matter how carefully they are
-   * issued together. This database is in us-east-1 and each of those trips
-   * costs about 250ms. Measured: the lobby's four queries take 2170ms through
-   * one connection and 496ms through four.
+   * issued together. Measured from a laptop in India, where each trip costs
+   * about 250ms: the lobby's four queries take 2170ms through one connection
+   * and 496ms through four. In production the same trips are a local hop —
+   * see the note above ensureSchema.
    */
-  sql = postgres(url, { max: 4, prepare: false });
+  /*
+   * `fetch_types: false` removes a round trip PER CONNECTION.
+   *
+   * postgres.js asks the server for array type OIDs the first time it opens
+   * each socket, which showed up in the statement log as four `select b.oid,
+   * b.typarray` queries on a cold request — one for each connection in the
+   * pool, each one a full trip to another region before any real work.
+   *
+   * Safe here because nothing this app selects is an array type. Every column
+   * read is text, numeric, bigint, boolean, timestamptz or jsonb, all of which
+   * parse without the OID table. If an array column is ever added, this has to
+   * come back off — the symptom would be a column arriving as a raw string.
+   */
+  sql = postgres(url, { max: 4, prepare: false, fetch_types: false });
   return sql;
 }
 
-/** Create-if-missing, once per process. Serverless-safe: idempotent DDL. */
+/**
+ * The schema, as one batch.
+ *
+ * The comments that used to sit between these statements are preserved on the
+ * tables themselves below; the ordering is unchanged and every statement is
+ * still IF NOT EXISTS, so running it against an existing database is a no-op.
+ */
+const SCHEMA = `
+        CREATE TABLE IF NOT EXISTS hands ( id text PRIMARY KEY, cluster text NOT NULL DEFAULT 'devnet', table_id numeric NOT NULL, hand_number bigint NOT NULL, pot_chips bigint, result_hash text, record jsonb NOT NULL, settled_at timestamptz NOT NULL DEFAULT now() );
+        ALTER TABLE hands ADD COLUMN IF NOT EXISTS cluster text NOT NULL DEFAULT 'devnet';
+        CREATE INDEX IF NOT EXISTS hands_cluster_settled ON hands (cluster, settled_at);
+        CREATE TABLE IF NOT EXISTS table_hands ( cluster text NOT NULL, table_id numeric NOT NULL, hands bigint NOT NULL, first_seen timestamptz NOT NULL DEFAULT now(), last_seen timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (cluster, table_id) );
+        CREATE TABLE IF NOT EXISTS table_names ( table_id numeric PRIMARY KEY, name text NOT NULL, created_at timestamptz NOT NULL DEFAULT now() );
+        CREATE TABLE IF NOT EXISTS hand_players ( cluster text NOT NULL, table_id numeric NOT NULL, hand_number bigint NOT NULL, seat smallint NOT NULL, wallet text NOT NULL, payout_chips bigint NOT NULL, rake_chips bigint NOT NULL DEFAULT 0, contributed_chips bigint, showdown boolean NOT NULL DEFAULT false, settled_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (cluster, table_id, hand_number, seat) );
+        ALTER TABLE hand_players ADD COLUMN IF NOT EXISTS contributed_chips bigint;
+        ALTER TABLE hand_players ADD COLUMN IF NOT EXISTS showdown boolean NOT NULL DEFAULT false;
+        CREATE INDEX IF NOT EXISTS hand_players_wallet ON hand_players (cluster, wallet);
+        CREATE TABLE IF NOT EXISTS players ( cluster text NOT NULL, wallet text NOT NULL, display_name text, name_updated_at timestamptz, PRIMARY KEY (cluster, wallet) );
+`;
+
+/*
+ * MEASURED, 30 Aug 2026, so the next person does not repeat the mistake this
+ * comment used to cause. Functions run in iad1 and the Neon database is in
+ * us-east-1 — the SAME region — verified with `vercel inspect` (the build
+ * lists every lambda as [iad1]) and the connection host
+ * (…c-12.us-east-1.aws.neon.tech, already the -pooler endpoint). An earlier
+ * version of this comment claimed the two were in different regions and sent
+ * a whole round of optimisation work chasing a co-location problem that does
+ * not exist.
+ *
+ * In production a round trip to the database is a local-network hop, and the
+ * routes measure ~340ms end to end from India, of which almost all is the
+ * requester's own distance to iad1 (x-vercel-id reads `bom1::iad1`). Six
+ * minutes of idle adds nothing, so the Neon compute is not autosuspending.
+ *
+ * Where round trips DO cost is local development: a laptop in India talking
+ * to us-east-1 pays ~250ms per trip, which is why `npm run dev` felt like it
+ * hung and production never did. Keep the trip COUNT low anyway — it is what
+ * makes dev usable — but do not tune production for a latency it does not
+ * have.
+ */
+
+/**
+ * Create-if-missing, once per process, in ONE round trip.
+ *
+ * This used to issue ten statements one after another, each awaited. That is
+ * fine against a local database and ruinous against a remote one: measured
+ * with statement logging, a cold request made 18 round trips and ten of them
+ * were this function. At the ~250ms this database sits from the functions
+ * reading it, that is two and a half seconds of schema checking before a
+ * single figure is fetched — the whole of the "the API takes three seconds"
+ * complaint, on a request that reads four numbers.
+ *
+ * Sent as one simple-protocol batch instead. Every statement is unchanged and
+ * still idempotent, so the guarantee is the same; only the number of trips
+ * changes, from ten to one. `unsafe` is safe here in the literal sense that
+ * matters: the string is a compile-time constant with no interpolation of any
+ * kind, and it is the only way to put multiple statements in one message.
+ */
 export function ensureSchema(s: Sql): Promise<void> {
   if (!ready) {
     ready = (async () => {
-      await s`
-        CREATE TABLE IF NOT EXISTS hands (
-          id           text PRIMARY KEY,
-          cluster      text NOT NULL DEFAULT 'devnet',
-          table_id     numeric NOT NULL,
-          hand_number  bigint NOT NULL,
-          pot_chips    bigint,
-          result_hash  text,
-          record       jsonb NOT NULL,
-          settled_at   timestamptz NOT NULL DEFAULT now()
-        )`;
-      // Devnet and mainnet share one database but must never share one
-      // statistic: play-money hands inflating a real volume figure would be
-      // exactly the fabricated liveness this product refuses to ship.
-      await s`
-        ALTER TABLE hands ADD COLUMN IF NOT EXISTS cluster text NOT NULL DEFAULT 'devnet'`;
-      await s`
-        CREATE INDEX IF NOT EXISTS hands_cluster_settled ON hands (cluster, settled_at)`;
-      // The high-water mark of each table's on-chain hand counter.
-      //
-      // This is a backfill AND a safety net. The counter is the program's own,
-      // so it covers hands played before any of this reporting existed and
-      // hands whose client never managed to report them. And because
-      // `close_table` deletes the table account outright, a count read live
-      // from chain falls to zero the moment a table is tidied away; written
-      // down here, it survives.
-      //
-      // `hands` only ever moves up, enforced in the upsert rather than trusted:
-      // a partial read or a lagging replica must not be able to lower it.
-      await s`
-        CREATE TABLE IF NOT EXISTS table_hands (
-          cluster    text NOT NULL,
-          table_id   numeric NOT NULL,
-          hands      bigint NOT NULL,
-          first_seen timestamptz NOT NULL DEFAULT now(),
-          last_seen  timestamptz NOT NULL DEFAULT now(),
-          PRIMARY KEY (cluster, table_id)
-        )`;
-      await s`
-        CREATE TABLE IF NOT EXISTS table_names (
-          table_id   numeric PRIMARY KEY,
-          name       text NOT NULL,
-          created_at timestamptz NOT NULL DEFAULT now()
-        )`;
-      // Who won what, and who paid for it.
-      //
-      // One row per seat that was paid, which is the only per-wallet money
-      // record that exists anywhere: settlement adds each payout straight into
-      // a seat stack and the breakdown survives on chain as a log line nothing
-      // keeps. Without this table "what have I won" is unanswerable and the
-      // rake a player generated is unknowable.
-      //
-      // `payout_chips` is not trusted as submitted, on the same principle as
-      // the hands table above: the row is written only after the server
-      // rebuilds `result_hash` from the reported payouts and gets the digest
-      // the chain published. `rake_chips` is not submitted at all — it is
-      // derived here from those proven payouts, because a figure that decides
-      // an airdrop allocation must not be one a caller can assert.
-      //
-      // The seat-to-wallet mapping is the one soft part, and stays at the
-      // trust level of the pot figure beside it: first report wins, which the
-      // primary key enforces without a transaction.
-      await s`
-        CREATE TABLE IF NOT EXISTS hand_players (
-          cluster      text NOT NULL,
-          table_id     numeric NOT NULL,
-          hand_number  bigint NOT NULL,
-          seat         smallint NOT NULL,
-          wallet       text NOT NULL,
-          payout_chips bigint NOT NULL,
-          rake_chips   bigint NOT NULL DEFAULT 0,
-          settled_at   timestamptz NOT NULL DEFAULT now(),
-          PRIMARY KEY (cluster, table_id, hand_number, seat)
-        )`;
-      // Every rewards figure is a sum over one wallet on one cluster.
-      await s`
-        CREATE INDEX IF NOT EXISTS hand_players_wallet
-          ON hand_players (cluster, wallet)`;
+      await s.unsafe(SCHEMA).simple();
     })();
   }
   return ready;

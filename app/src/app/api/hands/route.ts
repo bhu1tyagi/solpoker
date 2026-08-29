@@ -17,7 +17,9 @@ export const runtime = "nodejs";
 interface HandResults {
   bigBlind: number;
   payouts: number[];
+  contributed: number[];
   wallets: (string | null)[];
+  dealtIn: number;
 }
 
 const isCount = (n: unknown): n is number =>
@@ -58,16 +60,15 @@ function resultRows(record: HandHistory & { potChips?: number }, results: unknow
   );
   if (rebuilt !== record.resultHash) return null;
 
-  // A payout with nobody to credit is a capture that lost the seat, and a
-  // wallet that will not parse is not one an allocation can ever be sent to.
+  // A wallet that will not parse is not one an allocation can ever be sent
+  // to. An absent one costs that seat its row and nothing more.
   const wallets: (string | null)[] = [];
   for (let i = 0; i < MAX_SEATS; i++) {
     const w = r.wallets[i];
-    if (r.payouts[i] <= 0) {
+    if (typeof w !== "string") {
       wallets.push(null);
       continue;
     }
-    if (typeof w !== "string") return null;
     try {
       wallets.push(new PublicKey(w).toBase58());
     } catch {
@@ -80,24 +81,69 @@ function resultRows(record: HandHistory & { potChips?: number }, results: unknow
 
   // No flop, no drop, read off the board the verifier just proved.
   const sawFlop = record.board[0] !== NO_CARD;
-  const observed =
-    typeof record.potChips === "number" && record.potChips > 0
-      ? Math.floor(record.potChips)
-      : null;
-  const { rake } = rakeFromNetPayouts(netSum, r.bigBlind, sawFlop, observed);
-  const shares = attributeRake(r.payouts, rake);
 
+  /*
+   * The contributions are checked against the payouts, not believed.
+   *
+   * What the seats committed is the pre-rake pot, and the payouts the hash
+   * proved are that pot minus the rake. So a contribution total is credible
+   * exactly when raking it leaves the proven payout sum — which is the same
+   * corroboration `rakeFromNetPayouts` already applies to the observed pot,
+   * and a far tighter one, because a per-seat breakdown that sums correctly
+   * cannot have been invented wholesale.
+   *
+   * Contributions that fail it are dropped while the payouts are kept. That
+   * asymmetry is the point: profit figures go missing rather than going
+   * wrong, and a hand with no contributions still counts as a hand won.
+   */
+  const contributedOk =
+    Array.isArray(r.contributed) &&
+    r.contributed.length === MAX_SEATS &&
+    r.contributed.every(isCount);
+  const claimedPot = contributedOk
+    ? r.contributed.reduce((a, b) => a + b, 0)
+    : null;
+  const observed =
+    claimedPot ??
+    (typeof record.potChips === "number" && record.potChips > 0
+      ? Math.floor(record.potChips)
+      : null);
+
+  const { rake, paid } = rakeFromNetPayouts(netSum, r.bigBlind, sawFlop, observed);
+  const shares = attributeRake(r.payouts, rake);
+  const contributionsProven = contributedOk && claimedPot === paid;
+
+  /*
+   * A row for every seat DEALT IN, not every seat paid.
+   *
+   * This is what makes a loss exist in the record at all. Without it the
+   * table holds only winners, every profile reads as a pure profit, and the
+   * player who has lost for six hours has no history to look at.
+   */
+  const dealtIn = typeof r.dealtIn === "number" ? r.dealtIn : 0;
   const rows = [];
   for (let i = 0; i < MAX_SEATS; i++) {
-    if (r.payouts[i] <= 0) continue;
+    const wallet = wallets[i];
+    if (!wallet) continue;
+    const played = (dealtIn & (1 << i)) !== 0 || r.payouts[i] > 0;
+    if (!played) continue;
     rows.push({
       cluster: CLUSTER_TAG,
       table_id: record.tableId as number,
       hand_number: record.handNumber,
       seat: i,
-      wallet: wallets[i] as string,
+      wallet,
       payout_chips: r.payouts[i],
       rake_chips: shares[i],
+      // Null, never zero, when the contributions did not check out: a zero
+      // here would read as "put nothing in", making every payout look like
+      // profit it was not.
+      contributed_chips: contributionsProven ? r.contributed[i] : null,
+      // Derived from the record the verifier already proved, never taken
+      // from the report: a seat showed cards, so the hand reached a showdown.
+      showdown: Boolean(
+        record.seats?.find((s) => s.index === i)?.revealed?.length,
+      ),
     });
   }
   return rows.length > 0 ? rows : null;
@@ -189,8 +235,17 @@ export async function POST(req: Request) {
           "wallet",
           "payout_chips",
           "rake_chips",
+          "contributed_chips",
+          "showdown",
         )}
-        ON CONFLICT (cluster, table_id, hand_number, seat) DO NOTHING`;
+        ON CONFLICT (cluster, table_id, hand_number, seat) DO UPDATE
+          -- The one thing a repeat report may add is a contribution nobody
+          -- had yet. It can be filled in, never overwritten: the first
+          -- report that checked out is as good as any later one, and letting
+          -- a second writer change a stored profit figure would undo the
+          -- point of checking it in the first place.
+          SET contributed_chips =
+                coalesce(hand_players.contributed_chips, excluded.contributed_chips)`;
       results = true;
     } catch {
       // Six clients report the same hand at once; a loser here changes nothing.

@@ -4,7 +4,8 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { TopBar } from "@/components/chrome/TopBar";
-import { Panel, Skeleton } from "@/components/primitives/Surface";
+import { Panel } from "@/components/primitives/Surface";
+import { HandsSkeleton, Loading } from "@/components/primitives/Skeletons";
 import { Button } from "@/components/primitives/Button";
 import { VerifyCard } from "@/components/poker/VerifyCard";
 import { listHands, type StoredHand } from "@/lib/history-db";
@@ -84,10 +85,9 @@ export default function HistoryPage({ params }: { params: Promise<{ id: string }
         </Panel>
 
         {hands === null ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Skeleton height={82} />
-            <Skeleton height={82} />
-          </div>
+          <Loading label="Loading recorded hands">
+            <HandsSkeleton rows={3} />
+          </Loading>
         ) : hands.length === 0 ? (
           <Panel style={{ textAlign: "center", padding: 40 }}>
             <p style={{ color: "var(--c-ink-muted)", margin: "0 0 12px" }}>

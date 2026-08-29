@@ -41,10 +41,18 @@ interface SaltRecord {
   salt: string;
 }
 
-/** An occupant and the last stack seen in front of them, before settlement. */
+/**
+ * An occupant, the last stack seen in front of them, and the most they were
+ * ever seen to have committed.
+ *
+ * The commitment is a running maximum for the same reason the pot is: it is
+ * summed from seat state that settlement zeroes, and the notification carrying
+ * the last call can arrive after the one that clears the table.
+ */
 interface SeatMeta {
   wallet: string;
   stack: number;
+  contributed: number;
 }
 
 interface HandBuffer {
@@ -182,20 +190,32 @@ async function proveResults(
     );
     if (!payouts) return null;
 
-    // A proven payout with no remembered occupant cannot be credited to
-    // anybody, and a partial mapping would silently drop one winner's share of
-    // a split pot. Report all of it or none of it.
+    /*
+     * Every seat that was dealt in, winner or not.
+     *
+     * A wallet that could not be remembered costs that seat its row and
+     * nothing else. The alternative — dropping the whole hand — would throw
+     * away five known results to avoid one unknown, and the contributions are
+     * reported for all six seats regardless, so the sum the server checks the
+     * pot against stays complete either way.
+     */
     const wallets: (string | null)[] = [];
+    const contributed: number[] = [];
     for (let i = 0; i < MAX_SEATS; i++) {
-      if (payouts[i] <= 0) {
-        wallets.push(null);
-        continue;
-      }
       const meta = seen.seatsMeta.get(i);
-      if (!meta) return null;
-      wallets.push(meta.wallet);
+      const dealt = (seen.dealtIn & (1 << i)) !== 0;
+      wallets.push(dealt && meta ? meta.wallet : null);
+      contributed.push(meta?.contributed ?? 0);
     }
-    return { bigBlind: seen.bigBlind, payouts, wallets };
+    if (!wallets.some((w) => w !== null)) return null;
+
+    return {
+      bigBlind: seen.bigBlind,
+      payouts,
+      contributed,
+      wallets,
+      dealtIn: seen.dealtIn,
+    };
   } catch {
     return null;
   }
@@ -239,13 +259,21 @@ export function useHandCapture(
       if (!s || s.saltState !== SALT_REVEALED || forHand.salts.has(i)) continue;
       forHand.salts.set(i, { commit: s.saltCommit, salt: s.salt });
     }
-    // Overwritten on every look, so what survives is the last state before the
-    // pot moved rather than the first. A seat that empties mid-hand keeps the
+    // The stack is overwritten on every look, so what survives is the last
+    // state before the pot moved rather than the first. The commitment only
+    // ever climbs, because a seat that has already been observed betting must
+    // not be recorded as having bet less when a later snapshot arrives with
+    // the street already cleared. A seat that empties mid-hand keeps the
     // occupant it had while it was playing.
     for (let i = 0; i < MAX_SEATS; i++) {
       const s = seats[i];
       if (!s?.occupant) continue;
-      forHand.seatsMeta.set(i, { wallet: s.occupant, stack: s.stack });
+      const prev = forHand.seatsMeta.get(i);
+      forHand.seatsMeta.set(i, {
+        wallet: s.occupant,
+        stack: s.stack,
+        contributed: Math.max(prev?.contributed ?? 0, s.committedTotal),
+      });
     }
 
     // Keep a few hands' worth, no more.
