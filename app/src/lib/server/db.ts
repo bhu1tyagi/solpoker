@@ -109,6 +109,40 @@ export function ensureSchema(s: Sql): Promise<void> {
           name       text NOT NULL,
           created_at timestamptz NOT NULL DEFAULT now()
         )`;
+      // Who won what, and who paid for it.
+      //
+      // One row per seat that was paid, which is the only per-wallet money
+      // record that exists anywhere: settlement adds each payout straight into
+      // a seat stack and the breakdown survives on chain as a log line nothing
+      // keeps. Without this table "what have I won" is unanswerable and the
+      // rake a player generated is unknowable.
+      //
+      // `payout_chips` is not trusted as submitted, on the same principle as
+      // the hands table above: the row is written only after the server
+      // rebuilds `result_hash` from the reported payouts and gets the digest
+      // the chain published. `rake_chips` is not submitted at all — it is
+      // derived here from those proven payouts, because a figure that decides
+      // an airdrop allocation must not be one a caller can assert.
+      //
+      // The seat-to-wallet mapping is the one soft part, and stays at the
+      // trust level of the pot figure beside it: first report wins, which the
+      // primary key enforces without a transaction.
+      await s`
+        CREATE TABLE IF NOT EXISTS hand_players (
+          cluster      text NOT NULL,
+          table_id     numeric NOT NULL,
+          hand_number  bigint NOT NULL,
+          seat         smallint NOT NULL,
+          wallet       text NOT NULL,
+          payout_chips bigint NOT NULL,
+          rake_chips   bigint NOT NULL DEFAULT 0,
+          settled_at   timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (cluster, table_id, hand_number, seat)
+        )`;
+      // Every rewards figure is a sum over one wallet on one cluster.
+      await s`
+        CREATE INDEX IF NOT EXISTS hand_players_wallet
+          ON hand_players (cluster, wallet)`;
     })();
   }
   return ready;

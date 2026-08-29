@@ -3648,3 +3648,622 @@ input[type="range"]::-moz-range-thumb {
   gap: 6px;
   padding-top: 2px;
 }
+
+/* =========================================================================
+   REWARDS
+   ========================================================================= */
+
+/*
+ * The rewards page. Three regions — your figures, the pool, the boards — and
+ * exactly one glowing element in each of them.
+ *
+ * That restraint is the whole reason the glow still means anything here. Glow
+ * is this product's affirmative signal: money that came back, a seat that is
+ * live, the thing you probably want. A page that glowed on every stat card and
+ * every leaderboard row would say "all of this is important", which is the
+ * same as saying none of it is. So: the winnings figure glows, the pool figure
+ * glows, and first place glows. Nothing else does.
+ */
+
+.rewards-hero {
+  max-width: 62ch;
+  margin-bottom: var(--sp-12);
+}
+.rewards-hero p {
+  margin: 0;
+  color: var(--c-ink-muted);
+  font-size: var(--t-body-lg-size);
+  line-height: var(--t-body-lg-line);
+}
+
+.rewards-section {
+  margin-bottom: var(--sp-16);
+}
+.rewards-head {
+  margin-bottom: var(--sp-6);
+  max-width: 68ch;
+}
+.rewards-head h2 {
+  font-size: var(--t-display-md-size);
+  margin: 0 0 var(--sp-3);
+}
+.rewards-head p {
+  margin: 0;
+  color: var(--c-ink-muted);
+  line-height: 1.65;
+}
+
+/* ---------------------------------------------- stat cards */
+
+.rewards-stats,
+.rewards-pool {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-4);
+}
+@media (min-width: 768px) {
+  .rewards-stats,
+  .rewards-pool {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/*
+ * Glass, with the opaque fill underneath rather than instead of it. These sit
+ * over the ambient orbs, and backdrop-filter composites whatever is behind it,
+ * so contrast is measured against --c-glass-solid and the blur is decoration
+ * on top of a guaranteed floor.
+ */
+.rewards-stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-5) var(--sp-6);
+  border-radius: var(--r-lg);
+  background-color: var(--c-glass-solid);
+  background-image: linear-gradient(var(--c-glass-fill), var(--c-glass-fill));
+  border: 1px solid var(--c-glass-border);
+  backdrop-filter: blur(12px);
+}
+.rewards-stat-fig {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-size: var(--t-display-md-size);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--c-ink);
+}
+/* A figure nobody can answer yet. Lightened and dimmed so it reads as a held
+   space rather than as an answer, and never as a zero. */
+.rewards-stat-unknown {
+  font-size: var(--t-body-lg-size);
+  font-weight: 400;
+  line-height: 1.1;
+  color: var(--c-ink-faint);
+  opacity: 0.62;
+}
+.rewards-stat-note {
+  font-size: var(--t-body-sm-size);
+  line-height: 1.45;
+  color: var(--c-ink-faint);
+}
+
+/*
+ * The affirmative card. Green glow plus a green hairline, and — because state
+ * is never signalled by colour alone — a gradient rule along the top edge that
+ * survives with colour removed.
+ */
+.rewards-stat-glow {
+  border-color: color-mix(in srgb, var(--c-green) 38%, var(--c-glass-border));
+  box-shadow: var(--e-glow-cta);
+}
+.rewards-stat-glow::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: linear-gradient(135deg, var(--c-purple) 0%, var(--c-green) 100%);
+}
+
+/* ---------------------------------------------- share */
+
+.rewards-share {
+  margin-top: var(--sp-8);
+}
+.rewards-share-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.rewards-share-head p {
+  margin: 0;
+  color: var(--c-ink-faint);
+  font-size: var(--t-body-sm-size);
+}
+.share-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  align-items: flex-start;
+}
+/* Painted at 1200x630 whatever it is displayed at, so the exported PNG is
+   full resolution on a phone as well as a desktop. */
+.share-card-canvas {
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 1200 / 630;
+  height: auto;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--c-glass-border);
+}
+.share-card-actions {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------- boards */
+
+.rewards-boards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-6);
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .rewards-boards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Opaque rather than glass: these hold scrolling lists, and a backdrop-filter
+   recomputes per frame against moving content. */
+.rewards-board {
+  background: var(--c-felt-raised);
+  border: 1px solid var(--c-rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--e-raised);
+  padding: var(--sp-5);
+}
+/* The title and its qualifier compete for one line, and below the phone
+   breakpoint neither wins: the heading wraps mid-phrase while the qualifier
+   squeezes into two words a line. Stacked, both read. */
+.rewards-board-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-4);
+  margin-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--c-felt-edge);
+  color: var(--c-green);
+}
+@media (max-width: 480px) {
+  .rewards-board-head span {
+    flex-basis: 100%;
+    margin-left: 0;
+    text-align: left;
+  }
+}
+.rewards-board-head h3 {
+  margin: 0;
+  font-size: var(--t-body-lg-size);
+  color: var(--c-ink);
+}
+.rewards-board-head span {
+  margin-left: auto;
+  font-size: var(--t-body-sm-size);
+  color: var(--c-ink-faint);
+  text-align: right;
+}
+
+.rewards-row {
+  display: grid;
+  grid-template-columns: 28px 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  /* 44px is the floor for a touch target at every viewport. */
+  min-height: 52px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-md);
+}
+.rewards-rank {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-size: var(--t-body-sm-size);
+  color: var(--c-ink-faint);
+  text-align: center;
+}
+.rewards-wallet {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--t-chain-data-size);
+  color: var(--c-ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rewards-row-fig {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  font-weight: 700;
+  color: var(--c-ink);
+}
+.rewards-row-unit {
+  font-family: var(--font-body);
+  font-size: var(--t-body-sm-size);
+  font-weight: 400;
+  color: var(--c-ink-faint);
+}
+
+/* Your own row, wherever it sits. The tag is the cue that survives colour
+   removal; the tint alone would not. */
+.rewards-row-me {
+  background: color-mix(in srgb, var(--c-purple) 12%, transparent);
+}
+.rewards-you-tag {
+  flex: none;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--c-purple) 26%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-purple) 46%, transparent);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--c-purple-text);
+}
+
+/* First place, and only first place. The rank number is already the second
+   cue, so this adds emphasis rather than carrying the meaning alone. */
+.rewards-row-top {
+  background: color-mix(in srgb, var(--c-green) 8%, transparent);
+  box-shadow: var(--e-glow-hover);
+}
+.rewards-row-top .rewards-rank,
+.rewards-row-top .rewards-row-fig {
+  color: var(--c-green);
+}
+
+.rewards-row-split {
+  height: 1px;
+  background: var(--c-felt-edge);
+  margin: var(--sp-2) 0;
+}
+.rewards-more {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--sp-4);
+}
+
+/* ---------------------------------------------- connect, empty, terms */
+
+/*
+ * Never a bare empty state. Each of these says what is missing, why, and what
+ * to do about it — an empty rewards page is otherwise indistinguishable from a
+ * broken one.
+ */
+.rewards-connect,
+.rewards-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+  text-align: center;
+  padding: var(--sp-10) var(--sp-6);
+  border-radius: var(--r-lg);
+  background-color: var(--c-glass-solid);
+  background-image: linear-gradient(var(--c-glass-fill), var(--c-glass-fill));
+  border: 1px dashed var(--c-glass-border);
+  color: var(--c-green);
+}
+.rewards-connect h3 {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--t-display-md-size);
+  color: var(--c-ink);
+}
+.rewards-connect p,
+.rewards-empty p {
+  margin: 0 auto;
+  max-width: 46ch;
+  color: var(--c-ink-muted);
+  line-height: 1.6;
+}
+.rewards-empty {
+  margin-top: var(--sp-6);
+}
+
+.rewards-terms {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: flex-start;
+  margin-top: var(--sp-6);
+  padding: var(--sp-5) var(--sp-6);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--c-rule);
+  background: var(--c-felt-raised);
+  color: var(--c-purple-text);
+}
+.rewards-terms p {
+  margin: 0;
+  max-width: 76ch;
+  color: var(--c-ink-muted);
+  line-height: 1.65;
+}
+
+/* =========================================================================
+   TOURNAMENTS
+   ========================================================================= */
+
+/*
+ * The page for a thing that does not exist yet.
+ *
+ * The whole difficulty here is that a coming-soon page wants to look live. The
+ * glass, the gradient and the glow are exactly the vocabulary that would make
+ * it read as shipped, so they are rationed harder here than anywhere else in
+ * the product: ONE gradient, on the CTA that goes to the cash tables, and that
+ * CTA is the only thing on the page carrying a glow.
+ *
+ * The format cards deliberately do NOT take .glow-hover, unlike the visually
+ * identical cards on the landing page. Glow is this product's language for
+ * live and actionable; on a card describing an unbuilt format it would be
+ * saying the opposite of the sentence printed inside it.
+ */
+
+.tourn-page {
+  padding-bottom: var(--sp-8);
+}
+
+.tourn-hero {
+  max-width: 62ch;
+  margin-bottom: var(--sp-20);
+}
+
+/*
+ * One word, eleven characters, in a face run at 125% width.
+ *
+ * The shared .hero-title clamp bottoms out at 2.5rem, which is tuned for the
+ * landing hero's short lines. "TOURNAMENTS" at that size measures 403px inside
+ * the 350px column a 390px phone leaves — a 53px overflow that .landing's
+ * overflow-x: clip swallows silently, so the S simply goes missing rather than
+ * showing up as a scrollbar. Measured, not guessed.
+ *
+ * The vw term is set so the word lands just inside the column at 390px and the
+ * type reaches full display scale by 700px. The floor is only reached below
+ * 302px, which is narrower than any supported width.
+ */
+.tourn-hero .hero-title {
+  font-size: clamp(1.625rem, 8.6vw, var(--t-display-xl-size));
+}
+
+/*
+ * The badge, in the purple register rather than the green one. Green means
+ * live in this product — it is the colour of a seat to act and of money coming
+ * back — and a green badge over "In development" would be the page's first
+ * claim contradicting its second.
+ *
+ * Purple as a fill and a border with --c-purple-text on top: #9945FF is 4.28:1
+ * on the ground and fails AA at this size, so the label never takes it neat.
+ */
+.hero-badge--soon {
+  background: color-mix(in srgb, var(--c-purple) 16%, var(--c-glass-solid));
+  border-color: color-mix(in srgb, var(--c-purple) 45%, transparent);
+  color: var(--c-purple-text);
+}
+/* Hollow, so the state reads with colour removed. The filled dot is the live
+   signal and these two must not be mistakable for one another. */
+.hero-badge-dot--hollow {
+  background: transparent;
+  border: 2px solid currentColor;
+}
+
+.tourn-section {
+  margin-bottom: var(--sp-16);
+}
+.tourn-head {
+  margin-bottom: var(--sp-6);
+  max-width: 68ch;
+}
+.tourn-head h2 {
+  font-size: var(--t-display-md-size);
+  margin: 0 0 var(--sp-3);
+}
+.tourn-head p {
+  margin: 0;
+  color: var(--c-ink-muted);
+  line-height: 1.65;
+}
+
+/* ---------------------------------------------- formats */
+
+.tourn-formats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-5);
+}
+@media (min-width: 768px) {
+  .tourn-formats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Fill and hairline, no backdrop-filter: these scroll, and a blur inside a
+   scrolling region recomputes against moving content every frame. */
+.tourn-format {
+  padding: var(--sp-6);
+  border-radius: var(--r-lg);
+}
+.tourn-format h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  font-size: 1.375rem;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+.tourn-format p {
+  margin: 0;
+  color: var(--c-ink-muted);
+  line-height: 1.6;
+}
+
+/* Attached to the heading rather than floated in a corner, so it is read in
+   the same breath as the format's name and cannot be skimmed past. */
+.tourn-tag {
+  flex: none;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--c-purple) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-purple) 46%, transparent);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c-purple-text);
+}
+
+/* ---------------------------------------------- the build rail */
+
+/*
+ * The same rail the onboarding gate uses, because it is the same idea: a
+ * sequence with a position in it. Kept as its own class rather than reaching
+ * for .gate-* — the gate's rail tracks a live process and its states change
+ * under the player, and sharing the selectors would tie a marketing page to a
+ * flow that has every reason to keep moving.
+ */
+.tourn-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tourn-step {
+  position: relative;
+  display: flex;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-6);
+}
+/* Drawn per step so each segment can take the state of the step above it:
+   green through the parts that exist, hairline from there on. */
+.tourn-step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 32px;
+  bottom: 2px;
+  width: 2px;
+  background: var(--c-rule);
+}
+.tourn-step.is-done:not(:last-child)::before {
+  background: color-mix(in srgb, var(--c-green) 55%, transparent);
+}
+
+.tourn-node {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--c-glass-border);
+  background: var(--c-felt-edge);
+  color: var(--c-ink-faint);
+}
+/* Filled and ticked, against hollow. The shape carries the state; the colour
+   only agrees with it. */
+.tourn-step.is-done .tourn-node {
+  background: var(--c-green);
+  border-color: var(--c-green);
+  color: var(--c-felt);
+}
+
+.tourn-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-top: 4px;
+  max-width: 72ch;
+}
+.tourn-step-text strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--t-body-lg-size);
+  font-weight: 700;
+  color: var(--c-ink-faint);
+}
+.tourn-step.is-done .tourn-step-text strong {
+  color: var(--c-ink);
+}
+.tourn-step-text > span:last-child {
+  color: var(--c-ink-muted);
+  font-size: var(--t-body-size);
+  line-height: 1.6;
+}
+
+/* The status in words. This is the cue that survives colour removal, and the
+   one a screen reader reads — the tick and the rail are both aria-hidden. */
+.tourn-status {
+  flex: none;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--c-rule);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c-ink-faint);
+}
+.tourn-step.is-done .tourn-status {
+  background: color-mix(in srgb, var(--c-green) 12%, transparent);
+  border-color: color-mix(in srgb, var(--c-green) 40%, transparent);
+  color: var(--c-green);
+}
+
+/* ---------------------------------------------- the closing note */
+
+/*
+ * Where a newsletter box would go, saying why there isn't one. Opaque rather
+ * than glass: the page already carries three glass surfaces above it, and a
+ * fourth would flatten the difference between a panel and the ground.
+ */
+.tourn-note {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: flex-start;
+  padding: var(--sp-6);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--c-rule);
+  background: var(--c-felt-raised);
+  color: var(--c-purple-text);
+}
+.tourn-note h2 {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--t-body-lg-size);
+  color: var(--c-ink);
+}
+.tourn-note p {
+  margin: 0;
+  max-width: 76ch;
+  color: var(--c-ink-muted);
+  line-height: 1.65;
+}

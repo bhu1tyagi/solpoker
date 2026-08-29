@@ -406,6 +406,22 @@ export function useTableActions(args: {
         const bal = await conn.getBalance(session.publicKey);
         if (bal < needed) {
           if (!signTransaction) throw new Error("connect a wallet first");
+          /*
+           * Say what the money is before asking for it.
+           *
+           * The wallet shows a transfer of about 0.05 SOL and says nothing
+           * else, so it reads as the price of playing a hand. It is not: it is
+           * rent-exemption for the fifteen accounts the table needs on the
+           * rollup, it is refunded in full when the table comes back to
+           * Solana, and a player who does not know that reasonably concludes
+           * the game costs fifty times what it does.
+           */
+          toast(
+            `Putting up ${((needed - bal) / 1e9).toFixed(3)} SOL as a refundable deposit — ` +
+              `Solana holds it while the table runs and returns it when the table pauses. ` +
+              `It is not a fee.`,
+            "info",
+          );
           const { SystemProgram } = await import("@solana/web3.js");
           const fund = new Transaction().add(
             SystemProgram.transfer({

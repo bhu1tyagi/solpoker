@@ -25,6 +25,7 @@ import { useUiStore } from "@/stores/ui-store";
 const NAV = [
   { href: "/lobby", label: "Lobby" },
   { href: "/tournaments", label: "Tournaments" },
+  { href: "/rewards", label: "Rewards" },
   { href: "/trust", label: "How it works" },
 ] as const;
 

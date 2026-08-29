@@ -22,6 +22,7 @@ import { DiscordIcon, XIcon } from "@/components/primitives/Icons";
 const PLATFORM = [
   { href: "/lobby", label: "Game lobby" },
   { href: "/tournaments", label: "Tournaments" },
+  { href: "/rewards", label: "Rewards" },
   { href: "/trust", label: "How it works" },
 ] as const;
 

@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { handId, saveHand } from "@/lib/history-db";
-import { reportHand } from "@/lib/report-hand";
+import { reportHand, type HandResults } from "@/lib/report-hand";
 import { pruneSalts } from "@/lib/salts";
-import { decodeHand } from "@/lib/decode";
+import { decodeHand, decodeSeat } from "@/lib/decode";
 import { verify } from "@/lib/verifier/verify-shuffle";
-import { handPda } from "@/lib/pdas";
+import { computeResultHash } from "@/lib/verifier/result-hash";
+import { rakeFor } from "@/lib/rake";
+import { handPda, seatPda } from "@/lib/pdas";
 import { potTotal, useTableStore } from "@/stores/table-store";
-import { MAX_SEATS, SALT_REVEALED } from "@/lib/constants";
+import { MAX_SEATS, NO_CARD, SALT_REVEALED } from "@/lib/constants";
 
 /**
  * Writing a finished hand down before the chain forgets it.
@@ -39,6 +41,12 @@ interface SaltRecord {
   salt: string;
 }
 
+/** An occupant and the last stack seen in front of them, before settlement. */
+interface SeatMeta {
+  wallet: string;
+  stack: number;
+}
+
 interface HandBuffer {
   salts: Map<number, SaltRecord>;
   /** Who was dealt in, remembered before settlement clears the mask. */
@@ -53,10 +61,145 @@ interface HandBuffer {
    * call can arrive after the one that clears the table.
    */
   pot: number;
+  /**
+   * Who was sitting where, and with how much, on the last look before the
+   * pot moved.
+   *
+   * Both halves are gathered live for the same reason the salts are. The
+   * wallet, because a player can win a hand and leave before it is captured,
+   * and an empty seat afterwards cannot say who it paid. The stack, because a
+   * payout is only ever visible as a difference — settlement adds it straight
+   * into the seat and writes the total nowhere.
+   */
+  seatsMeta: Map<number, SeatMeta>;
+  /** The big blind, which sets the rake-free floor and the cap. */
+  bigBlind: number;
 }
 
 const FETCH_TRIES = 14;
 const FETCH_GAP_MS = 700;
+
+/**
+ * Work out what each seat was actually paid, and refuse to guess.
+ *
+ * The obvious reading — stack afterwards minus stack before — is right only if
+ * the "before" was the last state of the hand. It often is not: notifications
+ * arrive in whatever order the socket gives them, a seat can be observed
+ * mid-street, and by the time the settled hand is fetched the next hand's
+ * blinds may already have come out of the same stacks. Any of that produces a
+ * plausible set of payouts that is wrong.
+ *
+ * So nothing is inferred without proof. Settlement hashed the payouts into
+ * `result_hash`, so a candidate reading can be checked against the digest the
+ * chain published, and only a candidate that reproduces it is reported. Two
+ * candidates are tried: the observed deltas, and — because the great majority
+ * of hands have one winner and a stale stack reading is the common failure —
+ * each seat in turn taking the whole pot less the rake.
+ *
+ * Everything else is reported as a hand with no payouts. A miss costs the
+ * rewards figures one hand; a guess would corrupt them permanently.
+ */
+function provePayouts(
+  handNumber: number,
+  shuffleSeed: string,
+  board: number[],
+  resultHash: string,
+  stacksAfter: (number | null)[],
+  seen: HandBuffer,
+): number[] | null {
+  const matches = (candidate: number[]) =>
+    computeResultHash(handNumber, shuffleSeed, board, candidate) === resultHash;
+
+  const deltas = Array.from({ length: MAX_SEATS }, (_, i) => {
+    const after = stacksAfter[i];
+    const before = seen.seatsMeta.get(i)?.stack;
+    if (after === null || after === undefined || before === undefined) return 0;
+    return Math.max(0, after - before);
+  });
+  if (matches(deltas)) return deltas;
+
+  // The sole-winner family. The pot is the running maximum of what the seats
+  // committed, which is the pre-rake figure settlement worked from.
+  const sawFlop = board[0] !== NO_CARD;
+  const net = seen.pot - rakeFor(seen.pot, seen.bigBlind, sawFlop);
+  if (net > 0) {
+    for (let i = 0; i < MAX_SEATS; i++) {
+      if (!(seen.dealtIn & (1 << i))) continue;
+      const candidate = Array.from({ length: MAX_SEATS }, (_, j) =>
+        j === i ? net : 0,
+      );
+      if (matches(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+/**
+ * Read the settled seats and turn them into a reportable result, or nothing.
+ *
+ * Deliberately total: every failure path here — an RPC that will not answer, a
+ * seat account that has already been closed, payouts that do not reproduce the
+ * hash, a table whose big blind was never observed — returns null, and null
+ * means the hand is reported without money attached. None of this is allowed
+ * to throw, because it runs between a settled hand and the next one and the
+ * crank is waiting on it.
+ */
+async function proveResults(
+  connection: Connection,
+  table: PublicKey,
+  record: {
+    handNumber: number;
+    shuffleSeed: string;
+    board: number[];
+    resultHash: string;
+  },
+  seen: HandBuffer,
+): Promise<HandResults | null> {
+  // Without a big blind the rake-free floor and the cap are unknown, and the
+  // server would be deriving a rake from a number nobody checked.
+  if (seen.bigBlind <= 0) return null;
+  try {
+    const infos = await connection.getMultipleAccountsInfo(
+      Array.from({ length: MAX_SEATS }, (_, i) => seatPda(table, i)),
+      "processed",
+    );
+    const stacksAfter = infos.map((info) => {
+      if (!info) return null;
+      try {
+        return decodeSeat(new Uint8Array(info.data)).stack;
+      } catch {
+        return null;
+      }
+    });
+
+    const payouts = provePayouts(
+      record.handNumber,
+      record.shuffleSeed,
+      record.board,
+      record.resultHash,
+      stacksAfter,
+      seen,
+    );
+    if (!payouts) return null;
+
+    // A proven payout with no remembered occupant cannot be credited to
+    // anybody, and a partial mapping would silently drop one winner's share of
+    // a split pot. Report all of it or none of it.
+    const wallets: (string | null)[] = [];
+    for (let i = 0; i < MAX_SEATS; i++) {
+      if (payouts[i] <= 0) {
+        wallets.push(null);
+        continue;
+      }
+      const meta = seen.seatsMeta.get(i);
+      if (!meta) return null;
+      wallets.push(meta.wallet);
+    }
+    return { bigBlind: seen.bigBlind, payouts, wallets };
+  } catch {
+    return null;
+  }
+}
 
 export function useHandCapture(
   tableId: number | null,
@@ -71,6 +214,7 @@ export function useHandCapture(
   const hand = useTableStore((s) => s.hand);
   const tableView = useTableStore((s) => s.table);
   const seats = useTableStore((s) => s.seats);
+  const config = useTableStore((s) => s.config);
 
   // Collect salts for as long as the hand is live.
   useEffect(() => {
@@ -78,15 +222,30 @@ export function useHandCapture(
 
     let forHand = buffer.current.get(hand.handNumber);
     if (!forHand) {
-      forHand = { salts: new Map(), dealtIn: 0, pot: 0 };
+      forHand = {
+        salts: new Map(),
+        dealtIn: 0,
+        pot: 0,
+        seatsMeta: new Map(),
+        bigBlind: 0,
+      };
       buffer.current.set(hand.handNumber, forHand);
     }
     forHand.dealtIn |= hand.dealtIn;
     forHand.pot = Math.max(forHand.pot, potTotal(seats));
+    if (config) forHand.bigBlind = config.bigBlind;
     for (let i = 0; i < MAX_SEATS; i++) {
       const s = seats[i];
       if (!s || s.saltState !== SALT_REVEALED || forHand.salts.has(i)) continue;
       forHand.salts.set(i, { commit: s.saltCommit, salt: s.salt });
+    }
+    // Overwritten on every look, so what survives is the last state before the
+    // pot moved rather than the first. A seat that empties mid-hand keeps the
+    // occupant it had while it was playing.
+    for (let i = 0; i < MAX_SEATS; i++) {
+      const s = seats[i];
+      if (!s?.occupant) continue;
+      forHand.seatsMeta.set(i, { wallet: s.occupant, stack: s.stack });
     }
 
     // Keep a few hands' worth, no more.
@@ -178,12 +337,19 @@ export function useHandCapture(
               await saveHand(record).catch(() => {
                 // Storage refused. The hand is lost to history, play continues.
               });
+
+              // What the seats hold now, read in one call. The payouts are the
+              // difference this makes to what was there before, and the result
+              // hash decides whether that difference can be believed.
+              const results = await proveResults(connection, table, record, seen);
+
               // The lobby's volume numbers come from these reports; the server
               // re-verifies before storing, and a failure is nobody's problem.
               // The pot travels beside the record rather than inside it: the
               // record is the thing the verifier proves, and it must stay
-              // exactly what was proven, here and in IndexedDB.
-              reportHand(record, seen.pot);
+              // exactly what was proven, here and in IndexedDB. The payouts
+              // travel the same way and for the same reason.
+              reportHand(record, seen.pot, results ?? undefined);
               pruneSalts(table.toBase58(), n);
               return;
             }
