@@ -269,6 +269,22 @@ export const CREATE_TABLE_LAMPORTS = 45_000_000;
  */
 export const ONBOARD_FLOOR_MICRO_USDC = 4_000_000;
 
+/**
+ * Chips the onboarding gate offers to buy: the smallest buy-in, and nothing
+ * more.
+ *
+ * The gate used to offer the whole balance — a wallet holding $11.98 was met
+ * with "Buy 1,198 chips", which reads as a demand to commit everything before
+ * being allowed to sit anywhere. It was never a demand, but a player has no
+ * way to know that from a button, and the one screen standing between them and
+ * a seat is the worst place to ask for the largest amount.
+ *
+ * So the gate converts a seat's worth and leaves the rest in the wallet, where
+ * it stays theirs. Buying more is a normal thing to do afterwards, from the
+ * chips sheet in the lobby, with a field they can type into.
+ */
+export const ONBOARD_BUY_CHIPS = ONBOARD_FLOOR_MICRO_USDC / MICRO_USDC_PER_CHIP;
+
 /** Salt protocol states, on Seat. */
 export const SALT_NONE = 0;
 export const SALT_COMMITTED = 1;

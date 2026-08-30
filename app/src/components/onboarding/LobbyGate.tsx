@@ -15,10 +15,16 @@ import { CheckIcon, CopyIcon, UsdcMark } from "@/components/primitives/Icons";
 import { SolanaMark } from "@/components/primitives/StackCredit";
 import { Button } from "@/components/primitives/Button";
 import {
+  ONBOARD_BUY_CHIPS,
   ONBOARD_FLOOR_MICRO_USDC,
   PLAY_FLOOR_LAMPORTS,
 } from "@/lib/constants";
-import { formatSol, microUsdcToChips } from "@/lib/money";
+import {
+  chipsToMicroUsdc,
+  formatSol,
+  formatUsd,
+  microUsdcToChips,
+} from "@/lib/money";
 
 /**
  * The readiness gate, straight off the ladder in the design system's
@@ -213,6 +219,16 @@ export function LobbyGate({
   }, [open, locked, dismissGate]);
 
   if (!open) return null;
+
+  /*
+   * What the last step actually buys: one seat's worth, not the wallet.
+   *
+   * A player only reaches this step holding at least the floor, so the min()
+   * is a guard rather than a case — but a balance that moves between the read
+   * and the click must never produce a buy the wallet cannot cover.
+   */
+  const gateBuy = Math.min(ONBOARD_BUY_CHIPS, microUsdcToChips(microUsdc));
+  const gateRest = Math.max(0, microUsdc - chipsToMicroUsdc(gateBuy));
 
   const installed = wallets.filter(
     (w) =>
@@ -418,21 +434,26 @@ export function LobbyGate({
                 </span>
                 <h3>Turn USDC into chips</h3>
                 <p className="gate-note">
-                  A cent a chip, and the same rate back out. You hold{" "}
-                  <span className="num">{fmtUsdc(microUsdc)}</span>, enough for{" "}
-                  <span className="num">
-                    {microUsdcToChips(microUsdc).toLocaleString()}
-                  </span>{" "}
-                  chips.
+                  A cent a chip, and the same rate back out.{" "}
+                  <span className="num">{formatUsd(gateBuy)}</span> is the
+                  smallest buy-in, so that is all this step takes.
+                  {gateRest > 0 && (
+                    <>
+                      {" "}
+                      The other <span className="num">{fmtUsdc(gateRest)}</span>{" "}
+                      stays in your wallet — buy more from the lobby whenever
+                      you want it.
+                    </>
+                  )}
                 </p>
                 <Button
                   variant="gradient"
                   size="lg"
                   loading={busy === "buy"}
                   disabled={buyBlocked !== null}
-                  onClick={() => void buy(microUsdcToChips(microUsdc))}
+                  onClick={() => void buy(gateBuy)}
                 >
-                  Buy {microUsdcToChips(microUsdc).toLocaleString()} chips
+                  Buy {gateBuy.toLocaleString()} chips
                 </Button>
                 {buyBlocked && (
                   <p className="gate-warn" role="status">
