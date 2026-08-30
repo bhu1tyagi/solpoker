@@ -37,6 +37,8 @@ interface Board {
 /** One day, with every figure cumulative to that day. */
 export interface PoolPoint {
   at: number;
+  /** Hands recorded to date — the chart's x axis. */
+  hands: number;
   /** All rake collected, to date. */
   rake: number;
   /** The players' share of it — the pool as it stood that day. */
@@ -104,6 +106,9 @@ let inFlight: Promise<Omit<Payload, "you">> | null = null;
 const MEMO_MS = 15_000;
 
 const n = (v: unknown) => Number(v ?? 0);
+
+/** How many points a chart series is thinned to. See the profile route. */
+const SERIES_POINTS = 400;
 
 export async function GET(req: Request) {
   const s = db();
@@ -192,32 +197,59 @@ export async function GET(req: Request) {
            ORDER BY chips DESC, h.wallet
            LIMIT ${REWARDS_BOARD_SIZE}`,
         /*
-         * The pool as it accrued, one row per day with rake in it.
+         * The pool as it accrued, one point per HAND rather than per day.
          *
-         * Bucketed in the database and capped at two years: the chart draws a
-         * point per day however many hands are behind it, so shipping the raw
-         * rows would be a large payload to throw away on arrival.
+         * Bucketed by day the line was a handful of points joined by straight
+         * runs, which made a pool that grows hand by hand look like it grows
+         * in daily steps. Rows are folded to one row per hand first — a hand
+         * has a row per seat — then a window carries the running total in
+         * settle order, and the result is thinned to at most SERIES_POINTS
+         * samples with the last hand always kept.
+         *
+         * This is the one place per-hand resolution costs something. Measured
+         * at 200k hands (400k rows) it runs 243ms against the 43ms the daily
+         * version took, because a running total cannot be computed without
+         * ordering every hand. It is paid at most once per MEMO_MS across all
+         * readers and runs in parallel with the other five queries, so it sets
+         * the floor for a cold rewards build rather than adding to it. The
+         * trade is a pool line that actually shows the pool growing instead of
+         * a few straight daily steps.
          */
         s`
-          SELECT date_trunc('day', settled_at) AS day,
-                 coalesce(sum(rake_chips), 0)  AS rake
-            FROM hand_players
-           WHERE cluster = ${CLUSTER_TAG}
-             AND settled_at > now() - interval '2 years'
-           GROUP BY 1
-           ORDER BY 1`,
+          WITH per_hand AS (
+            SELECT table_id, hand_number,
+                   min(settled_at)     AS at,
+                   sum(rake_chips)     AS rake
+              FROM hand_players
+             WHERE cluster = ${CLUSTER_TAG}
+               AND settled_at > now() - interval '2 years'
+             GROUP BY table_id, hand_number
+          ),
+          seq AS (
+            SELECT row_number() OVER w AS n, at,
+                   sum(rake) OVER w    AS rake
+              FROM per_hand
+            WINDOW w AS (ORDER BY at, table_id, hand_number ROWS UNBOUNDED PRECEDING)
+          ),
+          sized AS (SELECT *, count(*) OVER () AS total FROM seq)
+          SELECT n AS hands, at, rake
+            FROM sized
+           WHERE n % greatest(1, (total / ${SERIES_POINTS})::int) = 0 OR n = total
+           ORDER BY n`,
       ]);
 
       // Cumulated here so the running total and the fifth taken off it are
       // both plain to read, and so the pool can never drift from the rake it
       // is a share of.
-      let running = 0;
+      // Already cumulative from the window; the pool is simply the players'
+      // share of whatever rake had been collected by that hand.
       const series: PoolPoint[] = daily.map((r) => {
-        running += n(r.rake);
+        const rake = n(r.rake);
         return {
-          at: new Date(r.day as Date).getTime(),
-          rake: running,
-          pool: poolFromRake(running),
+          at: new Date(r.at as Date).getTime(),
+          hands: n(r.hands),
+          rake,
+          pool: poolFromRake(rake),
           yours: null,
         };
       });
@@ -280,14 +312,35 @@ export async function GET(req: Request) {
          * which is the truth — their contribution did not fall, it simply did
          * not grow.
          */
+        /*
+         * The caller's rake at each of the same hand positions.
+         *
+         * Their running total is taken over the GLOBAL hand order, not their
+         * own, so the two lines share an x axis: at hand 900 of the room, this
+         * is what that wallet had contributed. Rows they were not in count as
+         * zero and simply carry the previous total forward.
+         */
         s`
-          SELECT date_trunc('day', settled_at) AS day,
-                 coalesce(sum(rake_chips), 0)  AS rake
-            FROM hand_players
-           WHERE cluster = ${CLUSTER_TAG} AND wallet = ${me}
-             AND settled_at > now() - interval '2 years'
-           GROUP BY 1
-           ORDER BY 1`,
+          WITH per_hand AS (
+            SELECT table_id, hand_number,
+                   min(settled_at) AS at,
+                   sum(rake_chips) FILTER (WHERE wallet = ${me}) AS mine
+              FROM hand_players
+             WHERE cluster = ${CLUSTER_TAG}
+               AND settled_at > now() - interval '2 years'
+             GROUP BY table_id, hand_number
+          ),
+          seq AS (
+            SELECT row_number() OVER w AS n,
+                   sum(coalesce(mine, 0)) OVER w AS mine
+              FROM per_hand
+            WINDOW w AS (ORDER BY at, table_id, hand_number ROWS UNBOUNDED PRECEDING)
+          ),
+          sized AS (SELECT *, count(*) OVER () AS total FROM seq)
+          SELECT n AS hands, mine
+            FROM sized
+           WHERE n % greatest(1, (total / ${SERIES_POINTS})::int) = 0 OR n = total
+           ORDER BY n`,
         /*
          * Where the caller actually stands, counted rather than ranked.
          *
@@ -329,14 +382,13 @@ export async function GET(req: Request) {
       ]);
 
       if (mineDaily.length > 0) {
-        const byDay = new Map<number, number>();
-        for (const r of mineDaily) {
-          byDay.set(new Date(r.day as Date).getTime(), n(r.rake));
-        }
-        let mine = 0;
+        // Keyed by hand position, which both queries sample identically.
+        const byHand = new Map<number, number>();
+        for (const r of mineDaily) byHand.set(n(r.hands), n(r.mine));
+        let carry = 0;
         series = shared.series.map((p) => {
-          mine += byDay.get(p.at) ?? 0;
-          return { ...p, yours: mine };
+          carry = byHand.get(p.hands) ?? carry;
+          return { ...p, yours: carry };
         });
       }
 

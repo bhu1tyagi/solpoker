@@ -50,8 +50,21 @@ export interface Series {
 
 interface Props {
   series: Series[];
-  /** Epoch millis per point, same length as every series' values. */
+  /**
+   * The x VALUE of each point — cumulative hands played, not a timestamp.
+   *
+   * Poker is measured in hands, not in calendar days. A player who plays five
+   * hundred hands on a Saturday and none for a week draws a long flat line on
+   * a time axis, which reads as a losing streak when nothing was played at
+   * all; the same run on a hands axis is one steep segment and then nothing,
+   * which is what actually happened. It is also the axis every poker tracker
+   * uses, so the shape is one players already know how to read.
+   */
   points: number[];
+  /** What each point was, in words, for the tooltip. Usually a date. */
+  pointLabels?: string[];
+  /** Renders an x value for the axis and the tooltip. */
+  formatX?: (v: number) => string;
   format: (v: number) => string;
   /** Short form for the axis, where space is tight. */
   formatAxis?: (v: number) => string;
@@ -76,12 +89,11 @@ function niceTicks(min: number, max: number, count = 4): number[] {
   return out;
 }
 
-const fmtDay = (at: number) =>
-  new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
 export function LineChart({
   series,
   points,
+  pointLabels,
+  formatX,
   format,
   formatAxis,
   height = 300,
@@ -126,10 +138,29 @@ export function LineChart({
     return { min: lo - pad, max: hi + pad, ticks: niceTicks(lo, hi) };
   }, [series]);
 
+  /*
+   * Spaced by VALUE, not by index.
+   *
+   * Evenly spacing points by their position in the array is only honest when
+   * the steps between them are equal. They are not: one entry can be five
+   * hands and the next five hundred, and drawing those the same width states
+   * that the same amount of poker happened in each. The gap between two
+   * points is now proportional to the hands between them.
+   */
+  const xSpan = useMemo(() => {
+    if (points.length === 0) return { lo: 0, hi: 1 };
+    const lo = Math.min(...points);
+    const hi = Math.max(...points);
+    return { lo, hi: hi === lo ? lo + 1 : hi };
+  }, [points]);
+
   const x = useCallback(
-    (i: number) =>
-      PAD.left + (points.length <= 1 ? plotW / 2 : (i / (points.length - 1)) * plotW),
-    [points.length, plotW],
+    (i: number) => {
+      if (points.length <= 1) return PAD.left + plotW / 2;
+      const t = (points[i] - xSpan.lo) / (xSpan.hi - xSpan.lo);
+      return PAD.left + t * plotW;
+    },
+    [points, plotW, xSpan],
   );
   const y = useCallback(
     (v: number) => PAD.top + plotH - ((v - min) / (max - min)) * plotH,
@@ -158,8 +189,19 @@ export function LineChart({
     const rect = e.currentTarget.getBoundingClientRect();
     const px = e.clientX - rect.left;
     if (points.length === 0) return;
-    const t = (px - PAD.left) / (plotW || 1);
-    setHover(Math.max(0, Math.min(points.length - 1, Math.round(t * (points.length - 1)))));
+    // Nearest by pixel distance. With uneven spacing the old index-scaling
+    // maths would snap to whichever point happened to sit at that fraction of
+    // the array rather than to the one under the pointer.
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < points.length; i++) {
+      const d = Math.abs(x(i) - px);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    setHover(best);
   };
 
   // Arrow keys move the crosshair, so the same readout is reachable without a
@@ -247,16 +289,15 @@ export function LineChart({
         {points.length > 0 && (
           <>
             <text x={PAD.left} y={H - 8} className="chart-axis-label chart-axis-x">
-              {fmtDay(points[0])}
+              {(formatX ?? String)(points[0])}
             </text>
             {points.length > 1 && (
               <text
                 x={W - PAD.right}
                 y={H - 8}
-                textAnchor="end"
-                className="chart-axis-label chart-axis-x"
+                className="chart-axis-label chart-axis-x chart-axis-x-end"
               >
-                {fmtDay(points[points.length - 1])}
+                {(formatX ?? String)(points[points.length - 1])}
               </text>
             )}
           </>
@@ -311,7 +352,13 @@ export function LineChart({
           }}
           role="status"
         >
-          <div className="chart-tip-day">{fmtDay(points[hover])}</div>
+          <div className="chart-tip-day">
+            {(formatX ?? String)(points[hover])}
+            {pointLabels?.[hover] && (
+              // The date is kept, it just stopped being the axis.
+              <span className="chart-tip-when">{pointLabels[hover]}</span>
+            )}
+          </div>
           {series.map((s) => (
             <div key={s.key} className="chart-tip-row">
               <span className="chart-tip-key" style={{ background: `var(${s.color})` }} />
@@ -336,7 +383,7 @@ export function LineChart({
             <caption className="sr-only">{caption}</caption>
             <thead>
               <tr>
-                <th scope="col">Day</th>
+                <th scope="col">Hands</th>
                 {series.map((s) => (
                   <th key={s.key} scope="col">
                     {s.label}
@@ -346,8 +393,8 @@ export function LineChart({
             </thead>
             <tbody>
               {points.map((at, i) => (
-                <tr key={at}>
-                  <th scope="row">{fmtDay(at)}</th>
+                <tr key={`${at}-${i}`}>
+                  <th scope="row">{(formatX ?? String)(at)}</th>
                   {series.map((s) => (
                     <td key={s.key}>
                       {s.values[i] === null

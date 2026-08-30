@@ -35,6 +35,8 @@ export interface YouRewards {
 /** One day, cumulative: the rake collected and the players' share of it. */
 export interface PoolPoint {
   at: number;
+  /** Hands recorded to date — the chart's x axis. */
+  hands: number;
   rake: number;
   pool: number;
   /** The caller's own rake to date, or null when no wallet was named. */

@@ -101,6 +101,15 @@ const headers = { "Cache-Control": "private, no-store" };
 
 const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 
+/**
+ * How many points a chart series is thinned to.
+ *
+ * Enough that the line shows real shape rather than a few straight runs, few
+ * enough that a heavy player's history is not a megabyte of JSON. Below this
+ * many hands nothing is dropped at all.
+ */
+const SERIES_POINTS = 400;
+
 function empty(wallet: string): Profile {
   return {
     wallet,
@@ -184,69 +193,68 @@ export async function GET(req: Request) {
           FROM players
          WHERE cluster = ${CLUSTER_TAG} AND wallet = ${wallet}`,
       /*
-       * One row per day the wallet played, ordered.
+       * One point per HAND, not per day.
        *
-       * Bucketed in the database rather than shipped raw: a busy player's
-       * whole history is tens of thousands of rows, and the chart draws one
-       * point per day whatever arrives. Capped at two years, which is far
-       * past anything this product has, so the payload can never surprise.
+       * A day is the wrong grain for a poker graph. A session of three hundred
+       * hands collapsed to a single point, so the line between two days was a
+       * straight interpolation and every swing inside the session — the whole
+       * thing a player opens this chart to see — was invisible. Bucketed by
+       * day the graph could only ever look linear.
+       *
+       * Running totals come from a window over the hands in the order they
+       * were settled. The result is then thinned to at most SERIES_POINTS
+       * evenly spaced samples, so a player with forty hands gets all forty and
+       * one with forty thousand gets a detailed line rather than a payload
+       * measured in megabytes. The final hand is always kept, so the last
+       * point on the chart is the player's real current position and not
+       * whatever the sampling happened to land on.
        */
       s`
-        SELECT date_trunc('day', settled_at) AS day,
-               count(*)                                 AS hands,
-               count(*) FILTER (WHERE payout_chips > 0)  AS hands_won,
-               count(*) FILTER (WHERE showdown)          AS showdowns,
-               coalesce(sum(rake_chips), 0)              AS rake,
-               count(*) FILTER (WHERE contributed_chips IS NOT NULL) AS priced,
-               coalesce(sum(payout_chips - contributed_chips), 0)     AS net,
-               coalesce(sum(payout_chips - contributed_chips)
-                        FILTER (WHERE payout_chips > contributed_chips), 0) AS won_amt,
-               coalesce(-sum(payout_chips - contributed_chips)
-                        FILTER (WHERE payout_chips < contributed_chips), 0) AS lost_amt
-          FROM hand_players
-         WHERE cluster = ${CLUSTER_TAG} AND wallet = ${wallet}
-           AND settled_at > now() - interval '2 years'
-         GROUP BY 1
-         ORDER BY 1`,
+        WITH seq AS (
+          SELECT row_number() OVER w                                   AS n,
+                 settled_at,
+                 count(*) FILTER (WHERE payout_chips > 0) OVER w        AS hands_won,
+                 count(*) FILTER (WHERE showdown) OVER w                AS showdowns,
+                 sum(rake_chips) OVER w                                 AS rake,
+                 count(*) FILTER (WHERE contributed_chips IS NOT NULL)
+                   OVER w                                               AS priced,
+                 coalesce(sum(payout_chips - contributed_chips)
+                   FILTER (WHERE contributed_chips IS NOT NULL) OVER w, 0) AS net,
+                 coalesce(sum(payout_chips - contributed_chips)
+                   FILTER (WHERE contributed_chips IS NOT NULL
+                             AND payout_chips > contributed_chips) OVER w, 0) AS won_amt,
+                 coalesce(-sum(payout_chips - contributed_chips)
+                   FILTER (WHERE contributed_chips IS NOT NULL
+                             AND payout_chips < contributed_chips) OVER w, 0) AS lost_amt
+            FROM hand_players
+           WHERE cluster = ${CLUSTER_TAG} AND wallet = ${wallet}
+             AND settled_at > now() - interval '2 years'
+          WINDOW w AS (ORDER BY settled_at, table_id, hand_number
+                       ROWS UNBOUNDED PRECEDING)
+        ),
+        sized AS (SELECT *, count(*) OVER () AS total FROM seq)
+        SELECT n AS hands, settled_at, hands_won, showdowns, rake, priced,
+               net, won_amt, lost_amt
+          FROM sized
+         WHERE n % greatest(1, (total / ${SERIES_POINTS})::int) = 0 OR n = total
+         ORDER BY n`,
     ]);
 
     /*
-     * Cumulated here rather than in SQL, so the running total is plain to read
-     * and the null rule stays visible: `net` is null for a day whose hands
-     * carried no contributions, and once any day can be priced the running
-     * net continues from the last known figure rather than resetting.
+     * Already cumulative from the window above, so this only shapes it. `net`
+     * stays null until a hand has actually been priced — a running profit of
+     * zero over hands nobody could price is not a profit of zero.
      */
-    let cNet = 0;
-    let cWon = 0;
-    let cLost = 0;
-    let cRake = 0;
-    let cHands = 0;
-    let cHandsWon = 0;
-    let cShowdowns = 0;
-    let everPriced = false;
-    const series: SeriesPoint[] = daily.map((r) => {
-      const priced = n(r.priced) ?? 0;
-      if (priced > 0) {
-        everPriced = true;
-        cNet += n(r.net) ?? 0;
-        cWon += n(r.won_amt) ?? 0;
-        cLost += n(r.lost_amt) ?? 0;
-      }
-      cRake += n(r.rake) ?? 0;
-      cHands += n(r.hands) ?? 0;
-      cHandsWon += n(r.hands_won) ?? 0;
-      cShowdowns += n(r.showdowns) ?? 0;
-      return {
-        at: new Date(r.day as Date).getTime(),
-        net: everPriced ? cNet : null,
-        won: cWon,
-        lost: cLost,
-        rake: cRake,
-        hands: cHands,
-        handsWon: cHandsWon,
-        showdowns: cShowdowns,
-      };
-    });
+    const series: SeriesPoint[] = daily.map((r) => ({
+      at: new Date(r.settled_at as Date).getTime(),
+      hands: n(r.hands) ?? 0,
+      net: (n(r.priced) ?? 0) > 0 ? (n(r.net) ?? 0) : null,
+      won: n(r.won_amt) ?? 0,
+      lost: n(r.lost_amt) ?? 0,
+      rake: n(r.rake) ?? 0,
+      handsWon: n(r.hands_won) ?? 0,
+      showdowns: n(r.showdowns) ?? 0,
+    }));
 
     const t = totals[0] ?? {};
     const p = profit[0] ?? {};
