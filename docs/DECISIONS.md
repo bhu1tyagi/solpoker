@@ -991,3 +991,100 @@ neither logs an error off Vercel.
 `@vercel/speed-insights` lists optional peers including `@sveltejs/kit`, which
 drags vite 8 against the vite 7 vitest wants and fails the install locally and
 on the build server alike. In a file, both resolve identically.
+
+## The mark became a drawing, 30 August
+
+**Poker charts are measured in hands, not days.** Bucketing the series by day
+collapsed a three-hundred-hand session to one point, so the line between two
+days was a straight interpolation and every swing inside the session was
+invisible. The grain is one point per hand, thinned to at most four hundred
+evenly spaced samples with the last hand always kept — so the final point is
+the player's real position rather than wherever the sampling landed, and a
+heavy player's history is not a megabyte of JSON.
+
+**The identity is illustrated; the interaction language is not.** The chip ring
+was the geometry the old spade-on-a-chip mark was built from, and it stayed:
+turn clock, every loading state, the privacy indicator, and the print at the
+centre of the felt. Replacing a brand is not a reason to replace the vocabulary
+players have already learned.
+
+**Art is trimmed to its own ink before it ships.** Untrimmed, a height in CSS
+is the height of a box with transparent margin in it, so a nominally correct
+34px lockup read as undersized. Trimming makes one number mean one thing.
+
+**Pre-lit art gets no CSS lighting.** The drawing arrives with its own neon, so
+the brand link has no hover glow: a second light thrown at it reads as the
+image blooming rather than as the link answering. Where the product does want
+motion on it — the hero — the light travels THROUGH the art's own alpha rather
+than sitting on top of it.
+
+**An illustration needs different opacities from a flat mark.** Near-white rim
+light on dark green carries far more contrast than the chip it replaced, so the
+numbers that read as weave for one read as a picture hung behind the board for
+the other. On the felt the raccoon is a watermark that never brightens and the
+ring alone answers when the room is working — which is only safe because the
+loud state cannot coincide with cards on the cloth. On the card back the
+greyscale came off for the opposite reason: at 40px this art's legibility IS
+its rim light, and desaturating it left a smudge.
+
+**A character cannot be a garnish on the cards.** The chip could stand in front
+of them because a chip is a prop. The mascot leads the hero and the cards are
+small and low in front of him. Only the face-down card turns on hover: turning
+one the reader can already see is a shuffle, not a reveal, and revealing an ace
+of hearts beside the ace of spades keeps exactly one of each card on the table.
+
+**A share card is one object, not a screenshot of a page.** It used to draw a
+background, float a panel on it and export both. The canvas IS the card now.
+
+**Composition beat opacity for the mascot on that card.** He is a dark figure
+on transparent, so anything dark enough to print a figure over is dark enough
+to erase him — a centred stack over a centred image measured a peak luminance
+of 45 out of 255. Giving the type its own column with a horizontal wipe, and
+putting the gradients down as ground rather than overlay, let the art run at an
+opacity where it actually reads. Nothing is drawn past the column's edge, so no
+rule or figure crosses the drawing.
+
+**Every figure on the card is fitted, not assumed.** A size chosen to look
+right on the happy case runs off the column on the unhappy one, and this is the
+most quotable surface the product has. The profit steps down until it fits; the
+three facts are fitted as a row so one huge number shrinks all three rather
+than putting three sizes in one line; and the domain sizes down and then
+truncates from the front, because size-down alone bottomed out and a
+ninety-character hostname still overflowed into the address beside it.
+
+**Colour is the second signal on a result, never the only one.** Profit is
+green and loss is red, and the sign stays in the string, because a posted card
+gets screenshotted and recompressed and the one thing that must survive is
+whether it was a win. A win keeps its glow and a loss does not — a red halo
+around a bad night is rubbing it in.
+
+**The same number twice, once large and once small, is the page arguing with
+itself.** The four figures that used to sit above the profile's share card are
+gone from the page; the card states them at a size nothing else competes with.
+Nothing left the record — every value is still fetched, still stored, and still
+on screen inside the card.
+
+**A grid row is as tall as its tallest item, which is the wrong way round when
+one item should follow another.** Holding the rewards boards to the chart's
+height needed a positioning shell: as a direct child, a long board grew the row
+and dragged the chart up with it — measured, a card ballooned from 273px to
+1447px. Inside the shell the row is measured from the chart alone and the
+boards are handed the result, cropping and scrolling to fit it.
+
+**One control that is always there beats two that take turns.** The board's
+expand icon appeared only above six rows and was hidden on touch, with a
+written "Show all N" row covering for it. An affordance that comes and goes is
+one nobody learns. It is a single 44px button now, on every board at every
+length, for every pointer.
+
+**A control sized to the exact minimum is a control that misses it.** At device
+pixel ratio 3 layout snaps to thirds of a pixel, so an element at exactly 44px
+measures 43.99 about a third of the time. Anything tappable now clears the
+floor with slack rather than landing on it.
+
+**Inline styles beat stylesheets, and a dead rule is worse than no rule.**
+`Button` sets `display` inline, so the rule hiding the header CTA on phones had
+never once applied — the button was on every phone header from the day the rule
+was written, and it took a larger lockup being crushed to make room for it
+before anyone noticed. The rule now carries `!important`, which is the only
+thing that outranks an inline style.

@@ -299,8 +299,9 @@ one set of sources in `app/public/new-logos` — `logo-*.png` for the mark alone
 `wordmark.png` for the horizontal lockup, `hero-mark.png` for the landing page —
 plus `app/icon.png` and `app/apple-icon.png`, which Next serves as the tab and
 home-screen icons by file convention. The art is pre-lit, so nothing in CSS
-re-lights it; the one exception is the brand link's hover, which deepens the
-glow the drawing already has rather than adding a new one.
+re-lights it and the brand link has no hover treatment at all: a second light
+thrown at a drawing that already glows reads as the image blooming out, not as
+the link answering the pointer.
 
 It replaced a spade-on-a-chip mark drawn as SVG in `Logo.tsx` and duplicated in
 `icon.svg`/`apple-icon.svg`. The chip ring that mark was built from did not go
@@ -2011,6 +2012,124 @@ Speed Insights joined Analytics, both gated on `VERCEL_ENV` so neither logs an
 error off Vercel. It reports the route rather than the URL, so a table id never
 leaves the client attached to a measurement.
 
+## The room got a face, 30 August
+
+### A day is the wrong grain for a poker graph
+
+Both series were bucketed by day in the database, so a session of three hundred
+hands collapsed to one point and the line between two days was a straight
+interpolation. Every swing inside the session — the whole thing a player opens
+the chart to see — was invisible, and the graph could only ever look linear.
+
+The grain is one point per HAND now. Running totals come from a window over the
+hands in settle order, then the result is thinned to at most four hundred
+evenly spaced samples: forty hands gets all forty, forty thousand gets a
+detailed line rather than a payload measured in megabytes. The last hand is
+always kept, so the final point is the player's real current position rather
+than wherever the sampling happened to land. The x axis is hands recorded
+rather than the calendar, which is what every poker tracker uses — a week away
+belongs absent from the shape rather than drawn as a flat stretch that reads as
+a losing streak. The dates ride in the tooltip.
+
+### The mark became a drawing
+
+The identity is illustrated now, and the sizing came with it. The three source
+renders are trimmed to their own ink before shipping, so a height in CSS is the
+height of the DRAWING rather than of a box with air around it — untrimmed, a
+nominally correct 34px header lockup read as undersized because a third of it
+was transparent margin. The whole shipped set is smaller than the single
+`logo.png` it replaces.
+
+The felt needed the opposite treatment from everywhere else. An illustration
+carries far more contrast than the flat chip it replaced — near-white rim light
+against dark green — so the opacities that read as weave for the old mark read
+as a picture hung behind the board for this one. The raccoon is a grey
+watermark that never brightens (0.08 at its loudest, 0.015 while cards are
+out), and the ring alone answers when the room is working. That split is safe
+because `tableBusy` is `roomWorking && !showBoard`: the loud state cannot
+coincide with cards on the cloth, so a legible ring is never a ring competing
+with a hand.
+
+The card back kept the mark and lost the greyscale. The old treatment was right
+for a flat chip; this art's whole legibility at 40px is its purple-and-cyan rim
+light, and desaturating it left a smudge. Opacity alone does the dimming.
+
+The hero inverted. A chip is a prop and can stand in front of the cards; a
+character cannot be a garnish on them. He is large, centred and at the BACK of
+the stage with two small cards low in front of him, and hovering turns the
+face-down card up to reveal an ace of hearts beside the ace of spades already
+showing — only that one card turns, because turning one the reader can already
+see is a shuffle rather than a reveal. The neon moves: a band sweeps up through
+the art's own alpha, masked to the smoke and the script so it never crosses his
+face, and the whole effect is behind `@supports (mask-composite)` because
+without compositing the mask layers add and paint a bright rectangle.
+
+### The share card is one object
+
+It used to draw a page — a background, a rounded panel floating on it — and
+export the whole thing, so what a player posted was a screenshot of a card
+rather than the card. It is full bleed now, edge to edge, with the app's own
+gradients inside it.
+
+Making the mascot the background took a composition change rather than an
+opacity. He is a dark figure on transparent, so a centred stack over a centred
+image left him at a peak luminance of **45 out of 255** — measurably invisible,
+because anything dark enough to print a figure over is dark enough to erase
+him. The type has its own column with a horizontal wipe under it; the gradients
+are ground rather than overlay, so the green rising from the bottom right is
+light BEHIND him; and nothing is drawn past the column's edge, so no rule or
+figure crosses the drawing. He measures 230 now.
+
+Every figure on it is fitted rather than assumed. The profit steps its own size
+down until it fits the column, so an eight-figure night stays inside it; the
+three facts are fitted as a ROW so one huge number shrinks all three together
+rather than putting three sizes in one line; and the domain sizes down and then
+truncates from the front, keeping the registrable domain, because size-down
+alone bottomed out and a ninety-character hostname still overflowed 181px into
+the address beside it. Profit is green and loss is red, but the sign stays in
+the string — a posted card gets screenshotted and recompressed, and the one
+thing that has to survive that is whether it was a win.
+
+### Two pages laid out around it
+
+The profile leads with the share card, with the figures it does not carry
+beside it. The four that used to sit above it — net, hands, won, biggest pot —
+are gone from the page because the card already states them at a size nothing
+else competes with; the same number twice, once large and once small, is the
+page arguing with itself. Nothing left the record: every one of those values is
+still fetched, still stored, and still on screen inside the card. Both charts
+share a row, because they share an x axis and are read against each other.
+
+Rewards took the same shape. The headline column is narrower — it holds one
+number and a line of type, and the width belongs to whichever half has more in
+it — and all eight figures sit in one block beside it. Two of them were already
+on the page in worse places: the rake total was buried in the sentence under
+the headline, and the token-fee share was filed under "Your share" when it is a
+programme-wide rule that applies to everyone.
+
+The chart and the two boards share the row below, boards stacked. They are held
+to **equal heights taken from the chart**, which needed a positioning shell: a
+grid row is as tall as its tallest item, so with the boards as a direct child a
+long list made the row grow and dragged the chart up to match. Measured with 28
+rows cloned into one board, the card ballooned from 273px to 1447px and the
+chart stretched to 2910. Inside the shell the card holds 273, both boards stay
+equal, and the list scrolls internally. Each board crops to its height, shows
+its head, and opens in full over the page — one 44px control, present on every
+board whatever its length, because an affordance that appears at six rows and
+up is one nobody learns.
+
+### Three floors that were not being met
+
+`Button` sets `display` as an INLINE style, so the rule hiding the header CTA
+on phones had never once applied. That button has been on every phone header
+since the rule was written; it only became visible when the larger lockup
+started being crushed to make room for it.
+
+Two buttons were 40px against a 44px floor, and the brand link had landed on
+exactly 44 — which measures 43.99 about a third of the time at device pixel
+ratio 3, so a control sized to the exact minimum is a control that misses it on
+some device. All three now clear it with slack.
+
 ## Known problems
 
 **Phantom shows a malicious-dApp warning on pokerable.fun.** Blowfish, the
@@ -2022,6 +2141,28 @@ takedown: an appeal to `review@phantom.com`, drafted at
 absence of any token, presale or airdrop. Until it clears, the first thing a
 new player sees is their own wallet telling them not to proceed. **This is
 currently the largest single obstacle between the product and a user.**
+
+**`design-check` fails on elements that meet the spec.** It measures tap
+targets at device pixel ratio 3, where layout snaps to thirds of a pixel, and
+compares with a strict `height < 44`. An element that is exactly 44px — the
+menu toggle, a chart chip, the board's expand control, anything sized to
+`--touch-target` — measures 43.99 often enough that the check is red on most
+runs and names a height of "44px" while failing it. The elements are correct
+and the assertion is not; the fix is an epsilon (`< 44 - 0.5`) at
+`scripts/design-check.mjs:198`, deliberately left alone because loosening a
+quality gate is not a change to make on somebody else's behalf.
+
+**`ui-check` fails `/` on selectors that no longer match anything.** It expects
+`h1:has-text('Pokerable')`, a `[aria-label='How this works']` link, and a
+`button` matching "Connect" — the landing h1 has always read "The deck is
+on-chain", the trust link carries no such label, and the CTA is an anchor
+rather than a button. Three stale expectations rather than three regressions;
+every other page in that check passes.
+
+**`app/public/new-logos/` ships 5.4MB of source art to production.** The three
+originals the shipped set was generated from live inside `public/`, so Next
+serves them alongside the derived copies that are actually used. They belong
+somewhere versioned but unserved — `design/logos/` — and it is one `git mv`.
 
 **The server routes are newer than any audit.** A funder wallet that signs
 delegation on request, a Postgres holding the hand record, an RPC proxy with a

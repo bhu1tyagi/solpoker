@@ -122,6 +122,14 @@ Pokerable, and that name wins. It is ownable and trademarkable, where "Solana
 Poker" is generic enough to fight for search results with every other Solana
 poker project.
 
+> **Superseded, 30 August.** The name held; everything below about how it is
+> SET did not. The wordmark is no longer type at all — it is drawn art, a
+> neon-lit raccoon in a tuxedo with the name in his cigar smoke, shipped as
+> PNGs rather than a font and a tile. The gradient logo tile described below no
+> longer exists. See "The mark became a drawing" in `DECISIONS.md` and the mark
+> paragraph under "What is built" in `STATUS.md`. The rest of this document —
+> layout, sections, the rules about what may be claimed — still stands.
+
 Consequences for this build:
 
 - Wordmark is `POKERABLE`, single colour. The draft's two-tone
@@ -148,6 +156,7 @@ bg-[--c-glass-solid]/80 backdrop-blur-md border-b border-[--c-glass-border]
 
 - **Left** — gradient logo tile (40px, `--r-md`) + wordmark. Reuse
   `primitives/Logo.tsx`; the mark already exists, only the tile is new.
+  *(Superseded: shipped as one drawn lockup at 44px, no tile. See above.)*
 - **Centre** — Lobby · Tournaments · High Stakes · Leaderboard.
   `text-white/60`, hover `text-white`, `--m-ui-fast`. Hidden below `md`.
   **Ship only routes that exist.** Today that is Lobby and Leaderboard;
