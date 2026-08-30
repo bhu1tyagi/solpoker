@@ -263,6 +263,11 @@ const TONES = {
   },
   gradient: {
     background: "linear-gradient(90deg, var(--c-purple) 0%, var(--c-green) 100%)",
+    // Across the border box, not the padding box. Tiled out to the 1px
+    // transparent border below, the ramp wrapped around and printed a green
+    // hairline down the purple edge of the raise button.
+    backgroundOrigin: "border-box",
+    backgroundRepeat: "no-repeat",
     border: "1px solid transparent",
     color: "var(--c-felt)",
   },

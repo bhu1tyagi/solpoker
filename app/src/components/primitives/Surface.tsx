@@ -1,8 +1,9 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
-import type { ReactNode } from "react";
-import { spring, z } from "@/styles/theme";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
+import { CloseIcon } from "@/components/primitives/Icons";
+import { spring } from "@/styles/theme";
 
 /** A panel. The default container for anything that is not the felt. */
 export function Panel({
@@ -41,93 +42,97 @@ export function Panel({
   );
 }
 
+/**
+ * The one dialog in the product.
+ *
+ * The head stays put and the body scrolls under it, which is what a dialog
+ * carrying a list needs and costs a dialog carrying three controls nothing.
+ * Escape closes it, the scrim closes it, and the page behind it stops
+ * scrolling while it is up — a dialog that leaves the room moving underneath
+ * reads as an overlay rather than as the thing you are now doing.
+ */
 export function Modal({
   open,
   onClose,
   title,
+  hint,
   children,
   width = 460,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  /** A quiet fact beside the title. Not a subtitle — one short line. */
+  hint?: ReactNode;
   children: ReactNode;
   width?: number;
 }) {
+  const headingId = useId();
+  const box = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
+
+  // The page behind it must not scroll under it.
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    box.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   return (
     <AnimatePresence>
       {open && (
         <motion.div
+          className="modal-scrim"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
           onClick={onClose}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "color-mix(in srgb, var(--c-felt) 82%, transparent)",
-            backdropFilter: "blur(8px) saturate(0.7)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: z.modal,
-            // Keep clear of notches and home bars; dvh keeps the box inside
-            // the screen a phone actually shows once its bars settle.
-            padding:
-              "max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px))",
-          }}
         >
           <motion.div
-            initial={{ opacity: 0, y: 14, scale: 0.98 }}
+            ref={box}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={headingId}
+            tabIndex={-1}
+            className="modal-box"
+            style={{ maxWidth: width }}
+            initial={reduce ? false : { opacity: 0, y: 14, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.99 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.99 }}
             transition={spring.gentle}
             onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "100%",
-              maxWidth: width,
-              maxHeight: "min(85dvh, 720px)",
-              overflowY: "auto",
-              overscrollBehavior: "contain",
-              // Opaque, deliberately. This was once a 24%-alpha surface, so a
-              // dialog opened over the felt had a poker table showing through
-              // the middle of it — every number competing with a card back
-              // behind it. A dialog is a thing on top of the room, not a
-              // window into it.
-              //
-              // --e-lifted is one of the two places a real drop shadow is
-              // allowed: this is genuinely floating over the table.
-              background: "var(--c-felt-raised)",
-              border: "1px solid var(--c-rule-strong)",
-              borderRadius: "var(--r-lg)",
-              boxShadow: "var(--e-lifted)",
-              padding: "var(--sp-6)",
-            }}
           >
             {/* No gradient bar across the top. The purple-to-green sweep is
                 the mark's, and a dialog chrome that borrows it turns an
                 identity into a paint bucket. A plain rule does the same job of
                 separating the title from the body. */}
-            <div
-              aria-hidden
-              style={{
-                height: 1,
-                margin: "calc(var(--sp-6) * -1) calc(var(--sp-6) * -1) var(--sp-5)",
-                background: "var(--c-rule)",
-              }}
-            />
-            <h2
-              style={{
-                fontSize: "var(--t-display-md-size)",
-                lineHeight: "var(--t-display-md-line)",
-                letterSpacing: "var(--t-display-md-tracking)",
-                color: "var(--c-ink)",
-                marginBottom: "var(--sp-5)",
-              }}
-            >
-              {title}
-            </h2>
-            {children}
+            <header className="modal-head">
+              <h2 id={headingId}>{title}</h2>
+              {hint && <span className="modal-hint">{hint}</span>}
+              <button
+                type="button"
+                className="modal-close"
+                onClick={onClose}
+                aria-label="Close"
+              >
+                <CloseIcon size={18} />
+              </button>
+            </header>
+            <div className="modal-body">{children}</div>
           </motion.div>
         </motion.div>
       )}

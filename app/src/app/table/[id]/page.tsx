@@ -12,6 +12,7 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 import { TableFelt } from "@/components/poker/TableFelt";
 import { ActionBar, type ActionKind } from "@/components/poker/ActionBar";
+import { HandHistoryModal } from "@/components/poker/HandHistoryModal";
 import { Button } from "@/components/primitives/Button";
 import { ChipGlyph } from "@/components/primitives/Chip";
 import { PrivacyRing } from "@/components/primitives/ChipRing";
@@ -155,6 +156,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const [delegated, setDelegated] = useState<boolean | null>(null);
   const [acting, setActing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const me = publicKey?.toBase58() ?? null;
   const mySeat = useMemo(
@@ -453,14 +455,20 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   // would show a bet the chain might not have.
   useEffect(() => {
     if (!pending) return;
-    if (!pendingApplies(pending, hand)) {
+    if (!pendingApplies(pending, hand, seats)) {
       setPending(null);
       return;
     }
-    const t = setTimeout(() => setPending(null), 8_000);
+    // An absolute deadline measured from the press, not a fresh eight seconds
+    // on every account push. The effect now re-runs whenever any seat changes,
+    // and a rolling timer at a busy table would never fire.
+    const t = setTimeout(
+      () => setPending(null),
+      Math.max(0, pending.sentAt + 8_000 - Date.now()),
+    );
     return () => clearTimeout(t);
-  }, [pending, hand, setPending]);
-  const showPending = pendingApplies(pending, hand);
+  }, [pending, hand, seats, setPending]);
+  const showPending = pendingApplies(pending, hand, seats);
   const viewSeats = showPending ? applyPending(seats, pending) : seats;
   const viewHand = showPending && hand ? applyPendingHand(hand, pending) : hand;
   const pot = potTotal(viewSeats);
@@ -491,6 +499,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         kind,
         toTotal,
         handNumber: hand.handNumber,
+        street: hand.street,
         sentAt: Date.now(),
       });
       try {
@@ -741,11 +750,11 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Link href={`/history/${id}`} style={{ textDecoration: "none" }}>
-              <IconButton title="Hand history">
-                <HistoryIcon />
-              </IconButton>
-            </Link>
+            {/* Over the table, not away from it: checking a deal is something
+                you do between hands, with a seat to come back to. */}
+            <IconButton title="Hand history" onClick={() => setHistoryOpen(true)}>
+              <HistoryIcon />
+            </IconButton>
             {/* On a phone the room's own controls join the history button up
                 here, so the row below carries only the table's state and does
                 not strand two icons on a line of their own. */}
@@ -958,6 +967,12 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
           )}
         </div>
       </main>
+
+      <HandHistoryModal
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        tableId={String(id)}
+      />
 
       <Modal
         open={confirmDelete}
@@ -1249,7 +1264,15 @@ function BalancePill({ chips, small = false }: { chips?: number; small?: boolean
   );
 }
 
-/** A square icon button, the shape the corners of the room are built from. */
+/**
+ * A square icon button, the shape the corners of the room are built from.
+ *
+ * One that does something is a real `<button>`; one wrapped in a `<Link>` stays
+ * a span, because an anchor may not contain interactive content. The split
+ * matters: a `role="button"` span has no tab stop and no Enter key, so the
+ * controls that stopped being links — history, mute — would have become
+ * mouse-only the moment they lost the anchor around them.
+ */
 function IconButton({
   children,
   title,
@@ -1261,27 +1284,40 @@ function IconButton({
   solid?: boolean;
   onClick?: () => void;
 }) {
+  const shared = {
+    className: "m-icon",
+    title,
+    "aria-label": title,
+    whileHover: { y: -1 },
+    whileTap: { scale: 0.96 },
+    transition: spring.snappy,
+    style: {
+      width: 44,
+      height: 44,
+      display: "grid",
+      placeItems: "center",
+      borderRadius: "var(--r-lg)",
+      background: solid ? "var(--c-felt-edge)" : "var(--c-felt-raised)",
+      color: solid ? "var(--c-green)" : "var(--c-ink-muted)",
+      cursor: "pointer",
+    } as React.CSSProperties,
+  };
+
+  if (onClick) {
+    return (
+      <motion.button
+        type="button"
+        onClick={onClick}
+        {...shared}
+        style={{ ...shared.style, border: "none", padding: 0 }}
+      >
+        {children}
+      </motion.button>
+    );
+  }
+
   return (
-    <motion.span
-      className="m-icon"
-      title={title}
-      aria-label={title}
-      role="button"
-      onClick={onClick}
-      whileHover={{ y: -1 }}
-      whileTap={{ scale: 0.96 }}
-      transition={spring.snappy}
-      style={{
-        width: 44,
-        height: 44,
-        display: "grid",
-        placeItems: "center",
-        borderRadius: "var(--r-lg)",
-        background: solid ? "var(--c-felt-edge)" : "var(--c-felt-raised)",
-        color: solid ? "var(--c-green)" : "var(--c-ink-muted)",
-        cursor: "pointer",
-      }}
-    >
+    <motion.span role="button" {...shared}>
       {children}
     </motion.span>
   );

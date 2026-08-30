@@ -1009,6 +1009,17 @@ input[type="range"]::-moz-range-thumb {
  */
 .cta-gradient {
   background: linear-gradient(135deg, var(--c-purple) 0%, var(--c-green) 100%);
+  /*
+   * The button carries a 1px transparent border (Button.tsx gives every
+   * variant one so the row's heights agree). A background paints its gradient
+   * across the PADDING box by default and then tiles it out to the border box
+   * — so that transparent 1px re-showed the far end of the ramp, and the
+   * purple end of the button wore a green hairline down its left edge. Paint
+   * the ramp across the border box instead and the seam has nowhere to come
+   * from.
+   */
+  background-origin: border-box;
+  background-repeat: no-repeat;
   color: #000;
   font-weight: 700;
   box-shadow: var(--e-glow-cta);
@@ -1022,7 +1033,15 @@ input[type="range"]::-moz-range-thumb {
   position: absolute;
   inset: 0;
   background: rgba(255, 255, 255, 0.2);
-  transform: translateX(-100%) skewX(-12deg);
+  /*
+   * Parked past the edge, not exactly on it.
+   *
+   * At -100% the sweep is only its own width away, and the skew widens it by
+   * half the button's height on each side — so its trailing corner sat back
+   * inside the left edge and printed a permanent white wedge over the purple.
+   * 130% clears the skew at both ends of the travel.
+   */
+  transform: translateX(-130%) skewX(-12deg);
   pointer-events: none;
 }
 @media (hover: hover) and (pointer: fine) {
@@ -1030,7 +1049,7 @@ input[type="range"]::-moz-range-thumb {
     transition: transform var(--m-shimmer) var(--m-ease);
   }
   .cta-gradient:hover::after {
-    transform: translateX(100%) skewX(-12deg);
+    transform: translateX(130%) skewX(-12deg);
   }
 }
 
@@ -1166,6 +1185,42 @@ input[type="range"]::-moz-range-thumb {
 }
 .site-nav-link:hover {
   color: var(--c-ink);
+}
+/*
+ * Where you are.
+ *
+ * Full-strength ink plus a short rule under the label. Two cues, because
+ * "brighter grey" is not a state anyone can name, and roughly 8% of men
+ * cannot be relied on to separate the colours this product otherwise uses.
+ * The rule is drawn on a pseudo-element rather than as a border so the
+ * inactive links do not have to reserve its height and the row never shifts
+ * as you move between pages.
+ */
+.site-nav-link {
+  position: relative;
+  padding-block: var(--sp-1);
+}
+.site-nav-link.is-current {
+  color: var(--c-ink);
+  font-weight: 600;
+}
+.site-nav-link.is-current::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--sp-1) * -1);
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: var(--c-green);
+}
+/* Same job in the phone sheet, where a row is wide and an underline would
+   run the width of the screen: a bar down the leading edge instead. */
+.site-sheet-link.is-current {
+  color: var(--c-ink);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--c-green);
+  padding-left: var(--sp-3);
 }
 
 .site-header-actions {
@@ -3288,24 +3343,161 @@ input[type="range"]::-moz-range-thumb {
   }
 }
 
-/* The create modal's name field, on the system like every other input. */
-.modal-name-input {
+/* ------------------------------------------------------------------ */
+/* The dialog.                                                          */
+/*                                                                      */
+/* One box for every modal in the product: a head that stays put, a     */
+/* body that scrolls under it, and a close that is always in the same   */
+/* corner. See the comment on Modal in Surface.tsx.                     */
+/* ------------------------------------------------------------------ */
+
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--c-felt) 82%, transparent);
+  backdrop-filter: blur(8px) saturate(0.7);
+  -webkit-backdrop-filter: blur(8px) saturate(0.7);
+  /* Keep clear of notches and home bars; dvh keeps the box inside the
+     screen a phone actually shows once its bars settle. */
+  padding: max(var(--sp-4), env(safe-area-inset-top, 0px)) var(--sp-4)
+    max(var(--sp-4), env(safe-area-inset-bottom, 0px));
+}
+
+.modal-box {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  min-height: var(--touch-target);
-  padding: 0 var(--sp-4);
+  max-height: min(85dvh, 720px);
+  /* Opaque, deliberately. This was once a 24%-alpha surface, so a dialog
+     opened over the felt had a poker table showing through the middle of
+     it — every number competing with a card back behind it. A dialog is a
+     thing on top of the room, not a window into it.
+
+     --e-lifted is one of the two places a real drop shadow is allowed:
+     this is genuinely floating over the table. */
   background: var(--c-felt-raised);
-  border: 1px solid var(--c-glass-border);
-  border-radius: var(--r-md);
+  border: 1px solid var(--c-rule-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--e-lifted);
+  overflow: hidden;
+  outline: none;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-shrink: 0;
+  padding: var(--sp-5) var(--sp-4) var(--sp-4) var(--sp-6);
+  border-bottom: 1px solid var(--c-rule);
+}
+.modal-head h2 {
+  margin: 0;
+  font-size: var(--t-display-md-size);
+  line-height: var(--t-display-md-line);
+  letter-spacing: var(--t-display-md-tracking);
   color: var(--c-ink);
+}
+/* A fact, not a second title: it sits on the baseline of the heading and
+   never grows past one line. */
+.modal-hint {
+  min-width: 0;
+  font-size: var(--t-body-sm-size);
+  color: var(--c-ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.modal-close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-ink-muted);
+  cursor: pointer;
+  transition: color var(--m-fast) var(--m-ease);
+}
+.modal-close:hover {
+  color: var(--c-ink);
+}
+
+.modal-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--sp-5) var(--sp-6) var(--sp-6);
+}
+
+@media (max-width: 479px) {
+  .modal-head {
+    padding: var(--sp-4) var(--sp-2) var(--sp-4) var(--sp-4);
+  }
+  .modal-body {
+    padding: var(--sp-4);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Opening a table.                                                     */
+/*                                                                      */
+/* Borrows the chips sheet's controls outright rather than growing a    */
+/* second set — see the comment in CreateTableModal.tsx. Only the       */
+/* handful of things that are genuinely this dialog's own live here,    */
+/* and each is written as a compound selector so it outranks the        */
+/* .xchg- rule it is adjusting whichever way round the file grows.      */
+/* ------------------------------------------------------------------ */
+
+/* A text field where the chips sheet has a number one: same shell, but the
+   name is prose, so it is not set in the tabular money face. */
+.xchg-field.ct-name {
+  margin-bottom: var(--sp-5);
+}
+.xchg-field.ct-name input {
   font-family: var(--font-body);
   font-size: var(--t-body-size);
+  font-weight: 500;
 }
-.modal-name-input::placeholder {
-  color: var(--c-ink-faint);
+/* The facts sit directly under the track they describe, so they read as its
+   caption rather than as a separate row. */
+.xchg-facts.ct-facts {
+  margin: calc(var(--sp-3) * -1) 0 var(--sp-5);
 }
-.modal-name-input:focus-visible {
-  border-color: var(--c-green);
-  outline: none;
+.xchg-facts.ct-facts .num {
+  color: var(--c-ink);
+  font-weight: 700;
+}
+.xchg-facts.ct-facts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.xchg-balance.ct-legend {
+  margin-bottom: var(--sp-3);
+}
+/*
+ * The two buttons, side by side and deliberately unequal.
+ *
+ * Cancel gets a third of the row; the affirmative gets the rest. Both are the
+ * same height and both clear the touch target, so the difference is width
+ * alone — which is the honest way to say which one the dialog exists for
+ * without dimming the other into something that looks disabled.
+ */
+.ct-foot {
+  margin-top: var(--sp-5);
+}
+.ct-foot > * {
+  flex: 1;
+}
+.ct-foot > :last-child {
+  flex: 2.4;
 }
 
 /* ------------------------------------------------------------------ */
@@ -3470,6 +3662,10 @@ input[type="range"]::-moz-range-thumb {
 }
 .xchg-tab:hover {
   color: var(--c-ink);
+}
+.xchg-tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .xchg-tab.is-on {
   background: color-mix(in srgb, var(--c-green) 14%, transparent);
@@ -5604,4 +5800,195 @@ input[type="range"]::-moz-range-thumb {
 .chart-tip-when {
   margin-left: var(--sp-2);
   opacity: 0.7;
+}
+
+/* ------------------------------------------------------------------ */
+/* Hand history, in the dialog.                                         */
+/*                                                                      */
+/* It was a page once. A player checking a deal is mid-session with a    */
+/* seat to come back to, so it opens over the table instead — see the    */
+/* comment on HandHistoryModal.                                         */
+/* ------------------------------------------------------------------ */
+
+.hh-lede {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--t-body-sm-size);
+  line-height: 1.55;
+  color: var(--c-ink-muted);
+}
+
+/* The last line, after the hands. Quiet by colour, not by size:
+   --c-ink-faint is still 7.3:1, and a line set at label size is a line
+   nobody reads. It needs no rule of its own — the last row's already there. */
+.hh-note {
+  margin: var(--sp-4) 0 0;
+  font-size: var(--t-body-sm-size);
+  line-height: 1.55;
+  color: var(--c-ink-faint);
+}
+
+/*
+ * A list, not a stack of cards.
+ *
+ * Every hand used to sit in its own bordered, filled box inside a bordered,
+ * filled dialog — a container inside a container, five times down the page,
+ * which is the look of a layout that could not decide what the surface was.
+ * The dialog is the surface. The hands are rows on it, told apart by a
+ * hairline and by air, the way a list of anything is.
+ */
+.hh-list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--c-rule);
+}
+
+/* Left-aligned like every other line in the dialog. Centred text in a box
+   read as a second thing pinned to the middle of the first. */
+.hh-empty {
+  padding: var(--sp-5) 0 var(--sp-2);
+  border-top: 1px solid var(--c-rule);
+}
+.hh-empty p {
+  margin: 0;
+  color: var(--c-ink-muted);
+}
+.hh-empty-sub {
+  margin-top: var(--sp-2) !important;
+  max-width: 62ch;
+  font-size: var(--t-body-sm-size);
+  line-height: 1.55;
+  color: var(--c-ink-faint) !important;
+}
+
+/* ---------------------------------------------- one recorded hand */
+
+.vc {
+  padding: var(--sp-4) 0;
+  border-bottom: 1px solid var(--c-rule);
+}
+/* The head holds still while the cards below it wrap, so the verify button
+   does not move under a thumb between one row and the next. */
+.vc-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+/* Everything after the hand number sits on the right: the verdict arrives
+   beside the button that produced it, not stranded across the row. */
+.vc-hand {
+  margin-right: auto;
+  font-size: var(--t-label-size);
+  color: var(--c-ink-faint);
+}
+.vc-hand .num {
+  margin-left: var(--sp-1);
+  font-family: var(--font-display);
+  font-size: var(--t-body-lg-size);
+  color: var(--c-ink);
+}
+/* A word and a glyph. Green against red is the one pairing this product may
+   not lean on alone, and roughly one man in twelve cannot separate them. */
+.vc-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--t-body-sm-size);
+  font-weight: 600;
+}
+.vc-verdict.is-ok {
+  color: var(--c-win);
+}
+.vc-verdict.is-bad {
+  color: var(--c-loss);
+}
+
+.vc-cards {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  margin-top: var(--sp-3);
+}
+.vc-group {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.vc-tag {
+  font-size: var(--t-label-size);
+  color: var(--c-ink-faint);
+}
+/* The board is one row of five, laid out the way a dealer lays it: nearly
+   touching. Spread it on the 4px scale and it stops reading as a board. */
+.vc-cardrow {
+  display: flex;
+  gap: 3px;
+}
+/* One player's two cards read as one hand, so the gap between players has to
+   be visibly larger than the gap inside a hand. */
+.vc-cardrow.is-holes {
+  gap: var(--sp-3);
+}
+.vc-hole {
+  display: flex;
+  gap: 2px;
+}
+
+/* Indented rather than ruled off. The rows already carry hairlines, and a
+   second one inside a row turns a list into a grid of boxes again. */
+.vc-detail {
+  margin-top: var(--sp-4);
+  padding-left: var(--sp-4);
+  border-left: 1px solid var(--c-rule);
+  font-size: var(--t-body-sm-size);
+  line-height: 1.5;
+  color: var(--c-ink-muted);
+}
+.vc-detail p {
+  margin: 0 0 var(--sp-2);
+}
+.vc-detail-bad {
+  color: var(--c-loss);
+}
+.vc-detail ul {
+  margin: 0;
+  padding-left: var(--sp-5);
+}
+.vc-detail li {
+  margin-bottom: var(--sp-1);
+}
+.vc-mono {
+  display: flex;
+  gap: var(--sp-3);
+  margin-top: var(--sp-1);
+}
+.vc-mono-label {
+  flex-shrink: 0;
+  min-width: 62px;
+  font-size: var(--t-label-size);
+  color: var(--c-ink-faint);
+}
+.vc-mono-value {
+  word-break: break-all;
+  color: var(--c-ink-muted);
+}
+
+@media (max-width: 479px) {
+  .vc-cards {
+    gap: var(--sp-3);
+  }
+  /* The board and the shown hands stack here, so the label goes above its
+     cards rather than beside them — otherwise the shown row starts an inch
+     right of the board row and the left edge goes ragged. */
+  .vc-group {
+    flex-basis: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-1);
+  }
+  .vc-cardrow {
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
 }

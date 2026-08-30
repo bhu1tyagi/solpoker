@@ -5,12 +5,10 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Transaction } from "@solana/web3.js";
 import BN from "bn.js";
-import { motion } from "motion/react";
 import { Modal } from "@/components/primitives/Surface";
 import { Button } from "@/components/primitives/Button";
 import { ChipGlyph } from "@/components/primitives/Chip";
-import { ClockIcon } from "@/components/primitives/Icons";
-import { spring } from "@/styles/theme";
+import { ClockIcon, TableIcon } from "@/components/primitives/Icons";
 import { getBaseConnection } from "@/lib/connection";
 import { makeProgram } from "@/lib/anchor";
 import {
@@ -23,7 +21,7 @@ import {
 import { CREATE_TABLE_LAMPORTS, MAX_SEATS } from "@/lib/constants";
 import { playerPda, tablePda } from "@/lib/pdas";
 import { friendlyError } from "@/lib/net";
-import { formatUsdRange } from "@/lib/money";
+import { formatUsd, formatUsdRange } from "@/lib/money";
 import { sweepTransactions } from "@/lib/sweep";
 import { toast } from "@/stores/ui-store";
 import type { LobbyTable } from "@/hooks/use-tables";
@@ -37,6 +35,10 @@ const STAKES = [
   { label: "Low", sb: 50, bb: 100, min: 2_000, max: 10_000 },
   { label: "High", sb: 250, bb: 500, min: 10_000, max: 50_000 },
 ];
+
+const TIMEOUTS = [15, 30, 60];
+
+const ROUND = { borderRadius: "var(--r-pill)" } as const;
 
 /**
  * Creating a table takes several instructions, so they are batched into as few
@@ -180,140 +182,114 @@ export function CreateTableModal({
     }
   };
 
+  const s = STAKES[stake];
+
+  /*
+   * The same dialog the chips sheet is.
+   *
+   * Buying chips and cashing out already settled what a decision looks like in
+   * this product: a pill track for the choice, a quiet line of facts under it,
+   * a rounded field, one gradient CTA across the bottom. This screen used to
+   * answer the same question with boxed cards, three uppercase section
+   * headings, and every stake carrying four stacked figures — two of which
+   * were the same number in chips and in dollars. Two dialogs one click apart
+   * were speaking in two different accents.
+   *
+   * So the containers are gone. The stake is a track like the buy/sell track,
+   * what that stake means is one line of facts like the chips sheet's, and the
+   * clock is a row of pills like its 25% / Half / Max. Nothing here needed a
+   * box; a box was standing in for a decision about hierarchy.
+   */
   return (
     <Modal open={open} onClose={busy ? () => {} : onClose} title="New table">
-      <Field label="Table name (optional)">
-        {/* A label, not an identity: 31 chars, plain charset, named once.
-            Left empty, the table gets its generated name. */}
+      {/* A label, not an identity: 31 chars, plain charset, named once.
+          Left empty, the table gets its generated name. */}
+      <label className="xchg-field ct-name">
+        <TableIcon size={17} />
         <input
           type="text"
           value={name}
           maxLength={31}
-          placeholder="Left blank, we pick one"
+          placeholder="Table name (optional)"
+          aria-label="Table name (optional)"
           onChange={(e) => setName(e.target.value)}
-          className="modal-name-input"
           disabled={busy}
         />
-      </Field>
+      </label>
 
-      <Field label="Stakes">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-          {STAKES.map((s, i) => {
-            const active = stake === i;
-            return (
-              <motion.button
-                key={s.label}
-                onClick={() => setStake(i)}
-                aria-pressed={active}
-                whileHover={{ y: -3 }}
-                whileTap={{ scale: 0.97 }}
-                animate={{ scale: active ? 1.02 : 1 }}
-                transition={spring.snappy}
-                style={{
-                  textAlign: "center",
-                  padding: "14px 10px 12px",
-                  borderRadius: "var(--r-lg)",
-                  cursor: "pointer",
-                  // The inner layer must be opaque: a translucent surface lets
-                  // the border-box gradient wash across the whole card face
-                  // and drown the small type.
-                  border: "1.5px solid transparent",
-                  background: active
-                    ? "linear-gradient(var(--c-felt-raised), var(--c-felt-raised)) padding-box, var(--c-green) border-box"
-                    : "linear-gradient(var(--c-felt-raised), var(--c-felt-raised)) padding-box, var(--c-rule) border-box",
-                  color: "var(--c-ink)",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 5,
-                  boxShadow: active ? "var(--e-raised)" : "none",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.09em",
-                    textTransform: "uppercase",
-                    color: active ? "var(--c-ink)" : "var(--c-ink-faint)",
-                  }}
-                >
-                  {s.label}
-                </span>
-                <span
-                  className="num"
-                  style={{ fontSize: "var(--t-display-md-size)", fontWeight: 600, lineHeight: 1.1 }}
-                >
-                  {s.sb}/{s.bb}
-                </span>
-                <span
-                  className="num"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    fontSize: "var(--t-label-size)",
-                    fontWeight: 700,
-                    color: "var(--c-ink)",
-                  }}
-                >
-                  <ChipGlyph size={12} />
-                  {s.min}–{s.max}
-                </span>
-                <span className="num" style={{ fontSize: "var(--t-label-size)", color: "var(--c-ink-muted)" }}>
-                  {formatUsdRange(s.min, s.max)}
-                </span>
-              </motion.button>
-            );
-          })}
-        </div>
-      </Field>
+      <div className="xchg-tabs" role="radiogroup" aria-label="Stakes">
+        {STAKES.map((t, i) => (
+          <button
+            key={t.label}
+            type="button"
+            role="radio"
+            aria-checked={stake === i}
+            disabled={busy}
+            className={stake === i ? "xchg-tab is-on" : "xchg-tab"}
+            onClick={() => setStake(i)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-      <Field label="Time to act">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ color: "var(--c-ink-faint)", display: "inline-flex" }}>
-            <ClockIcon size={17} />
-          </span>
-          {[15, 30, 60].map((t) => (
-            <Button
-              key={t}
-              size="sm"
-              variant={timeout === t ? "primary" : "ghost"}
-              onClick={() => setTimeoutSecs(t)}
-            >
-              {t}s
-            </Button>
-          ))}
-        </div>
-      </Field>
+      {/* What the chosen stake actually costs, as facts rather than as a card.
+          The figures are in dollars because chips are USDC and the lobby's own
+          filter rail already names the tiers that way. */}
+      <ul className="xchg-facts ct-facts">
+        <li>
+          <span className="num">
+            {formatUsd(s.sb)} / {formatUsd(s.bb)}
+          </span>{" "}
+          blinds
+        </li>
+        <li>
+          <ChipGlyph size={13} />
+          <span className="num">{formatUsdRange(s.min, s.max)}</span> buy-in
+        </li>
+      </ul>
 
-      <div style={{ marginTop: 22, display: "flex", gap: 10, alignItems: "center" }}>
-        <Button variant="primary" fullWidth onClick={create} disabled={!publicKey} loading={busy}>
-          {busy && progress ? progress : "Create table"}
-        </Button>
-        <Button variant="quiet" onClick={onClose} disabled={busy}>
+      <p className="xchg-balance ct-legend">
+        <ClockIcon size={15} />
+        Time to act
+      </p>
+      <div className="xchg-presets" role="radiogroup" aria-label="Time to act">
+        {TIMEOUTS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={timeout === t}
+            disabled={busy}
+            className={timeout === t ? "xchg-preset is-on" : "xchg-preset"}
+            onClick={() => setTimeoutSecs(t)}
+          >
+            <span className="num">{t}s</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Side by side, and not the same size. Cancel takes the width of its
+          own label; the affirmative takes the rest, so the row says which of
+          the two the dialog is for without either of them shouting. */}
+      <div className="xchg-actions ct-foot">
+        {/* Pill-radius, to finish the shape the track and the presets above
+            start. Set here rather than in the stylesheet because Button
+            writes its radius as an inline style, which no rule outranks. */}
+        <Button variant="ghost" size="lg" onClick={onClose} disabled={busy} style={ROUND}>
           Cancel
+        </Button>
+        <Button
+          variant="gradient"
+          size="lg"
+          onClick={create}
+          disabled={!publicKey}
+          loading={busy}
+          style={ROUND}
+        >
+          {busy && progress ? progress : "Create table"}
         </Button>
       </div>
     </Modal>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginTop: 18 }}>
-      <div
-        style={{
-          fontSize: "var(--t-label-size)",
-          color: "var(--c-ink-faint)",
-          textTransform: "uppercase",
-          letterSpacing: "0.07em",
-          marginBottom: 7,
-        }}
-      >
-        {label}
-      </div>
-      {children}
-    </div>
   );
 }

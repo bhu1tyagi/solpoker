@@ -95,6 +95,12 @@ export interface PendingAction {
   /** Street total the seat is moving to, for predicting stack and bet. */
   toTotal: number;
   handNumber: number;
+  /**
+   * The street the action was taken on. `committedStreet` resets to zero when
+   * the street turns, so a prediction that outlived its street would read the
+   * new zero as "the chips are not in yet" and put them in a second time.
+   */
+  street: number;
   sentAt: number;
 }
 

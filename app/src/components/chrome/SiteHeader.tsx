@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Button } from "@/components/primitives/Button";
 import { Wordmark } from "@/components/primitives/Logo";
@@ -111,7 +112,21 @@ function WalletSlot() {
   );
 }
 
+/**
+ * Which nav item the current URL belongs to.
+ *
+ * Prefix matching, not equality: /table/9 is reached from the lobby, and a bar
+ * that goes blank the moment you are actually somewhere is a bar that only
+ * ever highlights four of the product's pages. `/` is excluded from the prefix
+ * rule for the obvious reason.
+ */
+function isCurrent(pathname: string | null, href: string): boolean {
+  if (!pathname) return false;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function SiteHeader() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   // Solid until the page moves, so the hero's top edge is not cut by a
   // hairline sitting on nothing.
@@ -150,12 +165,25 @@ export function SiteHeader() {
             <Wordmark size={44} />
           </Link>
 
+          {/*
+            The current page is marked, not merely coloured: `aria-current`
+            is what a screen reader announces, and the underline beneath the
+            label is the second cue a colour change cannot carry on its own.
+          */}
           <nav className="site-nav" aria-label="Main">
-            {NAV.map((item) => (
-              <Link key={item.href} href={item.href} className="site-nav-link">
-                {item.label}
-              </Link>
-            ))}
+            {NAV.map((item) => {
+              const here = isCurrent(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={here ? "site-nav-link is-current" : "site-nav-link"}
+                  aria-current={here ? "page" : undefined}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
           <div className="site-header-actions">
@@ -200,16 +228,20 @@ export function SiteHeader() {
             aria-label="Main"
             onClick={(e) => e.stopPropagation()}
           >
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="site-sheet-link"
-                onClick={() => setOpen(false)}
-              >
-                {item.label}
-              </Link>
-            ))}
+            {NAV.map((item) => {
+              const here = isCurrent(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={here ? "site-sheet-link is-current" : "site-sheet-link"}
+                  aria-current={here ? "page" : undefined}
+                  onClick={() => setOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
             <Button
               href="/lobby"
               variant="gradient"
