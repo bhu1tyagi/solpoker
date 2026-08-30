@@ -144,9 +144,10 @@ export function SiteHeader() {
         className={scrolled ? "site-header glass-blur is-scrolled" : "site-header"}
       >
         <div className="site-header-inner">
-          {/* The chip art IS the O of the word. No tile, no separate mark. */}
+          {/* The lockup, whole: the raccoon and the script are one drawing and
+              are never split apart or re-set in type. */}
           <Link href="/" aria-label="Pokerable home" className="site-brand">
-            <Wordmark />
+            <Wordmark size={44} />
           </Link>
 
           <nav className="site-nav" aria-label="Main">

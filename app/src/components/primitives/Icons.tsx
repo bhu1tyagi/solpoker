@@ -362,6 +362,36 @@ export function ChevronRightIcon({ size = 20 }: Props) {
   );
 }
 
+/**
+ * Close. A cross, and deliberately NOT `XIcon` — that one is the social
+ * brand's letter and lives in the footer; a dialog's dismiss and a link to a
+ * company are not the same glyph however similar they look.
+ */
+export function CloseIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+/**
+ * Expand: two corners pulling apart.
+ *
+ * For opening a list that is showing only its head — the cropped board on the
+ * rewards page. Corners rather than a plus or a chevron, because neither of
+ * those says "the same thing, bigger": a plus reads as adding a row and a
+ * chevron as navigating away from the page.
+ */
+export function ExpandIcon({ size = 20 }: Props) {
+  return (
+    <svg {...frame(size)}>
+      <path d="M9 3H3v6M3 3l7 7" />
+      <path d="M15 21h6v-6M21 21l-7-7" />
+    </svg>
+  );
+}
+
 /*
  * The three socials. Brand glyphs are solid shapes rather than outlines, so
  * they take `fill` and ignore the shared stroke frame.

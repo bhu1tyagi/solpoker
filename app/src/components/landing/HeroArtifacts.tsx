@@ -8,17 +8,27 @@ import {
   useSpring,
   useTransform,
 } from "motion/react";
-import { SPADE_PATH } from "@/components/primitives/Logo";
+import { HEART_PATH, SPADE_PATH } from "@/components/primitives/Logo";
 import { MOTION } from "@/design/tokens";
 
 /**
- * The hero's physical objects: the rendered chip, two cards, a pot shadow.
+ * The hero's physical objects: the brand art, two cards, a pot shadow.
  *
- * The chip is the actual brand art in /public/logo-512.png, a photoreal 3D
- * render, used as itself rather than approximated in CSS. The cards are built
- * here with material treatment (paper gradient, edge highlights, gloss pass,
- * contact shadows) because the table's PlayingCard is a flat UI component that
- * reads as an interface element at this scale, not as an object.
+ * The art is the full lockup in /public/hero-mark.png — the raccoon with the
+ * name drawn in his own smoke — used as itself rather than approximated in
+ * CSS. ONE copy of it, deliberately: the old chip render appeared twice, a
+ * main and a smaller one tossed beside the pot, which works for a prop and
+ * not for a character. Two identical raccoons read as a rendering bug.
+ *
+ * He is the subject and is sized like one: large, centred, at the BACK of the
+ * stage. The cards are small and sit low in front of him. That is the reverse
+ * of what this scene did when the mark was a chip — a chip is a prop and can
+ * stand in front of the cards, a character cannot be a garnish on them.
+ *
+ * The cards are built here with material treatment (paper gradient, edge
+ * highlights, gloss pass, contact shadows) because the table's PlayingCard is
+ * a flat UI component that reads as an interface element at this scale, not
+ * as an object.
  *
  * The whole stage tilts toward the cursor: pointer position drives two motion
  * values through the cursor spring in tokens.ts, so the scene answers the hand
@@ -37,11 +47,37 @@ import { MOTION } from "@/design/tokens";
 const TILT_X = 9; // degrees at full deflection
 const TILT_Y = 13;
 
-function SpadeGlyph({ size }: { size: number }) {
+/**
+ * A suit glyph. `size` is the resting size; the centre pip is re-sized in CSS
+ * as a percentage of the card so it tracks the card at every breakpoint.
+ */
+function Suit({ suit, size }: { suit: "spade" | "heart"; size: number }) {
   return (
     <svg viewBox="0 0 100 100" width={size} height={size} aria-hidden>
-      <path d={SPADE_PATH} fill="var(--c-suit-spade)" />
+      <path
+        d={suit === "spade" ? SPADE_PATH : HEART_PATH}
+        fill={suit === "spade" ? "var(--c-suit-spade)" : "var(--c-suit-heart)"}
+      />
     </svg>
+  );
+}
+
+/** An ace face: two corner indices and the big centre pip. */
+function Ace({ suit }: { suit: "spade" | "heart" }) {
+  return (
+    <>
+      <span className="hero-card3d-index">
+        A
+        <Suit suit={suit} size={10} />
+      </span>
+      <span className="hero-card3d-pip">
+        <Suit suit={suit} size={46} />
+      </span>
+      <span className="hero-card3d-index hero-card3d-index--flip">
+        A
+        <Suit suit={suit} size={10} />
+      </span>
+    </>
   );
 }
 
@@ -85,41 +121,57 @@ export function HeroArtifacts() {
           <div className="hero-art-glow" />
           <div className="hero-art-shadow" />
 
-          {/* Card back, deepest object. */}
+          {/*
+            The mascot, big and at the back of the stage. The wrapper owns the
+            geometry so the art and the light travelling through it cannot
+            drift apart; both fill it.
+          */}
+          <div className="hero-mark-wrap">
+            <img
+              src="/hero-mark.png"
+              alt=""
+              className="hero-mark"
+              width={1000}
+              height={1164}
+            />
+            {/*
+              The neon, moving. A band of purple-to-green sweeps upward through
+              the art's own alpha, masked to the top half so it runs up the
+              cigar smoke and the script and leaves his face alone. It is the
+              drawing's own light travelling, not a second light thrown at it —
+              which is why it blends rather than overlays.
+            */}
+            <span className="hero-mark-shimmer" aria-hidden />
+          </div>
+
+          {/*
+            Two small cards, low and in front of him, like a hand held at the
+            table's edge.
+
+            Only the FACE-DOWN one is two-sided, and only it turns: hovering
+            the pair peeks at the hole card, which is the gesture this product
+            is actually about. The ace of spades already on show never moves —
+            turning a card the reader can already see is a shuffle, not a
+            reveal, and it made the pair read as decoration rather than as a
+            hand. What comes up is an ace of HEARTS, so the peek pays off with
+            pocket aces and never puts the same card on the table twice.
+          */}
           <div className="hero-card3d hero-card3d--back">
-            <div className="hero-card3d-frame" />
+            <div className="hero-card3d-flip">
+              <div className="hero-card3d-side">
+                <div className="hero-card3d-frame" />
+              </div>
+              <div className="hero-card3d-side hero-card3d-side--reverse hero-card3d-side--paper">
+                <Ace suit="heart" />
+              </div>
+            </div>
           </div>
 
-          {/* Ace of spades. */}
           <div className="hero-card3d hero-card3d--front">
-            <span className="hero-card3d-index">
-              A
-              <SpadeGlyph size={20} />
-            </span>
-            <span className="hero-card3d-pip">
-              <SpadeGlyph size={104} />
-            </span>
-            <span className="hero-card3d-index hero-card3d-index--flip">
-              A
-              <SpadeGlyph size={20} />
-            </span>
+            <div className="hero-card3d-side hero-card3d-side--paper">
+              <Ace suit="spade" />
+            </div>
           </div>
-
-          {/* The chip: the brand render, used as itself. */}
-          <img
-            src="/logo-512.png"
-            alt=""
-            className="hero-chip hero-chip--main"
-            width={512}
-            height={512}
-          />
-          <img
-            src="/logo-512.png"
-            alt=""
-            className="hero-chip hero-chip--side"
-            width={512}
-            height={512}
-          />
         </motion.div>
       </div>
     </div>

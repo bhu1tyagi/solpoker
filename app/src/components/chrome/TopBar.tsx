@@ -4,7 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { ChipGlyph } from "@/components/primitives/Chip";
-import { Logo } from "@/components/primitives/Logo";
+import { Wordmark } from "@/components/primitives/Logo";
 
 // The wallet button reaches for window on mount, so it cannot render on the server.
 const WalletMultiButton = dynamic(
@@ -40,22 +40,22 @@ export function TopBar({ chips }: { chips?: number }) {
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 9,
-            // The wordmark alone was a short, thin hit target. Padding takes it
-            // to a comfortable tap without moving the text off the bar's line.
+            // The lockup alone was a short, thin hit target. Padding takes it
+            // to a comfortable tap without moving the art off the bar's line.
             padding: "6px 8px",
             margin: "-6px -8px",
             borderRadius: "var(--r-lg)",
-            fontFamily: "var(--font-display)",
-            fontSize: "var(--t-body-lg-size)",
-            color: "var(--c-ink)",
             textDecoration: "none",
-            letterSpacing: "-0.01em",
           }}
         >
-          {/* Decorative: the wordmark beside it already says the name. */}
-          <Logo size={22} />
-          <span className="wordmark-solana">Pokerable</span>
+          {/*
+            The lockup rather than the mark plus set text. In-room chrome is
+            the densest bar in the product, and one piece of art at 26px is
+            quieter there than an icon and a word competing at two weights.
+            The link's own aria-label is what a screen reader announces; the
+            image's alt sits inside it and is never read out twice.
+          */}
+          <Wordmark size={32} />
         </Link>
         <Link
           href="/trust"

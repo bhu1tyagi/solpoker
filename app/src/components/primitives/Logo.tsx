@@ -1,192 +1,68 @@
 /**
- * The Pokerable mark.
+ * The Pokerable brand art.
  *
- * A poker chip in Solana's colours with the spade at its centre, standing on
- * its own — no tile. The chip's eight edge spots are real gaps in the ring
- * rather than dark paint, which is what lets the mark sit on any ground: the
- * background shows through the spots the way the felt shows through a real
- * chip's edge. Rendered at 16, 20, 32, 64 and 160 before shipping; one bold
- * shape is what survives every size.
+ * The identity is illustrated, not drawn in CSS: a neon-lit raccoon in a
+ * tuxedo, and a script wordmark beside it. Both ship as pre-lit PNGs with
+ * their own glow baked in, so nothing here re-lights them — a filter or a
+ * gradient laid over this art fights the rendering rather than adding to it.
  *
- * Kept in one file because `app/icon.svg` draws the same geometry. If this
- * changes, change that too, or the tab and the header stop agreeing.
+ * Two assets, two jobs:
+ *   /logo-*.png   the mark alone (square, transparent), for anywhere the
+ *                 name is already spoken by neighbouring text — the tab, the
+ *                 home screen, the card back, the felt.
+ *   /wordmark.png the horizontal lockup, mark and script together, for
+ *                 anywhere the brand has to introduce itself.
+ *
+ * The tab and home-screen icons are the same art at app/icon.png and
+ * app/apple-icon.png, served by Next's file convention. If the mark changes,
+ * regenerate those from the same source or the tab and the header stop
+ * agreeing.
  */
 
-/** The spade, drawn in a 100x100 box with the stem integrated. */
+/**
+ * The spade, drawn in a 100x100 box with the stem integrated.
+ *
+ * A playing-card suit, not the brand mark — the hero's ace and the felt's
+ * print are the only callers. It lives here because it was drawn alongside
+ * the old chip mark, and moving it now would touch two files for nothing.
+ */
 export const SPADE_PATH =
   "M50 12 C 38 28, 17 39, 17 55 C 17 66, 25 74, 35 74 C 41 74, 46 71, 48 67 " +
   "C 47 76, 44 83, 37 89 L 63 89 C 56 83, 53 76, 52 67 C 54 71, 59 74, 65 74 " +
   "C 75 74, 83 66, 83 55 C 83 39, 62 28, 50 12 Z";
 
 /**
- * The chip as a letterform: the 'o' of the wordmark. Same geometry as the mark,
- * with the ring weight matched to the face the wordmark is actually set in.
- *
- * Both numbers here are tuned to that face and have to move with it. They were
- * drawn for Dela Gothic One, whose stroke is far heavier; on Space Grotesk at
- * 700 a 15-unit ring read as an icon that had wandered into the word, so the
- * ring is thinner and the glyph slightly larger to sit on the same x-height.
- *
- * The hidden 'o' beside it keeps the word whole for screen readers, searches
- * and the page checks: the visible text alone would spell "Pkerable".
+ * The heart, in the same 100x100 box and drawn to the same mass as the spade
+ * above — it spans x 15..85 against the spade's 17..83, so the two sit at the
+ * same optical size when one card is turned over to reveal the other.
  */
-export function ChipO({ size = "0.66em" }: { size?: string }) {
-  const id = "pokerable-chip-o";
-  return (
-    <>
-      <span
-        style={{
-          position: "absolute",
-          width: 1,
-          height: 1,
-          overflow: "hidden",
-          clipPath: "inset(50%)",
-          whiteSpace: "nowrap",
-        }}
-      >
-        o
-      </span>
-      <svg
-        aria-hidden
-        width={size}
-        height={size}
-        viewBox="0 0 100 100"
-        style={{
-          display: "inline-block",
-          verticalAlign: "baseline",
-          marginBottom: "-0.015em",
-        }}
-      >
-        <defs>
-          <linearGradient id={`${id}-suit`} x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0" stopColor="var(--c-purple)" />
-            <stop offset="1" stopColor="var(--c-green)" />
-          </linearGradient>
-        </defs>
-        <circle
-          cx="50"
-          cy="50"
-          r="41"
-          fill="none"
-          stroke={`url(#${id}-suit)`}
-          strokeWidth="11"
-          strokeDasharray="19.7 12.5"
-          strokeDashoffset="9.85"
-        />
-        <g transform="translate(50 51) scale(0.44) translate(-50 -50)">
-          <path d={SPADE_PATH} fill={`url(#${id}-suit)`} />
-        </g>
-      </svg>
-    </>
-  );
-}
-
-export function Logo({
-  size = 22,
-  title,
-  mono = false,
-}: {
-  /**
-   * A number of pixels, or any CSS length. Pass `"1em"` next to text that
-   * scales: a fixed pixel mark beside a `clamp()` wordmark is correct at one
-   * width and wrong at every other, and reads oversized on a phone.
-   */
-  size?: number | string;
-  /**
-   * Only pass this where the mark stands alone. Beside the wordmark it is
-   * decorative, and a title there makes a screen reader say the name twice.
-   */
-  title?: string;
-  /**
-   * Draw the mark in `currentColor` instead of the purple-to-green gradient.
-   *
-   * For the one case where the mark sits ON the gradient — the header's brand
-   * tile. A gradient mark on a gradient ground loses its edges entirely, and
-   * the ring is the piece of this identity that has to stay legible.
-   */
-  mono?: boolean;
-}) {
-  const gradientId = "pokerable-mark-tile";
-  const paint = mono ? "currentColor" : `url(#${gradientId}-suit)`;
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
-      role={title ? "img" : undefined}
-      aria-label={title}
-      aria-hidden={title ? undefined : true}
-      focusable="false"
-      style={{ display: "block", flexShrink: 0 }}
-    >
-      <defs>
-        {/* The chain's colours: Solana's purple-to-green, run bottom-left to
-            top-right at the same angle as its bars. */}
-        <linearGradient id={`${gradientId}-suit`} x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0" stopColor="var(--c-purple)" />
-          <stop offset="1" stopColor="var(--c-green)" />
-        </linearGradient>
-      </defs>
-      {/* The chip: eight fat segments with real gaps between them, plus a
-          thin continuous inner ring that closes the circle. Solid-ring chips
-          need a contrast colour behind their spots; gaps work everywhere. */}
-      <circle
-        cx="50"
-        cy="50"
-        r="42"
-        fill="none"
-        stroke={paint}
-        strokeWidth="10"
-        strokeDasharray="20.3 12.7"
-        strokeDashoffset="10.15"
-      />
-      <circle
-        cx="50"
-        cy="50"
-        r="33"
-        fill="none"
-        stroke={paint}
-        strokeWidth="2.5"
-        opacity="0.7"
-      />
-      {/* Nudged a unit low: a spade carries its weight in the lobes, so a
-          mathematically centred one reads as sitting high in the frame. */}
-      <g transform="translate(50 51) scale(0.5) translate(-50 -50)">
-        <path d={SPADE_PATH} fill={paint} />
-      </g>
-    </svg>
-  );
-}
+export const HEART_PATH =
+  "M50 88 C 31 72, 15 58, 15 40 C 15 27, 24 18, 34 18 C 42 18, 47 22, 50 28 " +
+  "C 53 22, 58 18, 66 18 C 76 18, 85 27, 85 40 C 85 58, 69 72, 50 88 Z";
 
 /**
- * The wordmark: POKERABLE with the chip standing in for the O.
+ * The wordmark: the full lockup, mark and script together.
  *
- * The chip is the rendered art in /public/logo-96.png, not the SVG mark above,
- * and it sits directly in the word with no container tile behind it. The
- * hidden "o" keeps the word whole for screen readers, searches and the page
- * checks; the visible text alone would spell "PKERABLE".
+ * Sized by HEIGHT, in ems or pixels, and the width follows from the art's own
+ * aspect. Sizing by width instead would let a narrow header squash the script
+ * into something unreadable at exactly the moment it has least room.
  *
- * Sized in ems so it scales with whatever type size the header sets. The
- * height sits at the CAP height, not the em box: an image sized to the em box
- * towers over uppercase neighbours and reads as an icon that wandered into
- * the word rather than as a letter.
+ * The art is trimmed to its own ink, so a height here is the height of the
+ * drawing rather than of a box with air around it. Before the trim, a
+ * nominally correct 34px read as an undersized mark because a third of it was
+ * transparent margin.
+ *
+ * `alt` carries the name, so no hidden text is needed beside it: the image is
+ * the brand's only statement of it in the header and the footer.
  */
-export function Wordmark({ size = "1.75rem" }: { size?: string }) {
+export function Wordmark({ size = "2.5rem" }: { size?: number | string }) {
   return (
-    <span className="wordmark" style={{ fontSize: size }}>
-      P
-      <span className="sr-only-o">o</span>
-      {/*
-        The chip sits in a positioned shell so a glow can live behind it. The
-        glow is a sibling, never a filter on the image: a drop-shadow filter
-        would trace the chip's own edges and read as a halo stuck to it,
-        while a blurred disc behind it reads as light coming off the chip.
-      */}
-      <span className="wordmark-o">
-        <span className="wordmark-glow" aria-hidden />
-        <img src="/logo-96.png" alt="" className="wordmark-chip" />
-      </span>
-      KERABLE
-    </span>
+    <img
+      src="/wordmark.png"
+      alt="Pokerable"
+      className="wordmark"
+      draggable={false}
+      style={{ height: size }}
+    />
   );
 }

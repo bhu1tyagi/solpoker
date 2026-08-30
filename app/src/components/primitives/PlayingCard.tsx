@@ -154,9 +154,16 @@ function Face({ card, highlighted }: { card?: number; highlighted: boolean }) {
 }
 
 /**
- * The back: dark zinc stock inside a heavier zinc border, carrying the actual
- * house logo greyed and lifted to read on it. The one surface of the deck
- * that is this product's rather than the printer's.
+ * The back: dark zinc stock inside a heavier zinc border, carrying the house
+ * mark. The one surface of the deck that is this product's rather than the
+ * printer's.
+ *
+ * The mark keeps its colour here. It used to be greyed and brightened, which
+ * was right for the flat chip that came before — a card back is upholstery
+ * and a bright logo on it competes with the faces. This mark is an
+ * illustration whose whole legibility at 40px is its purple-and-cyan rim
+ * light, and greyscaling it left a dark smudge. Opacity alone does the
+ * dimming, so what survives is the silhouette plus a hint of the neon.
  */
 function Back() {
   return (
@@ -179,10 +186,10 @@ function Back() {
         src="/logo-96.png"
         alt=""
         aria-hidden
+        draggable={false}
         style={{
-          width: "52%",
-          filter: "grayscale(1) brightness(1.7)",
-          opacity: 0.28,
+          width: "62%",
+          opacity: 0.45,
           display: "block",
           pointerEvents: "none",
           userSelect: "none",

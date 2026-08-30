@@ -55,7 +55,6 @@
   --font-body: var(--font-satoshi), system-ui, sans-serif;
   --font-num: var(--font-satoshi), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", monospace;
-
   color-scheme: dark;
 }
 
@@ -183,16 +182,11 @@ button {
 }
 
 /*
- * The wordmark, and the only gradient text in the product. The mark's
- * purple-to-green is an identity, not a paint bucket: it appears here and in
- * the chip ring, and nowhere else.
+ * The only gradient text in the product. The chain's purple-to-green is an
+ * identity, not a paint bucket: it appears here and in the chip ring, and
+ * nowhere else. The brand's own name is never set in it — that is artwork
+ * now, and painting the word beside the art would say it twice in two voices.
  */
-.wordmark-solana {
-  font-family: var(--font-display);
-  font-weight: 700;
-}
-
-.wordmark-solana,
 .sol-text {
   background-image: linear-gradient(94deg, var(--c-purple) 0%, var(--c-green) 100%);
   -webkit-background-clip: text;
@@ -201,7 +195,6 @@ button {
   color: var(--c-green);
 }
 @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
-  .wordmark-solana,
   .sol-text {
     background-image: none;
     -webkit-text-fill-color: currentColor;
@@ -1138,27 +1131,26 @@ input[type="range"]::-moz-range-thumb {
 .site-brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-3);
   text-decoration: none;
   color: var(--c-ink);
-  /* The tile is 40px, which left the whole brand link a 40px tap target. */
+  /* The link shrinks too, and a shrunk link clamps the art inside it — at
+     exactly 768px, where the nav appears, the lockup was losing 10px of width
+     at full height. The brand is the one thing in this row that never gives. */
+  flex-shrink: 0;
+  /* The lockup clears this on its own now, but the floor stays: it is what
+     guarantees the tap target if the art is ever placed smaller. */
   min-height: var(--touch-target);
-}
-.site-brand-tile {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-md);
-  /* The mark is drawn in currentColor via Logo's `mono`, and black is what
-     holds against both ends of the gradient. */
-  color: #000;
-}
-.site-brand-word {
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  letter-spacing: 0.02em;
+  /*
+   * Slack above the floor, not exactly on it.
+   *
+   * The lockup is 44px and the floor is 44px, so the link landed on precisely
+   * the minimum — and at dpr 3 the layout snaps to thirds of a pixel, so it
+   * measured 43.999… about a third of the time and the tap-target check
+   * failed on an element that meets the spec. A control sized to the exact
+   * minimum is a control that misses it on some device; 2px here costs
+   * nothing and puts it unambiguously over.
+   */
+  padding-block: 2px;
 }
 
 .site-nav {
@@ -1197,9 +1189,15 @@ input[type="range"]::-moz-range-thumb {
  * "Connect wallet" as its last item, so nothing is lost by dropping it from
  * the bar — and a phone header holding a logo, a CTA and a burger is three
  * competing targets inside 44px of height anyway.
+ *
+ * `!important` because Button sets `display: inline-flex` as an INLINE style,
+ * which no stylesheet rule can outrank without it. This rule had been dead
+ * since it was written — the CTA was on every phone header the whole time,
+ * and it only became visible as a bug when the brand lockup grew and the row
+ * started crushing the art to make room for a button that should not be here.
  */
 .site-header-actions > .site-cta-link {
-  display: none;
+  display: none !important;
 }
 
 .site-menu-toggle {
@@ -1275,7 +1273,13 @@ input[type="range"]::-moz-range-thumb {
  */
 .landing {
   position: relative;
-  padding: 128px 0 var(--sp-16);
+  /*
+   * The top padding is clearance under the fixed header (76px) plus air. It
+   * was 128px, which spent 52px of a laptop's first screen on nothing and
+   * pushed the BUILT ON row below the fold; 96 keeps 20px of clear air, which
+   * is enough to stop the hero reading as if it starts inside the bar.
+   */
+  padding: 96px 0 var(--sp-16);
   overflow-x: clip;
 }
 .landing-inner {
@@ -1312,7 +1316,9 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   flex-direction: column;
   gap: var(--sp-12);
-  margin-bottom: var(--sp-20);
+  /* Was sp-20. The row below it — BUILT ON — is the proof the hero's claims
+     rest on, and it belongs on the first screen rather than one scroll down. */
+  margin-bottom: var(--sp-12);
 }
 .landing-hero-copy {
   flex: 1;
@@ -1397,7 +1403,7 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 340px;
+  min-height: 400px;
 }
 .hero-art-float {
   perspective: 950px;
@@ -1405,7 +1411,10 @@ input[type="range"]::-moz-range-thumb {
 .hero-art-stage {
   position: relative;
   width: 320px;
-  height: 340px;
+  /* Tall enough to hold the mascot at full height with the cards low in front
+     of him. Sized from the art (300px wide at its own 1000:1164) rather than
+     picked, so a change to his width has an obvious consequence here. */
+  height: 400px;
   transform-style: preserve-3d;
 }
 .hero-art-glow {
@@ -1443,27 +1452,73 @@ input[type="range"]::-moz-range-thumb {
  * The cards. Material, not interface: paper gradient, a lit top edge, a
  * darker bottom edge, and two shadows (one tight contact, one soft ambient),
  * which is what a card on a table actually casts.
+ *
+ * Three nested elements, and each one owns exactly one job:
+ *   .hero-card3d       where the card is  (placement, and the hover fan)
+ *   .hero-card3d-flip  which way it faces (the turn)
+ *   .hero-card3d-side  what is printed on it
+ * They have to be separate because all three are transforms; on one element
+ * the placement, the fan and the turn would overwrite each other.
  */
 .hero-card3d {
   position: absolute;
-  width: 200px;
+  width: 92px;
   aspect-ratio: 5 / 7;
+  transform-style: preserve-3d;
+  transition: transform var(--m-ui-slow) var(--m-ease);
+}
+
+.hero-card3d-flip {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  /* Slower than the fan on purpose: a card being turned over is a deliberate
+     act, and at the fan's speed it read as a glitch rather than a hand. */
+  transition: transform 620ms var(--m-ease);
+}
+
+.hero-card3d-side {
+  position: absolute;
+  inset: 0;
   border-radius: 16px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.12),
+    0 6px 14px rgba(0, 0, 0, 0.35),
+    0 30px 50px rgba(0, 0, 0, 0.5);
+  /* The back's stock. The paper face overrides it below. */
+  background:
+    radial-gradient(
+      circle at 30% 22%,
+      color-mix(in srgb, var(--c-purple) 20%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      circle at 74% 82%,
+      color-mix(in srgb, var(--c-green) 14%, transparent),
+      transparent 58%
+    ),
+    var(--c-card-back);
+}
+.hero-card3d-side--paper {
   background: linear-gradient(
     158deg,
     #fefdfa 0%,
     var(--c-card-face) 52%,
     #e6e2d6 100%
   );
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 2px rgba(0, 0, 0, 0.12),
-    0 6px 14px rgba(0, 0, 0, 0.35),
-    0 30px 50px rgba(0, 0, 0, 0.5);
-  transition: transform var(--m-ui-slow) var(--m-ease);
+  padding: 7px 8px;
 }
+/* The reverse, pre-turned, so it faces away until the card comes over. */
+.hero-card3d-side--reverse {
+  transform: rotateY(180deg);
+}
+
 /* The gloss pass: one static sheen, as if lit from the upper left. */
-.hero-card3d::after {
+.hero-card3d-side::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -1477,28 +1532,43 @@ input[type="range"]::-moz-range-thumb {
   pointer-events: none;
 }
 
+/*
+ * The turn. Only the face-down card has a `.hero-card3d-flip` at all, so this
+ * can only ever turn the hole card — the ace already on show stays put.
+ *
+ * The trigger is `:has` on the stage rather than `:hover` on the card itself
+ * because the hole card is mostly BEHIND the ace: its own hover target is the
+ * sliver sticking out on the left, which is a hard thing to find on purpose.
+ * Hovering either card peeks at it.
+ *
+ * A browser without `:has` drops this rule and the card simply stays down.
+ */
+.hero-art-stage:has(.hero-card3d:hover) .hero-card3d-flip {
+  transform: rotateY(180deg);
+}
+
+/* The duration above is a literal, so it does not collapse with the motion
+   tokens; it has to be told to stand still here like everything else. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-card3d-flip {
+    transition-duration: 1ms;
+  }
+}
+
+/*
+ * Low and in front, like a hand held at the edge of the table. Anchored to the
+ * bottom rather than to a percentage of the stage, so the pair keeps its
+ * relationship to the mascot's feet at every stage size.
+ */
 .hero-card3d--front {
   left: 50%;
-  top: 40%;
-  transform: translate(-30%, -52%) rotate(9deg) translateZ(36px);
-  padding: 14px 16px;
+  bottom: 1%;
+  transform: translate(-6%, 0) rotate(11deg) translateZ(112px);
 }
 .hero-card3d--back {
   left: 50%;
-  top: 38%;
-  transform: translate(-72%, -52%) rotate(-16deg) translateZ(10px);
-  background:
-    radial-gradient(
-      circle at 30% 22%,
-      color-mix(in srgb, var(--c-purple) 20%, transparent),
-      transparent 62%
-    ),
-    radial-gradient(
-      circle at 74% 82%,
-      color-mix(in srgb, var(--c-green) 14%, transparent),
-      transparent 58%
-    ),
-    var(--c-card-back);
+  bottom: 4%;
+  transform: translate(-92%, 0) rotate(-13deg) translateZ(96px);
 }
 /* The back's printed frame: an inner border over a fine diagonal weave. */
 .hero-card3d-frame {
@@ -1515,23 +1585,25 @@ input[type="range"]::-moz-range-thumb {
 
 .hero-card3d-index {
   position: absolute;
-  top: 12px;
-  left: 14px;
+  top: 7px;
+  left: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   font-family: var(--font-body);
   font-weight: 700;
-  font-size: 1.75rem;
+  /* Scaled with the card, which halved when the mascot took the stage. An
+     index sized for the old 200px card printed across half of this one. */
+  font-size: 0.95rem;
   line-height: 1;
   color: var(--c-suit-spade);
 }
 .hero-card3d-index--flip {
   top: auto;
   left: auto;
-  right: 14px;
-  bottom: 12px;
+  right: 8px;
+  bottom: 7px;
   transform: rotate(180deg);
 }
 .hero-card3d-pip {
@@ -1544,35 +1616,125 @@ input[type="range"]::-moz-range-thumb {
   filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.55))
     drop-shadow(0 2px 3px rgba(0, 0, 0, 0.18));
 }
+/*
+ * The centre pip is sized as a FRACTION of the card, not in pixels. The glyph
+ * ships with width/height attributes for the no-CSS case; this overrides them,
+ * which is what lets one number hold the pip's proportion across the mobile
+ * and desktop card widths instead of two hand-tuned pixel sizes drifting.
+ */
+.hero-card3d-pip svg {
+  width: 66%;
+  height: auto;
+}
 
 /*
- * The chip. This IS the brand render, shipped pre-lit; CSS adds only what a
- * photograph could not carry with it — the cast shadow and the depth slot.
+ * The mascot. This IS the drawing, shipped pre-lit; CSS adds only what an
+ * illustration could not carry with it — the cast shadow and the depth slot.
+ *
+ * Centred and upright, never rotated: the old chip sat at a jaunty angle
+ * because a chip has no up. A character does, and tilting his head off the
+ * vertical reads as a mistake rather than as a flourish.
+ *
+ * The wrapper owns the position and the size; the art and the light moving
+ * through it both fill it, so the two can never drift apart.
  */
-.hero-chip {
+.hero-mark-wrap {
   position: absolute;
-  height: auto;
+  left: 50%;
+  bottom: 4%;
+  width: 300px;
+  /* The art's own ratio, so the box is the drawing and the shimmer's mask
+     lines up with the pixels it is masking. */
+  aspect-ratio: 1000 / 1164;
+  transform: translateX(-50%) translateZ(22px);
   transition: transform var(--m-ui-slow) var(--m-ease);
 }
-.hero-chip--main {
-  width: 215px;
-  left: 4%;
-  bottom: 2%;
-  transform: translateZ(80px) rotate(-8deg);
+.hero-mark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   filter: drop-shadow(0 26px 38px rgba(0, 0, 0, 0.6))
     drop-shadow(0 8px 12px rgba(0, 0, 0, 0.4));
 }
+
 /*
- * The second chip rests low by the ace's bottom corner, like a chip tossed
- * beside the pot. Half-behind the card's top edge it read as a rendering
- * accident, not a placement.
+ * The neon, moving.
+ *
+ * A band of purple-to-green sweeps upward through the art's OWN alpha: the
+ * PNG is the mask, so the light can only appear where there is ink. A second
+ * mask cuts it off above his ears, which keeps it in the cigar smoke and the
+ * script. The first cut was at 62% and the band crossed his face on every
+ * pass — it read as a scanline over a portrait, not as smoke, and washed the
+ * whole animal green for a second at a time.
+ *
+ * `screen` rather than an overlay: the band adds to the neon that is already
+ * in the pixels instead of painting a new colour on top of it.
  */
-.hero-chip--side {
-  width: 110px;
-  right: 2%;
-  bottom: 6%;
-  transform: translateZ(14px) rotate(16deg);
-  filter: brightness(0.82) drop-shadow(0 14px 20px rgba(0, 0, 0, 0.5));
+.hero-mark-shimmer {
+  /*
+   * Off unless the browser can INTERSECT the two masks. Without compositing,
+   * mask layers add: the linear-gradient alone would reveal a bright rectangle
+   * across the top of the scene, which is far worse than no shimmer at all.
+   * Turned on below, inside the @supports that proves the feature is there.
+   */
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.5;
+  -webkit-mask-image: url("/hero-mark.png"),
+    linear-gradient(to bottom, #000 0%, #000 17%, transparent 32%);
+  mask-image: url("/hero-mark.png"),
+    linear-gradient(to bottom, #000 0%, #000 17%, transparent 32%);
+  -webkit-mask-size: 100% 100%, 100% 100%;
+  mask-size: 100% 100%, 100% 100%;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  background-image: linear-gradient(
+    to top,
+    transparent 0%,
+    color-mix(in srgb, var(--c-purple) 85%, transparent) 26%,
+    color-mix(in srgb, var(--c-green) 85%, transparent) 50%,
+    transparent 76%
+  );
+  background-repeat: no-repeat;
+  /* Twice the box, so the band can sit entirely outside the visible window at
+     both ends of its travel. */
+  background-size: 100% 200%;
+  animation: hero-smoke-rise 6s linear infinite;
+}
+
+@supports (mask-composite: intersect) or (-webkit-mask-composite: source-in) {
+  .hero-mark-shimmer {
+    display: block;
+  }
+}
+
+/*
+ * The travel is bounded to where the band is actually visible, not to the
+ * whole background box. Run edge to edge, the band spent most of the cycle
+ * behind the mask and the smoke sat dead for five seconds at a time. At both
+ * ends here the band is fully clear of the window, so the loop's restart has
+ * nothing on screen to jump.
+ */
+@keyframes hero-smoke-rise {
+  from {
+    background-position: 50% 40%;
+  }
+  to {
+    background-position: 50% 135%;
+  }
+}
+
+/* A light that never stops moving is a light nobody can read past. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-mark-shimmer {
+    animation: none;
+    opacity: 0.28;
+    background-position: 50% 88%;
+  }
 }
 
 /*
@@ -1581,17 +1743,17 @@ input[type="range"]::-moz-range-thumb {
  * on touch the "hover" would stick after the first tap.
  */
 @media (hover: hover) and (pointer: fine) {
-  .hero-art-stage:hover .hero-chip--main {
-    transform: translateZ(104px) rotate(-4deg);
-  }
-  .hero-art-stage:hover .hero-chip--side {
-    transform: translateZ(28px) rotate(20deg);
+  /* He settles back a touch; the cards come forward and fan. The gap between
+     them opening is the whole effect — moving both the same way would just
+     zoom the scene. */
+  .hero-art-stage:hover .hero-mark-wrap {
+    transform: translateX(-50%) translateZ(10px);
   }
   .hero-art-stage:hover .hero-card3d--front {
-    transform: translate(-28%, -54%) rotate(12deg) translateZ(52px);
+    transform: translate(0%, 0) rotate(15deg) translateZ(136px);
   }
   .hero-art-stage:hover .hero-card3d--back {
-    transform: translate(-74%, -53%) rotate(-19deg) translateZ(18px);
+    transform: translate(-100%, 0) rotate(-17deg) translateZ(118px);
   }
 }
 
@@ -1815,8 +1977,9 @@ input[type="range"]::-moz-range-thumb {
   .site-nav-support {
     display: flex;
   }
+  /* Matching `!important`, for the same inline-style reason as the base rule. */
   .site-header-actions > .site-cta-link {
-    display: inline-flex;
+    display: inline-flex !important;
   }
   .site-menu-toggle {
     display: none;
@@ -1840,16 +2003,16 @@ input[type="range"]::-moz-range-thumb {
   }
   .hero-art-stage {
     width: 480px;
-    height: 470px;
+    /* The scene is the tallest thing in the hero row, so this number decides
+       where the BUILT ON row lands on a laptop. 500 keeps him the subject and
+       still leaves that row on the first screen at 830px of viewport. */
+    height: 500px;
   }
   .hero-card3d {
-    width: 250px;
+    width: 112px;
   }
-  .hero-chip--main {
-    width: 275px;
-  }
-  .hero-chip--side {
-    width: 140px;
+  .hero-mark-wrap {
+    width: 400px;
   }
 }
 
@@ -1858,44 +2021,27 @@ input[type="range"]::-moz-range-thumb {
 /* ------------------------------------------------------------------ */
 
 /*
- * Bigger and calmer than the headings. The display face at full 125% stretch
- * plus wide tracking read as airy at wordmark size; pulling the stretch back
- * to 108% keeps the brand voice while the letterforms stay solid enough to
- * anchor the page. Prominence comes from size and weight, not from spacing.
+ * The lockup is artwork, not type: mark and script drawn as one image, with
+ * its own neon already in the pixels. Nothing here re-lights it — the height
+ * is set by whoever places it and the width follows from the art's 3:1 box.
+ *
+ * `width: auto` matters. The image sits in flex parents that would otherwise
+ * stretch or squash it to fill the row, and a squashed script is the one
+ * failure this mark cannot survive.
  */
 .wordmark {
-  font-family: var(--font-display);
-  font-stretch: 108%;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  color: var(--c-ink);
-  display: inline-flex;
-  align-items: center;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-/*
- * The chip-as-O. Height matches the CAP height of the surrounding letters
- * (~0.74em for Archivo), because an image sized to the full em box towers
- * over its uppercase neighbours. The small negative margins tuck it into the
- * word's letter-spacing so it sits as a letter, not as an icon beside text.
- */
-.wordmark-chip {
-  height: 0.8em;
+  display: block;
   width: auto;
-  display: inline-block;
-  margin: 0 0.02em;
-  transform: translateY(0.01em);
-}
-
-.sr-only-o {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  max-width: 100%;
+  object-fit: contain;
+  user-select: none;
+  /*
+   * Never squashed. As a flex item this shrinks by default, and in the header
+   * a 151px lockup was being pressed to 24px wide at 320px — the raccoon and
+   * the script compressed into an unreadable smear while the height stayed at
+   * 44px. The art holds its aspect and the row gives way around it.
+   */
+  flex-shrink: 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -3419,111 +3565,14 @@ input[type="range"]::-moz-range-thumb {
   background: var(--c-rule-strong);
 }
 
-/* ------------------------------------------------------------------ */
-/* The wordmark's chip, and the light coming off it.                   */
-/* ------------------------------------------------------------------ */
-
-.wordmark-o {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  /* The glow must not widen the word or push the letters around. */
-  isolation: isolate;
-}
-.wordmark-chip {
-  position: relative;
-  z-index: 1;
-}
-
 /*
- * The glow: two colours drifting behind the chip on their own slow cycle, so
- * the mark looks lit rather than decorated. Sized past the chip and blurred,
- * with pointer-events off, so it can never widen the word or catch a click.
- */
-.wordmark-glow {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  /* The chip is 0.8em. A hair over that keeps the light ON the chip: any
-     wider and it stops being a glow and starts being a wash across the P
-     and the K. */
-  width: 1.12em;
-  height: 1.12em;
-  margin: -0.56em 0 0 -0.56em;
-  border-radius: var(--r-chip);
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.9;
-  filter: blur(4px);
-  background:
-    radial-gradient(
-      circle at 36% 38%,
-      var(--c-purple) 0%,
-      color-mix(in srgb, var(--c-purple) 70%, transparent) 45%,
-      transparent 72%
-    ),
-    radial-gradient(
-      circle at 64% 62%,
-      var(--c-green) 0%,
-      color-mix(in srgb, var(--c-green) 60%, transparent) 45%,
-      transparent 72%
-    );
-  animation: wordmark-drift 7s ease-in-out infinite;
-}
-
-/*
- * The drift: the two lobes rotate around the chip and breathe. Kept under a
- * full turn per cycle so it never reads as a spinner.
+ * The lockup has NO hover treatment, deliberately.
  *
- * Transform ONLY, deliberately. Animating opacity here silently beat the
- * hover rule, because a running animation outranks a plain declaration in
- * the cascade: the glow kept breathing at its own opacity and hovering the
- * brand did visibly nothing. Opacity is left to the rules below so the
- * pointer can actually change it.
+ * A glow was tried and removed. The drawing arrives with its own neon already
+ * in the pixels, and a second light thrown at it on hover reads as the image
+ * blooming out rather than as the link answering the pointer. Art that is
+ * already lit is left alone; the affordance is the cursor.
  */
-@keyframes wordmark-drift {
-  0%,
-  100% {
-    transform: rotate(0deg) scale(1);
-  }
-  50% {
-    transform: rotate(180deg) scale(1.12);
-  }
-}
-
-/*
- * Interactive: hovering the brand pushes the light up and speeds the drift.
- * Behind a fine pointer, because on touch :hover sticks after a tap and the
- * mark would stay lit for the rest of the session.
- */
-@media (hover: hover) and (pointer: fine) {
-  .site-brand .wordmark-glow {
-    transition:
-      opacity var(--m-ui-base) var(--m-ease),
-      width var(--m-ui-base) var(--m-ease),
-      height var(--m-ui-base) var(--m-ease);
-  }
-  .site-brand:hover .wordmark-glow {
-    opacity: 1;
-    width: 1.3em;
-    height: 1.3em;
-    margin: -0.65em 0 0 -0.65em;
-    animation-duration: 3.2s;
-  }
-  .site-brand:hover .wordmark-chip {
-    transform: rotate(-8deg);
-  }
-  .wordmark-chip {
-    transition: transform var(--m-ui-base) var(--m-ease);
-  }
-}
-
-/* A light that never stops moving is a light nobody can read past. */
-@media (prefers-reduced-motion: reduce) {
-  .wordmark-glow {
-    animation: none !important;
-  }
-}
 
 /* A house table: always here, so a newcomer never has to open one. Bordered
    rather than filled, so it sits below the live badge in the hierarchy. */
@@ -3868,20 +3917,8 @@ input[type="range"]::-moz-range-thumb {
 
 /* ---------------------------------------------- boards */
 
-.rewards-boards {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--sp-6);
-  /* Stretched, not content-sized. The two boards rarely hold the same number
-     of rows, and letting them end at different heights left a ragged gap
-     between the columns that read as a layout bug rather than as thin data. */
-  align-items: stretch;
-}
-@media (min-width: 1024px) {
-  .rewards-boards {
-    grid-template-columns: 1fr 1fr;
-  }
-}
+/* `.rewards-boards` — the side-by-side pair — is gone. The boards stack in a
+   column beside the chart now; see `.rewards-boards-stack`. */
 
 /* Opaque rather than glass: these hold scrolling lists, and a backdrop-filter
    recomputes per frame against moving content. */
@@ -4526,9 +4563,19 @@ input[type="range"]::-moz-range-thumb {
 .chart {
   position: relative;
 }
+/*
+ * No `width: 100%` here, deliberately.
+ *
+ * The SVG has no viewBox, so its internal coordinates are CSS pixels 1:1 and
+ * the component draws against the width it measured. A CSS `width: 100%`
+ * overrides the width attribute, and when the two disagreed the drawing kept
+ * using the measured number — the right-hand axis label was positioned 1278px
+ * out inside a card that ended at 1256 and spilled past the border. The
+ * measured width is the only width now, so they cannot drift apart.
+ */
 .chart-svg {
   display: block;
-  width: 100%;
+  max-width: 100%;
   overflow: visible;
   touch-action: pan-y;
 }
@@ -4568,6 +4615,16 @@ input[type="range"]::-moz-range-thumb {
 }
 .chart-axis-x {
   text-anchor: start;
+}
+/*
+ * The right-hand label needs its own class rather than the `textAnchor="end"`
+ * attribute on the element. A presentation attribute loses to ANY css rule, so
+ * `.chart-axis-x { text-anchor: start }` silently overrode it and the label
+ * drew left-to-right from the last tick — 43px past the edge of the chart and
+ * out over the card border.
+ */
+.chart-axis-x-end {
+  text-anchor: end;
 }
 
 .chart-line path {
@@ -4774,6 +4831,142 @@ input[type="range"]::-moz-range-thumb {
   .profile-grid-sm {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
+}
+
+/* ---------------------------------------------- profile: the top row */
+
+/*
+ * The shareable card on the left, the figures it does not carry on the right.
+ *
+ * One column until there is room for two. The card is a fixed 1200x630 image
+ * and the figures are text; side by side under about 900px the card would be
+ * a thumbnail and the figures a stack of slivers, so they stack instead.
+ */
+.profile-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-8);
+  align-items: stretch;
+}
+/*
+ * 1024, the same line the charts split on, so the whole page changes shape
+ * once rather than twice.
+ *
+ * It was 900, and measured there the figure column ran 530px against the
+ * card's 248 — the notes wrapped to two lines in a 178px box and the right
+ * side became twice the height of the left. Two columns need room for the
+ * narrower one to still hold a line of text.
+ */
+@media (min-width: 1024px) {
+  .profile-top {
+    /* The card leads. It is the page's headline and it carries an aspect
+       ratio it cannot give up, so it takes the larger share and the figures
+       take what is left. */
+    grid-template-columns: minmax(0, 1.28fr) minmax(0, 1fr);
+    gap: var(--sp-5);
+  }
+  /* With no card there is nothing to lead with: the headline figures on the
+     left and the deeper ones on the right, at equal weight. */
+  .profile-top.is-cardless {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.profile-top-main {
+  min-width: 0;
+}
+/* The card is sized by the column here, not by its own 640px ceiling: in a
+   half-width slot that ceiling left it floating with a gutter beside it. */
+.profile-top-main .share-card-canvas {
+  max-width: 100%;
+}
+
+.profile-figs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+/*
+ * The dense figure column: the one that sits beside something bigger — the
+ * share card on the profile, the pool headline and the growth chart on
+ * rewards. It was called `.profile-top-figs` when only the profile had one.
+ *
+ * The figures stretch toward their neighbour's height rather than sitting in a
+ * short block beside a tall one — but never below what they contain, which is what
+ * `min-content` is doing in the floor. A fixed `1fr` clipped the note line off
+ * the bottom of every box the moment the figures grew a second line.
+ */
+@media (min-width: 1024px) {
+  .figs-column {
+    grid-auto-rows: minmax(min-content, 1fr);
+  }
+}
+/*
+ * Denser than the figures elsewhere in the product.
+ *
+ * These sit in a tall narrow column beside a big picture, and at the standard
+ * padding and money size they were a small label and a small number adrift in
+ * a lot of nothing. The value is set larger, the note carries the second fact,
+ * and the padding comes in — so the box is full of the figure rather than
+ * containing one.
+ */
+.figs-column .fig {
+  gap: 2px;
+  padding: var(--sp-3) var(--sp-4);
+  justify-content: center;
+}
+.figs-column .fig-val {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+.figs-column .fig-note {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--c-ink-faint);
+}
+/* The cardless fallback: four headline figures, two up and two across. */
+.profile-figs-head {
+  align-content: start;
+}
+
+/* ---------------------------------------------- profile: the charts */
+
+/*
+ * Both charts on one row from 1024px up.
+ *
+ * They share an x axis — hands played — and are read against each other, so a
+ * scroll between them was a scroll through the middle of one comparison. The
+ * chart measures its own container, so each simply draws itself narrower;
+ * below 1024 they stack, because two 280px plots side by side is two plots
+ * nobody can read.
+ */
+.profile-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-5);
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .profile-charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* The row owns the spacing now, so the cards inside it do not each carry
+   their own bottom margin and open a gap under the shorter one. */
+.profile-charts > .chart-card,
+.profile-charts > .skel-card {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+/* The card's placeholder, at the aspect the real one lands at. */
+.skel-share {
+  aspect-ratio: 1200 / 630;
+  width: 100%;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--c-glass-border);
 }
 .fig {
   position: relative;
@@ -5038,20 +5231,62 @@ input[type="range"]::-moz-range-thumb {
  * display scale, everything else supporting it.
  */
 
-.pool-hero {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--sp-4);
-  margin-bottom: var(--sp-8);
-}
+/*
+ * The pool hero rides the profile's top row: `.profile-top` supplies the
+ * two-column grid and `.figs-column` the dense figure column, and these
+ * rules only say what is different here.
+ *
+ * It splits earlier than the profile does — 768 rather than 1024 — because the
+ * thing on the left is a line of type rather than a fixed-aspect image, so it
+ * has no width it must keep and both halves stay readable sooner.
+ */
 @media (min-width: 768px) {
-  .pool-hero {
-    grid-template-columns: 1.4fr 1fr;
-    align-items: stretch;
+  .pool-hero.profile-top {
+    /*
+     * The headline column is narrow now. It holds one number and a line of
+     * type — at 1.4fr its right half was empty air while eight figures were
+     * crowded into the other side, and the width belongs to whichever half
+     * has more in it.
+     */
+    grid-template-columns: minmax(240px, 0.8fr) minmax(0, 2.2fr);
+    gap: var(--sp-4);
   }
-  .pool-hero-side {
-    grid-template-columns: 1fr 1fr;
+  .pool-hero .figs-column {
+    grid-auto-rows: minmax(min-content, 1fr);
   }
+}
+/*
+ * Eight figures: four up and two down once there is room, two up before that.
+ * They are one block rather than two rows of four with a gap, because they are
+ * read in one glance and each card's own label says whose number it is.
+ */
+@media (min-width: 640px) {
+  .pool-figs {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+/*
+ * The prompt that stands in for your four when there is no wallet or no rake.
+ * It spans the whole second row, so the block is a rectangle in every state
+ * rather than a grid with a hole in it.
+ */
+.fig-span {
+  grid-column: 1 / -1;
+}
+.rewards-connect-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-4);
+  color: var(--c-ink-muted);
+}
+.rewards-connect-inline p {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--t-body-sm-size);
+}
+.rewards-connect-inline svg {
+  flex-shrink: 0;
 }
 
 .pool-hero-main {
@@ -5095,10 +5330,220 @@ input[type="range"]::-moz-range-thumb {
   line-height: 1.5;
   color: var(--c-ink-faint);
 }
-.pool-hero-side {
+
+/*
+ * The chart and your own figures on one row: the same two-up rhythm the
+ * profile's card and figures use, and the same 1024 line, so this page changes
+ * shape once rather than in two places.
+ *
+ * The chart takes the larger share because it is the thing that needs width —
+ * it measures its own container and simply draws itself narrower, but a plot
+ * squeezed under half of half a page stops being readable.
+ */
+.rewards-mid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-5);
+  /*
+   * Stretch, not start. The boards column takes its height from the chart
+   * beside it, which is what makes the two sides end on the same line — with
+   * `start` the right column stopped wherever its content did and the row had
+   * a ragged bottom edge.
+   */
+  align-items: stretch;
+  margin-bottom: var(--sp-10);
+}
+@media (min-width: 1024px) {
+  .rewards-mid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  }
+}
+/* The row owns the spacing, so neither child carries its own bottom margin
+   and opens a gap under the shorter one. */
+.rewards-mid > * {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------- boards, stacked */
+
+/*
+ * The two boards, one above the other, beside the chart. A column rather than
+ * the pair they used to be: side by side in half a page each board would be
+ * three columns of text in 200px.
+ */
+/*
+ * The shell takes the row's height and does not add to it.
+ *
+ * Grid rows size to their tallest item, so a long board pushed the row down
+ * and the chart stretched to follow. Positioning the stack inside a shell
+ * takes the boards out of that measurement: the row is the chart's height, the
+ * shell is stretched to it, and the boards are given exactly that much.
+ *
+ * The floor is for the day there is no chart yet — with nothing else in the
+ * row, an empty shell would collapse and the boards with it.
+ */
+@media (min-width: 1024px) {
+  .rewards-boards-shell {
+    position: relative;
+    min-height: 480px;
+  }
+  .rewards-boards-shell > .rewards-boards-stack {
+    position: absolute;
+    inset: 0;
+  }
+}
+
+.rewards-boards-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /*
+   * Two equal rows, always. The boards rarely hold the same number of players
+   * and sized to content one ended well short of the other, which reads as a
+   * layout fault rather than as thin data. `minmax(0, 1fr)` is what lets them
+   * be smaller than their content so the scroll area inside can do its job.
+   */
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* The card is a head that stays and a list that moves. */
+.rewards-board {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.rewards-board-head {
+  flex-shrink: 0;
+}
+/*
+ * The rows, scrolling inside the card.
+ *
+ * `min-height: 0` is the load-bearing line: without it a flex child refuses to
+ * shrink below its content and the list pushes the card past the height the
+ * grid gave it, which is exactly the ragged column this was meant to fix.
+ */
+.rewards-board-rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room for the scrollbar so the last column of figures is not sat on. */
+  scrollbar-gutter: stable;
+}
+
+/*
+ * The expand control, in the board's own head beside the hint.
+ *
+ * A full 44px, and shown to every pointer. It was 28px and hidden on touch,
+ * with a written "Show all N" row underneath carrying the job instead — two
+ * controls doing one thing, and the written one only appeared on long boards.
+ * One control that is always there and always big enough is simpler than a
+ * pair that take turns.
+ *
+ * The negative margins keep it from setting the head's height: the target is
+ * 44px, the head stays the height of its type.
+ */
+.rewards-board-expand {
+  margin-left: var(--sp-2);
+  margin-block: -8px;
+  margin-right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-ink-faint);
+  cursor: pointer;
+  transition:
+    color var(--m-ui-fast) var(--m-ease),
+    background-color var(--m-ui-fast) var(--m-ease);
+}
+.rewards-board-expand:hover {
+  color: var(--c-ink);
+  background-color: var(--c-felt-edge);
+}
+
+/*
+ * On a phone the head wraps, and left to itself it wrapped BADLY: the hint
+ * went to its own line and pushed the expand button onto a third, making the
+ * head 115px on a 269px card. Reordering puts the control up on the title's
+ * line and gives the hint the second one to itself, which is two lines rather
+ * than three and the same information.
+ */
+@media (max-width: 639px) {
+  .rewards-board-head {
+    row-gap: var(--sp-2);
+  }
+  .rewards-board-head span {
+    order: 2;
+    flex-basis: 100%;
+    margin-left: 0;
+    text-align: left;
+  }
+  .rewards-board-expand {
+    order: 1;
+    margin-left: auto;
+  }
+}
+
+/* ---------------------------------------------- the board, opened */
+
+/*
+ * Rides the wallet gate's scrim so there is one kind of dialog in the product.
+ * Only the box differs: this one is a list, so its head stays put and the rows
+ * scroll underneath.
+ */
+.board-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: calc(100dvh - var(--sp-8));
+  border-radius: var(--r-lg);
+  outline: none;
+  overflow: hidden;
+}
+.board-modal-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+  border-bottom: 1px solid var(--c-rule);
+  color: var(--c-ink-muted);
+}
+.board-modal-head h2 {
+  margin: 0;
+  font-size: var(--t-body-lg-size);
+  color: var(--c-ink);
+}
+.board-modal-head span {
+  font-size: var(--t-body-sm-size);
+  color: var(--c-ink-faint);
+}
+.board-modal-close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-ink-muted);
+  cursor: pointer;
+}
+.board-modal-close:hover {
+  color: var(--c-ink);
+}
+.board-modal-body {
+  overflow-y: auto;
+  padding: var(--sp-3) var(--sp-5) var(--sp-5);
 }
 
 /* A note under a figure. One line, and only where the number needs it. */
@@ -5113,10 +5558,8 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--t-display-md-size);
   margin: 0 0 var(--sp-4);
 }
-.rewards-yours,
-.rewards-boards-section {
-  margin-bottom: var(--sp-10);
-}
+/* Both sections are gone — the figures moved into the hero's block and the
+   boards into the row beside the chart, and each row owns its own spacing. */
 
 /* ---------------------------------------------- terms */
 
@@ -5155,4 +5598,10 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--t-body-sm-size);
   line-height: 1.55;
   color: var(--c-ink-muted);
+}
+
+/* The date, kept in the tooltip now that hands carry the axis. */
+.chart-tip-when {
+  margin-left: var(--sp-2);
+  opacity: 0.7;
 }

@@ -45,7 +45,7 @@ export function SiteFooter() {
         <div className="site-footer-grid">
           <div className="site-footer-brand">
             <Link href="/" aria-label="Pokerable home" className="site-brand">
-              <Wordmark />
+              <Wordmark size={52} />
             </Link>
             <p className="site-footer-blurb">
               Six-max Texas Hold&rsquo;em on Solana. Chips are USDC, the shuffle

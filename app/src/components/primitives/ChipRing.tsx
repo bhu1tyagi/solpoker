@@ -6,8 +6,10 @@ import { MOTION } from "@/design/tokens";
 /**
  * The signature: a dashed ring whose dashes are a poker chip's edge spots.
  *
- * This is the same geometry as the mark in Logo.tsx — eight spots, the same
- * duty cycle — and it has exactly three jobs in the whole product:
+ * The brand mark is illustrated art now, but this ring is unchanged and stays
+ * that way: it is the product's interaction language rather than its identity,
+ * and the same eight spots are printed around the mark on the felt. It has
+ * exactly three jobs in the whole product:
  *
  *   1. The turn clock. It wraps the seat that is to act and depletes
  *      counter-clockwise as their time runs out. The most-watched element on
@@ -21,7 +23,7 @@ import { MOTION } from "@/design/tokens";
  * cases and it stops meaning anything if it becomes a border style.
  */
 
-/** Eight spots at a 0.615 duty cycle, matching the mark exactly. */
+/** Eight spots at a 0.615 duty cycle, matching the felt's printed ring. */
 const SPOTS = 8;
 const DUTY = 0.615;
 

@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useElementWidth } from "@/hooks/use-viewport";
-import { SPADE_PATH } from "@/components/primitives/Logo";
 import { PlayingCard, CardSlot } from "@/components/primitives/PlayingCard";
 import { ChipStack, Coin, chipsFor } from "@/components/primitives/Chip";
 import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
@@ -268,53 +267,114 @@ export function TableFelt({
 
             It is also the table's only loading indicator. While the table is
             doing something the player cannot see — securing cards, moving
-            between layers, drawing randomness — the mark's outer ring turns
-            and the whole mark lifts a little out of the cloth. Working state
-            used to be a raised card floating over the felt; a card over a
-            table reads as an interruption, while the table's own mark turning
-            reads as the room quietly at work. */}
-        <svg
+            between layers, drawing randomness — the outer RING turns and
+            brightens. The raccoon inside it stays a watermark throughout;
+            only the ring answers, because only the ring means something.
+            Working state used to be a raised card floating over the felt; a
+            card over a table reads as an interruption, while the table's own
+            print turning reads as the room quietly at work. */}
+        <div
           aria-hidden
-          viewBox="0 0 100 100"
           style={{
             position: "absolute",
             left: "50%",
             top: "50%",
             transform: "translate(-50%, -50%)",
-            width: "19%",
-            /*
-             * Printed into the cloth, and it knows when to get out of the way.
-             *
-             * Once a hand is out, the mark is directly behind the board and the
-             * status line, and at 0.09 its ring was reading as a shape between
-             * the community cards rather than as weave. A real table's print is
-             * only ever noticed when nothing is on it. So: nearly gone while
-             * cards are on the felt, its usual quiet self between hands, and up
-             * again only when it is doing its other job and turning.
-             */
-            opacity: tableBusy ? 0.22 : showBoard ? 0.03 : 0.09,
-            filter: "blur(1px)",
-            color: "var(--c-ink)",
+            width: "26%",
+            aspectRatio: "1",
             pointerEvents: "none",
-            transition: "opacity 0.8s ease",
           }}
         >
-          <circle
-            className={tableBusy ? "mark-ring-turning" : undefined}
-            cx="50"
-            cy="50"
-            r="42"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="10"
-            strokeDasharray="20.3 12.7"
-            strokeDashoffset="10.15"
+          {/*
+            The ring is the table's only loading indicator, and it is drawn
+            rather than borrowed from the art: the mark is an illustration with
+            no circle in it to turn. Eight segments, the same geometry the chip
+            mark used, so what a returning player recognises as "the room is
+            working" is unchanged even though the thing inside the ring is not.
+
+            Thinner and blurrier than it was: at 4 units it drew a hard dashed
+            circle around the middle of the cloth that the eye kept returning
+            to between actions; at 2.5, spread into the weave, it is a printed
+            rule you only notice once it starts turning.
+
+            It carries its OWN opacity rather than inheriting the mark's,
+            because the two have different jobs. The raccoon is decoration and
+            goes to a watermark everywhere. The ring is the only thing in this
+            product that says the room is working, and if it dims with the art
+            it stops being an indicator at all.
+
+            Note when `tableBusy` can even be true: `roomWorking && !showBoard`.
+            The loud state cannot coincide with cards on the cloth, so a ring
+            that is legible while working is never a ring competing with a
+            hand. During play it is at 0.03, which is weave.
+          */}
+          <svg
+            viewBox="0 0 100 100"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              color: "var(--c-ink)",
+              /*
+               * Blended into the cloth, not drawn on it. Even at 0.3 the ring
+               * was the brightest thing on an empty table and the eye parked
+               * on it; a printed rule in felt is barely there, and MOTION is
+               * what makes it readable when it matters. A turning shape at
+               * 0.16 is noticed; the same shape standing still is weave.
+               */
+              opacity: tableBusy ? 0.16 : showBoard ? 0.02 : 0.05,
+              filter: "blur(2px)",
+              transition: "opacity 0.8s ease",
+            }}
+          >
+            <circle
+              className={tableBusy ? "mark-ring-turning" : undefined}
+              cx="50"
+              cy="50"
+              r="46"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeDasharray="22.2 13.9"
+              strokeDashoffset="11.1"
+            />
+          </svg>
+          {/*
+            The mark itself, screened into the weave.
+
+            Nearly all the colour is gone and the contrast is pulled in around
+            the midtone, which is what turns a lit illustration into cloth
+            print. Saturation alone was not enough: at 0.55 the purple and cyan
+            rim light still picked the raccoon out of the green as a separate
+            object, and the eye reads a face on a poker table whether or not it
+            is faint. Grey, flattened and blurred, he is a watermark — the felt
+            still says whose room this is, and nothing on the cloth competes
+            with the cards.
+
+            The opacities came down with it. He is never brighter than 0.11,
+            which is below where the OLD mark sat when the table was merely
+            idle: the illustration carries far more contrast than the flat chip
+            it replaced, so the numbers that read as weave for that one read as
+            a picture hung behind the board for this one.
+          */}
+          <img
+            src="/logo-256.png"
+            alt=""
+            draggable={false}
+            style={{
+              position: "absolute",
+              inset: "16%",
+              width: "68%",
+              height: "68%",
+              objectFit: "contain",
+              opacity: tableBusy ? 0.08 : showBoard ? 0.015 : 0.045,
+              transition: "opacity 0.8s ease",
+              filter: "grayscale(0.95) saturate(0.4) contrast(0.55) blur(1.8px)",
+              userSelect: "none",
+            }}
           />
-          <circle cx="50" cy="50" r="33" fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.7" />
-          <g transform="translate(50 51) scale(0.5) translate(-50 -50)">
-            <path d={SPADE_PATH} fill="currentColor" />
-          </g>
-        </svg>
+        </div>
       </div>
 
       {/* Everything that stands ON the table, drawn at canvas size and scaled

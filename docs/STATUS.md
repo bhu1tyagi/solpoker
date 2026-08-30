@@ -1,9 +1,10 @@
 # SolPoker: what is built, what is verified, what is left
 
-Written 15 August 2026. Updated 22 August 2026, after moving the program to a
-new id, redeploying and re-verifying it on devnet, and deploying it to
-mainnet-beta. The program is on mainnet; the client is not. Play is still
-devnet only.
+Written 15 August 2026. Updated 30 August 2026, after a week that moved the
+work out of "does the protocol hold" and into "does a stranger who arrives at
+the URL end up playing a hand". The program has been on mainnet since 22
+August and the client has pointed at it since 24 August. Real USDC, real
+hands, and — for most of that week — real reasons nobody could finish one.
 
 This is the honest version. "Verified" below means a test or a measurement ran
 and I read the result, not that the code looks right. Anything I have not
@@ -13,49 +14,69 @@ things I know are wrong are in [Known problems](#known-problems).
 The repository is public and the client is live. As of 20 August there is no
 known open fund-theft or card-leak bug: the four found in the mainnet audit are
 fixed and deployed, and `record_hand_result`, open since 16 August, is closed.
-What stands between here and mainnet is not a bug list; it is in
-[Are we ready for mainnet?](#are-we-ready-for-mainnet) directly below.
+Nothing found since has been a custody or leak bug; everything found since has
+been a reason the game would not start, which is a different and, for a week,
+more expensive class of problem.
 
-## Are we ready for mainnet?
+## Where this stands
 
-**Not yet, and the remaining list is short.** Everything provable without real
-money on the line passes: 75 Rust tests, 68 client tests, 30 devnet integration
-tests across three suites, and the two-browser gate. The mainnet audit's four
-fund-or-card bugs are fixed on chain, `record_hand_result` is closed, mucked
-cards are no longer derivable, and the house now earns a rake. If the question
-were "is the code sound", the answer is yes.
+**Live on mainnet, taking real dollars, and thinly played.** pokerable.fun
+serves the mainnet program at `Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker`,
+chips are bought and sold for USDC at a cent each, and the treasury keeps four
+house tables standing so an arriving player never has to open one alone. Every
+figure the lobby prints is derived from public chain state or from hands the
+server re-verified before storing.
 
-Two things still fail the mainnet bar, and the owner has deliberately deferred
-the first while this remains an experiment:
+The number worth stating plainly: **for the first five days on mainnet, exactly
+one hand was ever dealt there**, and it was not a protocol failure. Starting a
+table has the session key front delegation-buffer rent for all fifteen rollup
+accounts, the float was sized from a devnet guess, and the last seat's
+delegation failed three CPIs deep as `custom program error: 0x1` — a rollback
+that correctly returned the table to Solana and told nobody why. See
+[Why mainnet had one hand](#why-mainnet-had-one-hand-27-august). Since 30
+August starts land, and the failures after that point were the felt lying about
+what had happened rather than the chain refusing to do it.
+
+Four things still fail the bar a real-money product should hold itself to, in
+the order they matter:
 
 1. **The upgrade authority can drain the entire vault, and it is a single laptop
    keypair.** The only risk here whose blast radius is *everyone's* money at
    once rather than one table's pot: whoever holds that key can deploy a program
    that empties the vault backing every chip. A multisig (Squads) or a burn is
-   an afternoon. **Consciously deferred** — acceptable for an experiment on
-   devnet, not acceptable the day real SOL is involved.
+   an afternoon. **Consciously deferred**, and the deferral got more expensive
+   the day real USDC arrived, not less.
 
-2. **A real wallet extension has never signed anything here.** Every browser
-   test uses an injected keypair. The interface is the standard one, so this is
-   likely fine, and likely is not the same as tested. One hand with Phantom on
-   devnet closes it.
+2. **Phantom warns on the domain.** Blowfish, the real-time scanner Phantom
+   runs, shows "Request blocked — This dApp could be malicious" for
+   pokerable.fun. It is a judgement on an unseen domain rather than a
+   blocklist entry: `github.com/phantom/blocklist` has zero matches. The appeal
+   is drafted at `docs/phantom-appeal.md` and leans on the OtterSec verified
+   build. Until it clears, the first thing a new player sees is their wallet
+   telling them not to.
 
-3. **A player who closes their tab without pausing leaves their seat
+3. **The client now has a backend, and the backend has secrets.** A funder
+   wallet signs delegation on demand, a Postgres holds the hand record, and an
+   RPC key sits in a server env var behind a proxy. None of that existed a week
+   ago, and the whole of it is newer than any audit. The mainnet audit on 20
+   August read a client with no server in it.
+
+4. **A player who closes their tab without pausing leaves their seat
    unreleased.** The permission still names them, so the next occupant of that
    chair cannot be secured and sits out. Safe — excluded, never readable — and
-   now visible: the table says so and tells them to take another seat. Closing
-   the last of it needs a hole PDA seeded by an occupancy counter, which costs
-   an account per seat-change and has not been judged worth it.
+   visible: the table says so and tells them to take another seat. Closing the
+   last of it needs a hole PDA seeded by an occupancy counter, which costs an
+   account per seat-change and has not been judged worth it.
 
 Below those sit the launch-hygiene items that are cheaper now than later: no
-account-migration path (treat the layouts as frozen once money is on them), the
-50 orphan test players that argue for a fresh program id, and the standing
-trust-model gaps (attestation proves hardware not code; the two-salt threshold).
-None is a reason to hold a launch alone; together they are the difference
-between a careful launch and a hopeful one.
+account-migration path (treat the layouts as frozen, because money is on them),
+the 50 orphan test players that argue for a fresh program id, and the standing
+trust-model gaps (attestation proves hardware not code; the two-salt
+threshold).
 
-**Shortest honest path to GO:** multisig the upgrade authority, sign one hand by
-hand with Phantom on devnet, and exercise a seat changing hands across a pause.
+**Shortest honest path to a product that can be recommended to a stranger:**
+multisig the upgrade authority, get the Phantom warning cleared, and put a
+security pass over the server routes that did not exist when the last one ran.
 
 ## In one paragraph
 
@@ -64,17 +85,19 @@ Ephemeral Rollup so play is sub-second, and the rollup's validator runs inside
 an Intel TDX enclave so hole cards are unreadable by opponents and by anyone
 watching Solana. The shuffle is a VRF draw combined with player salts, at least
 two of them, and anyone can recompute a finished deal in their browser to check
-it was not rigged. Chips are bought with SOL and sold back at a fixed program
-rate, backed one to one by a program vault; on devnet that SOL is test
-currency. The web client is live and lays out on a phone. Both players in a
-two-browser test can play a real hand without a single wallet prompt after
-setup.
+it was not rigged. Chips are bought with USDC and sold back at a fixed program
+rate — a cent a chip — backed one to one by a token account the program's vault
+PDA owns. The web client is live on mainnet, lays out on a phone, and after the
+one signature that opens a session a player signs nothing else: sitting down,
+betting, and the whole cash-out all run on a session key. The house keeps four
+tables standing so nobody has to open one alone, and takes 2.5% of a flopped
+pot, capped at three big blinds.
 
 ## The stack
 
 | Layer | Choice | Version |
 | --- | --- | --- |
-| Chain | Solana devnet | Agave CLI 3.1.9 |
+| Chain | Solana mainnet-beta and devnet | Agave CLI 3.1.9 |
 | Program framework | Anchor | CLI 1.0.2, lang 1.1.2 |
 | Language | Rust | 1.89.0 |
 | Rollup | MagicBlock Ephemeral Rollups | `ephemeral-rollups-sdk` 0.16.2 |
@@ -87,7 +110,10 @@ setup.
 | State | Zustand | 5 |
 | Wallets | Solana wallet-adapter | 0.15 |
 | Web3 | `@solana/web3.js` | 1.98.4 |
+| Money | USDC (SPL) via `@solana/spl-token` | 0.4 |
 | Hashing | `@noble/hashes` | 1.8 |
+| Hand record | Hosted Postgres (Neon), `postgres` driver | 3.4 |
+| Telemetry | Vercel Analytics + Speed Insights | gated on `VERCEL_ENV` |
 | Browser tests | Playwright | 1.62 |
 | Unit tests | Vitest, cargo test, proptest | current |
 
@@ -97,8 +123,17 @@ both and the cluster is chosen entirely by which RPC the client is pointed at.
 TEE endpoint: `https://devnet-tee.magicblock.app`, `https://mainnet-tee.magicblock.app`
 Pinned validator: `MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo` — the same
 identity on both clusters, confirmed by `getIdentity` against each.
-Client: <https://pokerable.fun> (devnet; solpoker.vercel.app still serves the same deploy)
+Client: <https://pokerable.fun> (mainnet)
 Source: <https://github.com/bhu1tyagi/solpoker>, MIT, public
+
+The dependency list moved in both directions this week. `three`,
+`@react-three/fiber` and `drei` arrived on 28 August to render the chairs and
+left the same day when photographs beat the model; `postgres`, `qrcode` and the
+two Vercel telemetry packages arrived and stayed. `app/.npmrc` pins
+`legacy-peer-deps`, because `@vercel/speed-insights` lists optional peers
+including `@sveltejs/kit`, which drags vite 8 against the vite 7 vitest wants
+and fails the install locally and on the build server alike. It lives in a file
+so both resolve identically.
 
 **22 August, later: the product is now Pokerable** (pokerable.fun, "Play poker
 with SOL"), and the chip rate changed from 1,000 lamports per chip to
@@ -207,35 +242,72 @@ Split across the two layers on purpose, because the split is the security model.
 | `Table`, `Seat`, `Hand` | delegated to the rollup | Change every action |
 | `Deck`, `HoleCards` | delegated, TEE-private | Must never be publicly readable |
 
-35 instructions covering the lifecycle: create, seat, delegate, secure, salt
+37 instructions covering the lifecycle: create, seat, delegate, secure, salt
 commit and reveal, VRF request and callback, start, deal, act, advance, settle,
 timeout, commit results, undelegate, leave, vacate, delete — plus the two
 break-glasses added in the mainnet audit, `reset_shuffle` and `abandon_hand`,
-and `release_hole`, which is how a chair survives changing hands.
-45 error codes. Chips are bought with SOL, and the house takes 2.5% of a
-raked pot.
+`release_hole`, which is how a chair survives changing hands, and the two added
+on 28 August, `sit_down` and `stand_up`, which are `join_table` and
+`leave_table` with the session-key guard every in-game instruction already
+uses. 48 error codes. Chips are bought with USDC at a cent each, and the house
+takes 2.5% of a flopped pot, capped at three big blinds.
 
 ### The client
 
-`app/`, a Next.js app with no game server. Lobby, table, hand history with an
-in-browser verifier, and a trust page. There is no backend: starting a hand,
+`app/`, a Next.js app. A landing page at `/`, a lobby at `/lobby`, the table,
+hand history with an in-browser verifier, a per-wallet profile, a rewards page,
+tournaments (which says honestly that it is not running yet), and a trust page.
+
+**There is still no game server, and that is unchanged**: starting a hand,
 dealing, advancing a street, settling and timing out are all permissionless, so
 every open client watches the same state and does whatever is next, staggered by
-seat so they rarely collide.
+seat so they rarely collide. Nothing about the game's authority moved off chain
+this week.
 
-Deployed at <https://pokerable.fun>. It lays out for narrow screens, and a
-phone held upright gets a table stood on end rather than a shrunken wide one:
-the media queries live in `globals.css` because inline styles cannot hear one,
-and `use-viewport` mirrors the same breakpoints for the parts positioned in JS.
-The two must stay identical word for word or a phone gets a portrait table
-inside a desktop room.
+**But the client acquired a backend, and that is new.** Six API routes now do
+work no browser can:
 
-The mark is a spade on a slate tile, drawn once in `components/primitives/Logo`
-and again in `app/icon.svg` and `app/apple-icon.svg`, which Next serves as the
-tab and home-screen icons by file convention. Three candidates were rendered at
-16, 20, 32, 64 and 160 pixels on light and dark tab bars before one was picked;
-the two that lost did so on measurement rather than taste, which is the only way
-to choose a mark that has to survive 16 pixels.
+| Route | Does | Because |
+| --- | --- | --- |
+| `/api/hands` | stores settled hands in Postgres | the chain reuses hand accounts, so pots cannot be recomputed later |
+| `/api/lobby` | aggregates the room's figures | four SQL aggregates plus a program scan, memoised and shared |
+| `/api/delegate` | signs delegation from a funder wallet | so a player is not asked for 0.05 SOL of refundable rent |
+| `/api/rpc`, `/api/rpc-token` | proxy the RPC behind a signed ticket | so the paid key is not in the bundle |
+| `/api/profile` | display names, signature-verified | the one piece of state not derived from chain |
+| `/api/attest`, `/api/table-name` | TEE attestation, deterministic table names | unchanged from before |
+
+Nothing a route stores is trusted as submitted. `/api/hands` re-runs the same
+shuffle verification the browser runs before writing a row, so a hand in the
+database means the deck provably followed from the published salts and VRF
+output. Devnet and mainnet share the database and never share a statistic:
+every row is filed under its cluster and the id namespaced by it. With no
+`DATABASE_URL` every route degrades to nulls and the lobby renders exactly what
+the chain alone supports — an aggregate that cannot be known is absent, never a
+fabricated zero.
+
+Deployed at <https://pokerable.fun>. The table is now drawn at a fixed canvas
+size and scaled as one object, which is how a real client does it and what lets
+one set of seat percentages serve every screen; the compact canvas is 740px,
+chosen because that is where phone-sized furniture takes the same fraction of
+the cloth that full-size furniture takes at 1120. The media queries still live
+in `globals.css` because inline styles cannot hear one, and `use-viewport`
+mirrors the same breakpoints for the parts positioned in JS.
+
+The mark is illustrated rather than drawn in code: a neon-lit raccoon in a
+tuxedo, and a script wordmark beside him. It ships as three PNGs generated from
+one set of sources in `app/public/new-logos` — `logo-*.png` for the mark alone,
+`wordmark.png` for the horizontal lockup, `hero-mark.png` for the landing page —
+plus `app/icon.png` and `app/apple-icon.png`, which Next serves as the tab and
+home-screen icons by file convention. The art is pre-lit, so nothing in CSS
+re-lights it; the one exception is the brand link's hover, which deepens the
+glow the drawing already has rather than adding a new one.
+
+It replaced a spade-on-a-chip mark drawn as SVG in `Logo.tsx` and duplicated in
+`icon.svg`/`apple-icon.svg`. The chip ring that mark was built from did not go
+with it: it still runs the turn clock, every loading state and the privacy
+indicator (`ChipRing.tsx`), and it is still printed around the mark on the felt,
+where it is also the table's only working indicator. The identity changed; the
+interaction language did not.
 
 ## What is verified
 
@@ -311,13 +383,24 @@ chip animation.
 
 ### Test counts
 
-- 48 Rust unit tests, 8 property tests, 7 shuffle-quality tests, 4 program tests
-  (67 total, up from 63: three of the new four pin the config-swap attack)
-- 62 client unit tests (engine ports, verifier, salts, decoders, optimistic)
+Re-run 30 August, and these are the numbers the runners printed rather than the
+numbers I remembered.
+
+- 48 Rust unit tests, 8 property tests, 7 shuffle-quality tests, 14 program
+  tests — **77 total**, up from 67
+- **94 client unit tests** across 8 files, up from 62 (engine ports, verifier,
+  salts, decoders, optimistic updates, the rake, and `send-solana`, which pins
+  the base-layer rebroadcast added on 30 August)
 - 14 devnet integration tests, plus 4 in the session run
 - 1 module-level devnet play test
 - 1 two-browser UI gate
 - 1 page-load check that fails on any console error
+- 1 design check that fails on horizontal overflow at 390px
+
+One of those 94 was red for a day and worth naming: `decodeConfig` grew a
+creator field when house tables needed telling apart from a player's own, and
+the expectation was not brought along, so `npm test` had been one red since.
+Fixed in `28f32f8`. A suite you have stopped reading is not a suite.
 
 ## The security audit, 16 August
 
@@ -1137,7 +1220,831 @@ outstanding chips were zero.
 **Devnet is now behind mainnet** and will stay behind until its RPC cooperates.
 Anyone testing there should know the rate differs from production.
 
+## The product got a front door, 27 August
+
+Everything up to here was a protocol with a debugging surface attached. This is
+the week it became something a stranger could arrive at, and almost all of it
+came from watching what a stranger actually hits.
+
+**The lobby was living at `/`,** which meant the only way to see what this is
+was to first meet a wallet gate. It moved to `/lobby` and a landing page took
+the root, as a server component, so a stranger gets HTML on first paint and the
+wallet adapter never loads at all.
+
+Three claims from the design draft could not ship as drawn, and the reasons are
+the same reasons that govern every number on the site. "The first provably fair
+poker platform" is banned phrasing here; the honest claim is a provably fair
+shuffle plus TEE-protected hole cards. "Zero rake" is false and documented as
+false. And "4,281 players currently at the tables" was invented — an invented
+player count on a real-money product is a misrepresentation rather than a
+flourish, so it is simply absent.
+
+**The onboarding gate shows one step at a time, never a checklist of
+failures.** A rail shows where the player is; one panel shows the step that
+currently blocks them. Funding steps are a process rather than a paragraph: a
+token mark, a have-of-need figure, a QR code beside a copyable address, and a
+visible "watching for your deposit" row, which is the balance subscription made
+honest — the deposit arriving really is the next thing that happens.
+
+The QR encodes the raw base58 address rather than a `solana:` URI, because
+exchange withdraw screens read a bare address and a payment URI is exactly the
+cleverness that fails inside them.
+
+Two bugs there are worth keeping. Selecting a wallet *is* the connect request;
+an earlier version also called `connect()` and lost a race, resolving while the
+context sat disconnected forever, because the provider re-subscribes to the
+adapter's events asynchronously. And the gate decided what to show the instant
+it mounted, before `autoConnect` had resolved and before balances were read, so
+a returning player was told to connect a wallet they had already connected. It
+now waits for the answer to be knowable, reading the stored wallet name to know
+a reconnect is coming, with a cap so a locked wallet cannot hang it.
+
+**The gate is not a wall.** Click the ground behind it, press Escape, or take
+the door, and it closes. A stranger can walk around a poker room. The refusal
+that matters happens where the seat is, and a table page — which is a plain URL
+that a shared link walks straight to — makes the same refusal there. Someone
+already seated is never turned away whatever their balance says: chips on a
+seat have to stay reachable. `useReadiness` answers for the gate, the cards and
+the table alike, because the gate used to work readiness out privately, which
+left the lobby no way to ask and guaranteed the two would drift.
+
+**Arriving at a table without a wallet used to replace the table with the word
+"Not yet."** No felt, no players, no way to see what you had been sent a link
+to. A poker room has never had a reason to stop anyone watching. The room is
+open now; only playing is gated, and clicking a chair opens the gate over the
+table rather than instead of it.
+
+**The trust page stopped being prose.** Several screens of text is the least
+likely shape for anyone to read before depositing, so it is a machine diagram:
+six actors, six dashed arrows in the direction data flows, and a colour split
+that carries the argument structurally. Green flows are checkable by anyone
+from public data; the one purple region — the enclave and everything it emits —
+is where the player trusts hardware and an operator instead, drawn as a dashed
+purple wall because that is exactly what it is. "What an attacker cannot do"
+became "Try to cheat it", four attempts each carrying a verdict, because
+framing the reader as the attacker is the most persuasive shape this content
+has. The rake paragraph became a meter you drag. The footer had linked to
+`/trust#shuffle` and `/trust#rake` since it was written and neither anchor
+existed; both are real now.
+
+**Tournaments exists and says it is not running yet.** One honest paragraph and
+a way back to the cash tables: no fake schedule, no counterfeit bracket, no
+countdown to a date nobody has committed to.
+
+### The design system underneath it
+
+The palette moved off the blue-cast felt onto near-black with glass panels, and
+depth stopped coming from rim-light and started coming from blur and a green
+glow. Headings run wide: Archivo loaded with its width axis and set at 125%
+stretch, which only works because the axis is requested at load time — without
+it the browser fakes the stretch by scaling glyphs, which is the exact cheap
+look this replaces.
+
+Money moved off the display face onto Satoshi, and the reason is measured
+rather than aesthetic. A display face was briefly swapped in whose GSUB carries
+one feature, `locl`, and no `tnum` at all, so the tabular request silently did
+nothing and every stack and pot would have re-measured itself as it ticked.
+Money is now pinned to the face whose `tnum` was verified with fontTools
+against the shipped woff2. Satoshi is self-hosted rather than pulled from a
+third-party stylesheet, which would have defeated the preloading `next/font`
+exists to provide.
+
+The chip icon took four passes and each rejection is a rule. A single fill set
+to the page ground held on the felt and turned into a black blob on a green
+button, so the slabs are cut with a mask and the chip is genuinely hollow.
+Three concentric rings need a finer stroke than the rest of the set or they
+close into a blob by 20px. Almost every instance on the site is 15–22px, so the
+"detailed" drawing that only appeared at 24 and above was appearing exactly
+once; the edge spots are notched into the rim itself now, with butt caps
+declared explicitly, because the set rounds its line ends and a round cap grows
+each dash by half a stroke at both ends — at 16px that is the entire gap and
+every spot seals shut into a plain circle.
+
+The USDC glyph was drawn by hand from memory and was missing the two arcs,
+which are most of what makes that mark recognisable. It is Circle's own
+artwork now, verbatim, at its native viewBox.
+
+## Numbers a stranger can check, 27 August
+
+The lobby's stat row read as three dashes and a 1, which is a room that has
+failed rather than one that has not opened yet. Fixing that honestly took most
+of a day, because the obvious fix — put a number there — is the one thing this
+product cannot do: every figure is derivable from public chain state, so an
+invented one is disprovable by anyone with an RPC call, in front of exactly the
+audience that checks.
+
+**The chain forgets the things a lobby wants to show.** Hand accounts are
+reused every hand, so pots and hand records cannot be recomputed from Solana
+later. Clients already capture the full record at settle for shuffle
+verification; they now report it to a Postgres as well, fire-and-forget with
+`keepalive` so the report survives the tab closing right after a hand ends,
+which is exactly when players leave.
+
+The pot in particular has no field to read. It is the sum of what the seats
+have committed, and settlement zeroes those, so it is watched while the hand is
+live and kept as a running maximum — a single snapshot is only that street's
+total, and the notification carrying the last call can land after the one that
+clears the table. It travels *beside* the record rather than inside it: the
+record is the thing the verifier proves and has to stay exactly what was
+proven, while the pot is summed from seat state and is not pretended to be
+provable. A repeat report can raise a stored pot but never lower it, because a
+client that joined mid-hand saw part of it and the fullest observation is the
+right one.
+
+**Hand counts are backfillable and pots are not.** Every table carries
+`hand_number`, bumped as each hand is dealt, so the program's own tally covers
+hands played before any of this reporting existed and hands whose client closed
+the tab before the capture finished. It is read on the server, not taken from
+the browser: a figure the page can post to us is a figure anyone can post to
+us, and this one is a headline. It is written down rather than read live
+because `close_table` deletes the table account, taking the count off chain
+with it — so the high-water mark per table is stored and only ever moves up,
+enforced in the upsert rather than trusted, and verified against the real
+database by re-reporting zero (left it alone) and re-reporting more (raised
+it). An unreachable RPC returns null and changes nothing, because an endpoint
+that is down is not a room where nothing has been played.
+
+Three rules came out of this and all three are load-bearing:
+
+**Absence, never a zero.** A poker room reporting $0 of volume is a lie about
+liveness; reporting nothing is the truth about what is known. An average pot
+over no observed pots is not zero, it is a question nobody has answered.
+
+**Every tile names its own window.** The counter carries no timestamps, so
+there is no honest way to ask it about the last 24 hours, and it sits beside
+money figures that may be showing a day.
+
+**"Nobody counting" is not "nothing to count".** Every unknowable figure came
+back null whether no database was attached or a database had answered and the
+room had genuinely played nothing, so the row kept falling through to chain
+counts on a machine whose database was working perfectly. The payload carries
+`stored` now: once a database has answered, a count of zero hands is a fact
+about this room and gets said out loud.
+
+**And volume that goes down is not volume.** The rule was
+`hands_24h > 0 ? "24h" : "all"`, meant to show recent activity when there was
+any and fall back to lifetime so a quiet room did not look empty. It did the
+exact opposite of its intent: while the room was quiet it showed lifetime
+volume, and the moment somebody played their first hand of the day every tile
+switched to a 24-hour window and the headline became those four hands alone.
+Playing four hands took the lobby from $12.11 to $4.40. Nothing was lost; the
+window moved underneath the number. These are cumulative figures and they say
+so now.
+
+**The rake bounds the pot from below, and only from below.** Money tiles were
+dashes because a pot is only ever observed when a client stays open long enough
+to report one. But rake sitting on chain already proves money went through: the
+program takes a fixed 250 bps of a flopped pot, so every raked chip implies at
+least forty chips of pot behind it. Rake caps at three big blinds and a preflop
+hand is not raked at all, so both push the true figure above this and neither
+below — which is why the tiles say "at least". A bound printed as a total would
+be an invented number with arithmetic in front of it. Checked rather than
+assumed: the treasury's `Player` account has `hands_played = 0` against a
+minimum buy-in of 400 chips, so it has never sat down and those chips cannot be
+what is left of a stack.
+
+### A room with tables already in it
+
+Nobody opens a poker table to sit at alone, and until now the first player had
+to. Four tables opened and paid for by the treasury remove that step. Three are
+the cheapest game in the room, because the table a newcomer can afford is the
+only one that helps them and $4 is the smallest buy-in the program allows; the
+fourth is there for anyone arriving with a bankroll.
+
+Standing empty is the job, so the two rules that hide a deserted table no
+longer apply to these — without that exemption every house table would vanish
+an hour after the last player left, which is exactly when a newcomer most needs
+to find one. The lobby tells them apart by the config's `creator`, a field
+that has been on chain since the first build and simply was never read.
+
+The permissionless sweep is untouched and always will be: closing an empty
+table is anyone's to do and the rent goes back to whoever paid it. So
+`house-tables.mjs` is a keeper, not a one-off — it counts what is standing,
+opens only the difference, picks specs the room is short of rather than the
+first N, and refuses to start a table it cannot finish paying for, because a
+half-built table is one the lobby has to advertise as broken.
+
+The published High tier at $2.50/$5 needed $200 to seat two players against $25
+in the treasury, so the big table is sized from the bankroll instead of the
+bankroll being pretended into the stakes: $0.25/$0.50, twenty big blinds at the
+minimum and a hundred at the top.
+
+**`house-session.mjs` plays real hands between two house wallets.** Real VRF,
+real hole cards out of the enclave, real chips crossing the felt, real rake
+taken. It writes no figure anywhere — the lobby moves because the play moved
+it, and every number stays checkable on chain afterwards. It bets rather than
+only calling, because checking a hand down produces a pot of exactly the blinds,
+which is a real hand and a meaningless one.
+
+The header says the thing the numbers cannot say for themselves: **both wallets
+belong to the house, so this is house play, not players finding each other.**
+It is real and verifiable; it is not organic. Anyone can read those two
+addresses on chain. If the lobby ever shows these figures as a room full of
+strangers, that is a claim the numbers will not support.
+
+### What the runner cost to get working
+
+Two failures, and the second one cost real money twice.
+
+Authorising a session key is **two presses, not one**. The first opens a panel
+explaining what the key can and cannot do; "Continue" is what signs. The runner
+clicked the first and waited for the prompt to disappear — but the panel *is*
+the prompt, so it waited forever while the table sat at READY TO START with
+both players seated and nobody able to start it.
+
+And **the balance a wallet reports is not the money a wallet has.** Chips live
+in three places: on the seat while seated, in the `Player` balance after
+leaving, and as USDC before ever buying in. Sitting down moves chips out of the
+balance onto the seat, so a wallet mid-session reads as holding no USDC and no
+chips while being fully stocked with $11 on the felt. Funding on those two
+numbers alone re-bought the entire stack on every run, which is how the
+treasury went from $25 to $3. It counts all three now and buys nothing that
+already exists. This misunderstanding cost two separate runs and $22 of
+treasury USDC; it is written down here so it costs a third nothing.
+
+**Tearing a table down no longer asks a browser to do it.** Leaving a seat and
+closing a table are two plain instructions and both wallets are held locally,
+so `table-teardown.mjs` does it directly — the UI can fail for reasons that
+have nothing to do with the chain, and a stuck table is exactly when that is
+least welcome. Order is enforced: `leave_table` returns each stack to its
+owner's balance and empties the seat, and `close_table` refuses while anyone is
+still sitting. The twelve seat and hole accounts are remaining accounts, and
+passing none produces `SeatOrderMismatch` rather than anything that mentions
+them, so seats-then-holes in index order is part of the instruction rather than
+a convention.
+
+## Why mainnet had one hand, 27 August
+
+This is the most expensive bug of the week and the least visible, because
+nothing was lost and nothing was stuck: the table simply refused to start, was
+correctly rolled back to Solana, and said nothing useful about why.
+
+Pressing start died on
+
+```
+delegate seat 0 failed: {"InstructionError":[0,{"Custom":1}]}
+```
+
+`Custom: 1` three CPIs down, where nothing names it. Raising the session float
+from 0.05 to 0.15 SOL — what the two-browser gate uses for the same work — did
+not change it, so lamports looked ruled out. What actually settled it was
+reading a failed transaction on chain rather than reasoning about it:
+
+```
+Transfer: insufficient lamports 1215920, need 1600800
+```
+
+**The session key, not the wallet, fronts the delegation-buffer rent for every
+account a start moves to the rollup.** A fresh key holds its float, clears the
+old "below 0.004, top up" check untouched, and is then drained by delegation.
+Measured on mainnet: 9.2M lamports for the table, hand and deck together, plus
+6.4M per seat — and it moves **all six seats whether or not anyone is in
+them**, because the rollup refuses to run a hand unless every account it might
+touch is there. That is roughly 48M lamports for a start. The last seat asks
+for lamports the key no longer has and the whole start rolls back.
+
+`startTable` now sizes the top-up to the work — core, plus an allowance per
+seat, plus a cushion — and moves it from the wallet before delegating.
+`PLAY_FLOOR_LAMPORTS` rose 0.018 → 0.032 → **0.06 SOL** as the measurement
+was taken and then corrected, and the meters read the constant rather than
+carrying their own copy. The rent is refunded on undelegation, so this parks
+SOL rather than spending it.
+
+This is why the entire mainnet history was a single hand: **every table but one
+died here.** Verified against a real table — with the larger float it delegated
+and moved onto the rollup, which no treasury-adjacent table had ever done
+before.
+
+A sibling of the same class: `CREATE_TABLE_LAMPORTS` is checked before the
+wallet is ever asked to sign, because creation is three transactions and the
+third is the expensive one. A wallet that runs out between them leaves a table
+with seats and no card slots — it appears in the lobby, accepts players, and
+can never deal. That happened on mainnet, and two people sat at that table for
+three hours waiting for a hand that could not come.
+
+## The table became a room, 28 August
+
+A day and a half of nothing but what a player looks at. Most of it is
+recorded here because the rejections are more useful than the results.
+
+**The chairs went round a full circle.** CSS-drawn seats → four photographed
+angles of a green Chesterfield → a downloaded CC0 GLTF model → the Chesterfield
+modelled in code out of primitives with procedural tufting → back to the
+photographs. The 3D round was not wasted: what it taught about light got
+layered into the *room* instead of baked into the pictures, so every chair
+stands in its own pool of ground shadow, seats farther up the screen render
+smaller the way the far side of a real table sits farther from your eyes, and
+the room's light falls from the table's centre — far chairs run brighter, and
+the hero's back, nearest the viewer and facing away from the light, sits
+darkest. `three`, `@react-three/fiber` and `drei` came and went in the same
+day.
+
+Two rendering traps worth keeping. A chair at `z: -1` inside its seat needs
+`isolation: isolate` on the parent or the image falls behind the page whenever
+framer resets the idle transform. And the global `img` max-width reset
+collapses a fixed-width image inside a shrink-to-fit absolute wrapper to its
+minimum size.
+
+The matte took three passes. A whole-image neutral purge ate the chairs,
+because dark leather in shadow is as neutral as studio floor; a greedy
+enclosed-pocket cut ate the leather's own pale highlights and left them
+moth-eaten. What works is surgical: a border flood for the outside, a sizeable
+enclosed-region cut for the pockets it cannot reach, and a bright-neutral-only
+flood confined to the bottom half for the studio floor. The corner mirrors were
+also backwards — the source three-quarter faces lower-right, not lower-left —
+so the top corner chairs faced away from the table.
+
+**The seat ring moved to the classic 6-max arrangement**, hero dead centre
+above the action bar, opponent top centre, corners and flanks around. The
+rotation that already put you at seat 0 now seats you exactly where every poker
+room seats its hero.
+
+**An empty seat says "open".** Two instructions were tried first — "sit · 3",
+then "sit here" — and both shouted at a player who is looking at a poker table
+and can already see which chairs are free. It is the fact and nothing else,
+printed in the felt's own ink at low opacity, so six free chairs read as a calm
+room rather than six buttons. The seat is an object: a plate recessed into the
+room, lit from above, with the ghost of its player inside — the same circle
+every seated player occupies, so a full seat and an empty one are plainly the
+same kind of thing. Hover brings the brand gradient to full and lifts the
+ghost.
+
+**Nothing floats over the felt any more.** The working overlay — a raised card
+in the middle of the table — is gone. The house mark printed into the cloth is
+the loading indicator: while the table works its ring turns and the mark lifts
+a little out of the felt, and the words speak through the same status line as
+everything else. A card over a table reads as an interruption; the table's own
+mark turning reads as the room quietly at work.
+
+The status line is white run through overlay blending, so the letters take the
+cloth's own green and its lighting — brighter where the felt is lit, sunk where
+it falls dark. It can wrap but must never run off the edge: short labels keep
+their wide tracking, medium ones tighten and may take a second line, and
+anything longer is not upholstery at all but a sentence asking the player to do
+something, so it goes to a toast and leaves a short stand-in behind. Before
+that rule, "next hand has not started, so try reloading, or pause the table"
+arrived as "...pause the TA".
+
+**The overlay speaks the language of the game.** Shuffling up, setting the
+table, dealing you in — not "delegating accounts" and "moving the table into
+the enclave". The machinery is still real and still explained on the fairness
+page, where anyone who wants it can go and find it.
+
+**Chips are drawn as chips.** SVG, a face seen at a shallow angle over a
+visible clay edge, moulded spots crossing rim and edge together, an inlay ring,
+and the denomination printed in the inlay of every column's top chip so a
+stack's value is readable from the chips themselves. The pot pays out chip by
+chip — one stream per winner, so a split pot reads as a split — with each chip
+absorbed as the winner's stack counts up and the figure arriving last, after
+the money.
+
+**The deck is the real deck.** All fifty-two faces are Byron Knoll's
+public-domain artwork shown exactly as printed. Two earlier attempts failed
+instructively: hand-drawn geometric court figures lasted one look, and grafting
+the classic courts into our own faces doubled every symbol, because the art
+carries its own pips and indices. The back stays ours and carries the house
+logo — a real casino brands the back and leaves the face to the printer.
+Nothing about which card comes off the deck changes; these files only decide
+what a card byte looks like once it is already yours to see.
+
+### Six things a hand running end to end exposed
+
+Recorded because none of them were visible until a hand actually completed on
+the felt, which on mainnet had happened once.
+
+- **The mark outranked the cards.** Cashing out narrates itself as "finishing
+  this hand", and any narration lit the mark and set its ring turning — so
+  pressing Cash out put the brightest, only moving thing on the table directly
+  behind the board of a hand still being played. Cards on the cloth outrank
+  whatever the room is arranging in the background.
+- **Folding was drawn as a catastrophe**: a black disc over the player's face
+  with the word across it in loss-red, the loudest treatment on the table given
+  to its least eventful event. It desaturates with a single band carrying the
+  word in the felt's own ink now, the way a mucked hand gets a line through it.
+  Two cues, no colour alone, and you can still see who it is. All-in keeps its
+  warning colour, because that one *is* an event.
+- **Split pots were cut off mid-payment.** The award beat was a flat 1,500ms
+  and a split needs about 1,760, so the second winner's chips were deleted in
+  flight — precisely the moment a player most needs to see where the money
+  went. The beat is measured from what is actually being animated now.
+- **The pot row unmounted the instant the chips flew,** and the column is
+  centred on its own middle, so losing that row jerked the board and everyone's
+  cards a dozen pixels upward every single hand.
+- **`layout` on a seat pod** whose cards unmount at the end of every hand made
+  framer scale the whole subtree and ease it back, so every avatar and name on
+  the table squashed and stretched twice a hand. Measured after: an opponent's
+  seat moves 0px between a live hand and none.
+- **The bet chips printed across the hero's own hole cards.** The hero's bet
+  sat at y 71 and the hero's hand starts at y 71, hiding the rank of the second
+  card on every street the hero bet. Every bet spot is now derived against that
+  seat's cards, the pot and the board rather than eyeballed against its chair,
+  and the pot's own position was corrected from y 56 — the status line — to
+  where the pot is actually drawn.
+
+## One signature per session, 28 August
+
+Sitting down and cashing out were the last two wallet prompts in a session, and
+every prompt is a place for a player to hesitate. `sit_down` and `stand_up`
+accept the same session-key guard every in-game instruction already uses, so
+the wallet signs exactly once — the sit that creates the session key — and
+everything after that, including the entire cash-out, is promptless.
+
+`stand_up` is safe outright: the account constraints pin both ends, so whatever
+signs it, the chips can only travel from the occupant's seat to the occupant's
+own balance. The most a leaked session key gains is standing its own player up
+between hands.
+
+**`sit_down` is a deliberate trade, made with eyes open.** A browser-held key
+may now commit the player's balance into play, where before it could only bet
+what was already on a seat. The seat is still assigned to the session's own
+authority and the buy-in still bounded by the table config — the chips never
+leave the player's name — but a stolen key plus a colluding opponent could put
+them at risk. Judged worth it: the key already signs bets that can lose the
+whole stack, and a signature on every sit was the product's single worst
+moment.
+
+They are new instructions rather than changes to `join_table` and
+`leave_table`, so clients built before the deploy keep working through it. The
+client tries the session path whenever a live, funded session key exists and
+falls back to the wallet otherwise — which is also the ordering rule:
+**deploy the program before shipping the client,** or a live session tries an
+instruction the chain does not know yet.
+
+## Push instead of poll, 28 August
+
+The six-second listing poll was the app's biggest RPC spender — two program
+scans per tick per open tab — and the leaderboard's twenty-second full scan was
+the second. Neither survives arithmetic: fifty people in the lobby is a
+scan-storm every second against a limiter that counts per second, on any plan.
+
+The endpoint's websocket carries the same facts for free. A table account
+changes exactly when somebody joins, leaves, starts, pauses or closes it; a
+player account exactly when chips are bought, sold, or moved to and from a
+seat. Both hooks build state from one initial scan and then listen — table
+subscriptions on **both** owners, because a delegating table is next written as
+the delegation program's and one coming home as ours, with the discriminator
+filtered server-side and address re-derivation keeping out other apps'
+same-named accounts.
+
+The polls remain as once-a-minute reconciles, because a socket can drop events
+across a reconnect and a subscription can quietly lapse. Measured on the lobby:
+six HTTP calls in the first 25 seconds and then about four a minute, where the
+old shape spent that budget every six seconds.
+
+**Questions whose answers cannot change stopped being asked.** A table's config
+is written at creation and never after, and the deck and hole accounts that
+decide `outdated` either were made with the table or never will be — yet every
+poll re-read all three for every table. They happen once per table per visit
+now, remembered at module level so a remount forgets nothing. Config caches
+only once an account was actually read, so one null from a flaky batch cannot
+freeze a table as stakes-less for the whole visit.
+
+**Three balance subscriptions answer "did my deposit arrive?"** — the player
+account, the USDC account and the wallet itself — so a transfer sent from an
+exchange or a phone appears the moment it confirms, in the header, the gate and
+the buy-chips modal at once. Shared across every mounted copy of the hook,
+because there are around five per page and each opening its own three
+subscriptions would ask the endpoint the same question fifteen times.
+
+Balances are also cached per wallet now, so the last known numbers are up
+before the first read begins. Held per wallet on purpose: switching wallets
+must never show the previous one's money, so a miss is simply a miss. And
+`openGate` was only ever cleared by dismissing, so once anything armed it the
+flag stayed armed for the whole visit — which is why walking between the lobby
+and a table produced "reading your wallet's balances" every single time.
+**Unknown is not zero**, and the holding card that accused funded wallets of
+holding nothing is gone: the gate opens as itself with its rail and panel drawn
+as skeletons, because a skeleton claims nothing.
+
+## The endpoint was most of 29 August
+
+A day that started as "the app is slow" and ended somewhere else entirely.
+Recording it in order, because three of the four conclusions reversed an
+earlier one.
+
+**First, the logging, because everything after depends on it.** Both
+connections are now built over a fetch that records every call — method, layer,
+account, duration, outcome — with a ring buffer at `window.__rpc`
+(summary/errors/recent/slow). It immediately showed every base-layer call
+averaging 890ms. Against the endpoint directly: `getHealth`, which touches no
+chain state, answers in 48ms, so the network path is fine; ten `getSlot`
+samples averaged 901ms where public mainnet-beta averages 271ms for the
+identical call. Errors are classified rather than lumped together, because they
+call for opposite responses — not-found (an account asked of the layer it does
+not live on), rate-limited, transient, rpc-error — and not-found logs the
+**whole** address, because a truncated one cannot be looked up.
+
+**A table's stakes are read, never guessed.** Sitting at one table offered a
+maximum of 200 chips to a player holding 659, at a table whose real terms are
+10/20 blinds and a 400–2000 buy-in. The config was on chain the whole time; one
+unguarded `getAccountInfo` came back rate-limited and left the stakes unknown
+for the entire visit, and the fallbacks of 40 and 200 were not a safe guess in
+either direction — at a table whose minimum is 400, the seat button was quietly
+promising a transaction that could only fail. Unknown stakes say so now, and
+the config is read once and cached: 842ms to stakes cold, 84ms warm.
+
+**One unguarded read could take the whole table down.** `refreshDelegation` ran
+every ten seconds with nothing catching it — the only background read on the
+page that had been missed. One failed call became an unhandled rejection, which
+put a dialog over the table and made the seats unclickable. It reached the
+browser as a bare `TypeError: Failed to fetch`, because an error response
+carries no CORS headers, so a rate-limited read is indistinguishable from the
+network being gone. It retries now, and **a failure leaves the last known value
+alone**: reporting "not delegated" because a read failed would redraw a live
+game as an empty lobby. Verified by cutting the RPC entirely for 32 seconds —
+43 requests refused, zero unhandled rejections, no dialog, the table still on
+screen.
+
+Retry backoff became exponential with jitter, where it was 1.5s, 3s, 4.5s — the
+same delays to the millisecond in every browser. A rate limit refuses several
+clients at once by definition, so they all backed off together and all came
+back together, re-creating the burst that got them refused.
+
+**The scans moved to the server, and then moved back.** `getProgramAccounts` is
+billed at ten credits against one and has its own much lower ceiling; the lobby
+needed two and the leaderboard a third, in every browser. Two cached routes
+fixed that, and a shared in-flight sweep fixed the cold-start burst behind it
+(ten simultaneous cold requests answered in 2.2s off a single scan, against
+eleven seconds and a storm of 429s before). Then the dashboards were actually
+read: the room runs at 0.8 requests a second with a 100% success rate. It was
+insurance against a crowd that does not exist yet, paid for with a hop on every
+read, so `/api/tables` and `/api/leaderboard` were deleted. The caches they
+taught us to keep stayed. **Worth knowing before the crowd arrives: this trade
+reverses in production, where a function beside the endpoint reads it far
+faster than a browser on the other side of the world can.**
+
+**The lobby was slow at the database, not the endpoint. I had this wrong and
+the dashboards said so.** `/api/lobby` had no cache at all — the one route of
+the three that never got one — so every reader rebuilt the whole thing.
+Memoising it was half. The other half: four independent aggregate queries were
+awaited one after another, and issuing them together did nothing, because
+`max: 1` gave the driver a single socket to queue them on. That setting was
+filed next to `prepare: false` as though both were pooler safety, but only
+`prepare: false` is — a pooler exists precisely so many client connections can
+share few server ones. Measured on this database: the four take 2170ms through
+one connection and 496ms through four. The database is in us-east-1 and we are
+not, so a round trip costs about 250ms before doing any work, and the hands
+table has seven rows. **Nothing here was ever a query that needed optimising;
+it was four trips where one would do.** Steady-state rebuild 2350ms → 647ms,
+6ms on a cache hit. The cold path is still ~11s, almost all of it Neon waking
+up, which is why the phase timings now print.
+
+### The key in the bundle
+
+An RPC url a browser calls is an RPC url the world can read. Ours was
+unrestricted: no Origin, a forged Origin and a forged Referer all answered 200.
+
+The first move was two keys rather than one — server paths read `BASE_RPC` with
+no `NEXT_PUBLIC_` prefix, falling back to the public variable so a single-key
+setup keeps working — so the public key could be origin-locked at the provider
+and the server key never shipped anywhere. Testing that turned up two things.
+The rule works, but only on the api-key urls; the "Secure RPC URL" subdomain we
+were using serves everybody, including `evil.example`. And the locked url is
+**three times quicker**: 327ms against 948ms on the same call, back to back,
+which was most of the slowness chased earlier that day.
+
+Origin locking stops other websites and casual copying, not a script — measured,
+thirty forged requests in a third of a second. So `/api/rpc` keeps the key on
+the server: the browser calls a path on our own origin, the route holds the key
+and calls Helius. It is the overflow path, not the hot one — browser reads go
+direct to the keyless per-IP-limited endpoint, and only a 429 falls back to the
+proxy, so the steady state pays no server hop. Measured: Secure direct 944ms,
+the api-key url 376ms, the proxy over it 391ms — fifteen milliseconds of
+overhead.
+
+Development routes *everything* through the proxy, because the fast endpoint is
+domain-locked and Helius will not allowlist localhost: a dev browser calling it
+directly gets 403, while the proxy attaches the site's own origin and the same
+endpoint answers 200.
+
+**Then the proxy grew a ticket, and the honest framing decided its shape.** A
+proxy that hides the key but lets anyone on our origin relay through it has
+moved the problem, not solved it. Any token a browser sends is a token the
+browser holds, and a fixed one in the bundle would be the key problem under a
+new name. So the ticket is not built to be unstealable — it is built so
+stealing it is worth little. It is an HMAC over its own expiry, so it cannot be
+invented or extended; it lasts fifteen minutes; it is minted at a separate,
+rate-limited endpoint; and the proxy also checks `Sec-Fetch-Site`, which a
+browser sets and a page cannot forge. **None of this stops a script that
+fetches a ticket and uses it — in a browser nothing can.** What it stops is the
+cheap case, copying one value out of the network panel. Verified: no token 401,
+valid 200, forged 401, expired 401, and a real page mints once and relays five
+calls with no rejects.
+
+Verified against a production build: **zero bundle chunks contain the key or
+even the string "api-key"**, where the keyless Secure url is present as
+expected.
+
+**Leaking a server secret is a build error now.** The funder's key and the
+database password are safe today because Next.js only inlines `NEXT_PUBLIC_`
+vars into the bundle — verified, not assumed, by grepping the built chunks for
+the key bytes, the `FUNDER_` variable names and the database host, all absent
+while the prefixed RPC url is present as expected. But that protection is a
+naming convention, and a convention is one careless import away from being
+wrong. Both modules declare `server-only`. Confirmed by doing it: a client page
+importing the funder exits 1.
+
+## The house pays the table's rent, 29 August
+
+Starting a table parks rent-exemption for fifteen accounts in the delegation
+program's buffers, and the player was being asked for it — a wallet prompt for
+about 0.05 SOL with no explanation and no way to tell a refundable deposit from
+the price of playing. A player who is not told this reasonably concludes the
+game costs fifty times what it does and stops before finding out otherwise.
+(The actual cost of a game is fees, around 0.00007 SOL.)
+
+Two answers shipped. The deposit sheet says what the money is before asking for
+it. And a funder wallet signs those delegations, so **a player signs nothing to
+start a table.**
+
+The safety comes from where the money goes, not from who is asking.
+`delegate_core` and `delegate_seat` take the payer as their only signer, so the
+funder pays directly and the lamports land in buffers owned by the delegation
+program — they never pass through an account the caller controls. The obvious
+alternative, transferring SOL to the player's session key, would have been the
+opposite: a session costs about 0.014 SOL to create, so draining 0.05 at a time
+would have been profitable for whoever asked most often.
+
+What is left is griefing rather than theft — starting tables nobody will play,
+to lock the float up in buffers — so the checks are aimed at that: the table
+must exist and be ours, two players must already be sitting at it, a table
+cannot be restarted in a tight loop, and there is a daily ceiling and a kill
+switch. **The funder is deliberately not the treasury authority.** It signs on
+demand from a server, which is a different risk from the key that owns the
+house tables and the chip vault, and it should hold a working float and nothing
+more.
+
+Server-side confirmation polls instead of subscribing: `confirmTransaction`
+waits on a websocket, which in this Node build fails as
+`bufferUtil.mask is not a function` and then retries forever rather than
+throwing, wedging the route and every request queued behind it.
+
+### The funder told six seats they were already delegated
+
+**This is why a started table dealt nobody in, and it was mine.** The route
+checked the *table's* owner on every step to decide whether there was anything
+left to pay for — but `delegate_core` is precisely what makes the table
+delegation-owned, so once the core landed, all six seat requests saw a table
+that was no longer ours and returned ok having done nothing. Six successes, no
+seats moved.
+
+Found by reading the chain rather than the code: table, hand and deck on the
+rollup, all six seats and holes on the base layer — exactly the half-delegated
+table the start's rollback exists to prevent, built by the thing meant to help.
+"Already delegated" is a question about the account being asked for now. A seat
+step asks about its own seat, and a delegated table is what it should expect to
+find.
+
+`recover-table.mjs` pulls a half-delegated table back: seats first where any
+are on the rollup, then the core, then waits for the commit to land. Used on
+mainnet table 1787822983190680, which is whole again.
+
+### Three more ways a start lied about itself
+
+**The start wrote to accounts it never waited for.** It waited for the table,
+the hand and the seats to arrive on the rollup, then wrote to the *hole*
+accounts. A hole that had not landed failed its secure, its seat was recorded
+unsecured, and with both players in that state the table went live with the
+whole room sat out. It was never an ownership problem: `secure_hole` rebuilds a
+seat's permission every call to name its current occupant, so an occupied chair
+is always securable — the program says so and this was read from it. The catch
+that recorded a seat as unsecured also swallowed the reason, which made this
+the one failure in the sequence a report could not explain.
+
+**Then the fix overcorrected.** Listing every occupied hole in the wait put the
+starter directly against the rule in the comment above it: the validator serves
+a permission-gated hole to its member and to nobody else. The permission exists
+from the moment a player sits down, so the starter polled the opponent's hole,
+read null forever, and burned its whole window — while delegation flipped
+`delegated` true on every seated client within one poll and *their* cranks
+finished the start. A hand was visibly live on the felt, blinds posted, cards
+secured, while the status said "setting the table" and thirty seconds later the
+starter announced the table had been returned to Solana. None of it was true.
+The wait list carries our own hole only, which still stands proxy for the rest
+because every hole delegates in the same transaction as its seat. **A hand
+going live mid-wait is the finish line crossed by somebody else, not something
+to wait through** — and the felt gets the rule as a backstop: a start-phase
+overlay never outranks a live hand, because cards on the felt are the proof the
+start succeeded.
+
+**Starting took twelve to fifteen seconds** because the seats were delegated
+one at a time, each turn costing a check and a send waited out to confirmation.
+Nothing about them is ordered — six independent accounts, six independent
+transactions, and only the core has to land first. The checks collapse into one
+batched read and the sends go together, so the wait is the slowest seat rather
+than the sum of six. About eight seconds off every start.
+
+**And the felt stopped contradicting the secured badge.** A seated player
+mid-game, with the HUD showing CARDS SECURED, was being told by the felt to get
+up: "this chair is still locked — try another seat." The badge draws "secured"
+from the rollup link being live, which is the authenticated connection that
+reads your hole cards; the felt read the on-chain `cards_secured` bit
+separately, and a stale read of it with the link plainly live left the felt
+handing a playing player advice that would have cost them their seat. A live
+link *is* the lock being in place.
+
+Two more non-events stopped being dressed up as faults. A table spends a few
+seconds with its accounts split across two layers while it starts or pauses;
+the crank has always swallowed that, but an action pressed inside the same
+window took a different path out and reached the screen as "this table is
+part-way between Solana and the game validator" in the middle of an otherwise
+successful start. And `ws error: undefined` is web3.js reporting a dropped
+subscription socket — a browser WebSocket error event carries no message, so
+that string is the whole of it — which Next's dev overlay promoted to a
+full-screen dialog. It is a warning now, matched on that exact string and
+nothing else.
+
+## Send to Solana like we mean it, 30 August
+
+A start failed in production and left no trace on chain. The house funder
+signed `DelegateCore`, the RPC handed back signature `3dW6zeGq…`, and the
+transaction was never included in any block — null from `getSignatureStatuses`
+with `searchTransactionHistory`, null from `getTransaction`, on two independent
+endpoints. The route waited its thirty seconds, said "core did not confirm",
+returned 502, and the client correctly rolled back a start that had never
+begun. Nothing was lost and nothing was broken; the table simply could not
+start, and pressing the button again rolled the same dice.
+
+**Every base-layer transaction this app has ever sent paid 5,000 lamports** —
+the bare signature fee, no priority fee at all — and was broadcast exactly once
+with no rebroadcast. That is the shape a leader under load drops first, and
+when it is dropped there is nothing to find afterwards.
+
+`sendSolana` is the base-layer sibling of `sendEr`. It bids at a floor of
+20,000 micro-lamports per unit over a 200,000 unit limit — measured, not
+guessed: `DelegateCore` has consumed 125,027 and 149,027 units, `DelegateSeat`
+77,291 to 140,292. It keeps the same signed bytes going out every two seconds,
+which cannot double-apply because the signature is fixed at signing. And it
+tells "not yet" from "never" using the blockhash's own
+`lastValidBlockHeight`, so a dropped transaction is reported as one that never
+happened rather than one whose fate is unknown.
+
+Proved on mainnet before shipping: landed in 2,294ms for a fee of 9,000
+lamports, being the 5,000 base plus the 4,000 the bid costs.
+
+**The wallet-signed sends are not covered yet.** Join, cash out, create table
+and deposits still send once at zero priority. They keep preflight on, so they
+fail loudly instead of vanishing, but they can be dropped the same way and are
+next.
+
+## A player has a profile, 30 August
+
+A public page per wallet, built from hands already recorded against a public
+key on a public chain, so there is nothing about it to gate — and gating it
+would break the one thing a profile is for, which is being shown to somebody
+else.
+
+**The display name is the first thing in the product that is not derived from
+chain state,** so it is also the first thing somebody could set on a wallet
+that is not theirs. The wallet signs the exact name it is claiming, the server
+verifies that signature, and the signature stops being good ten minutes after
+it was made. No session, no cookie, no token.
+
+The rewards page is reworked around the same grammar — stat cards, tabular
+figures, one glow per region — with a line chart, skeletons in place of empty
+boxes while the data is still arriving, and boards that end at the same height
+so thin data reads as thin data rather than as a layout bug. `hand_players`
+grew a `contributed_chips` column, added the same idempotent way as the rest of
+the schema.
+
+Speed Insights joined Analytics, both gated on `VERCEL_ENV` so neither logs an
+error off Vercel. It reports the route rather than the URL, so a table id never
+leaves the client attached to a measurement.
+
 ## Known problems
+
+**Phantom shows a malicious-dApp warning on pokerable.fun.** Blowfish, the
+real-time scanner Phantom runs, is making a risk judgement on a domain it has
+never seen; `github.com/phantom/blocklist` has zero matches, so there is
+nothing to request removal of. The fix is evidence and time rather than a
+takedown: an appeal to `review@phantom.com`, drafted at
+`docs/phantom-appeal.md`, leaning on the OtterSec verified build and the
+absence of any token, presale or airdrop. Until it clears, the first thing a
+new player sees is their own wallet telling them not to proceed. **This is
+currently the largest single obstacle between the product and a user.**
+
+**The server routes are newer than any audit.** A funder wallet that signs
+delegation on request, a Postgres holding the hand record, an RPC proxy with a
+minted ticket, and a signature-verified name endpoint all arrived on 27–30
+August. The mainnet audit on 20 August read a client with no server in it.
+Nothing here touches custody — the funder pays into delegation-program buffers
+and never through an account a caller controls, and `/api/hands` re-verifies
+every hand before storing it — but "reasoned about carefully while writing it"
+is not the same as "read by someone looking for a way in".
+
+**The funder is a hot key on a server.** Deliberately not the treasury
+authority, deliberately holding a working float and nothing more, and fenced
+with a daily ceiling, a kill switch, a restart-rate limit and a requirement
+that two players already be seated. The residual risk is griefing — starting
+tables nobody will play, to lock the float up in buffers — and the ceiling is
+what bounds it rather than anything cleverer.
+
+**The RPC ticket is a speed bump, stated as one.** Any token a browser sends
+is a token the browser holds. The HMAC-over-expiry ticket cannot be invented or
+extended and dies in fifteen minutes, and `Sec-Fetch-Site` refuses cross-site
+use, but nothing stops a script that mints a ticket and uses it. What it buys
+is that the cheap attack — copying a value out of the network panel — stops
+working, and everything else becomes traffic through endpoints we rate-limit.
 
 **50 test `Player` accounts are on chain and 48 of them cannot be removed.** They
 are the leaderboard. Every chip movement needs the player's own `authority`
@@ -1157,7 +2064,14 @@ a permanently stranded balance — correct, and a reason to launch on a fresh id
 today: the privacy fix appended a bool to `Seat` and `Deck`, which makes every
 account written by an earlier build too short to deserialize. Nothing needed
 migrating because the tables were wiped first, but the underlying gap is the
-same one below.
+same one below. **This now matters differently: real chips are on mainnet
+accounts, so the layouts are frozen rather than merely inconvenient to
+change.**
+
+**The devnet cluster is behind mainnet and getting further behind.** The chip
+rate diverged on 25 August when devnet's public RPC could not complete the
+1.1MB upload, and every deploy since has gone to mainnet first. Anyone testing
+on devnet should treat it as a different product.
 
 **Tables: cleared, twice.** `wipe-tables.mjs` cleared the world on 16 August. On
 20 August the eight tables from the mainnet-audit devnet runs were cleared
@@ -1202,78 +2116,107 @@ roughly the rate they are made, not on a clock.
 Listed because "not tested" and "broken" are different things and the difference
 matters.
 
-- **Real wallets.** Every browser test uses an injected wallet-standard wallet
-  backed by a keypair. Phantom and Solflare have never actually signed anything
-  here. The interface is the standard one, so this is likely fine, and likely is
-  not the same as tested.
-- **Mobile, on real hardware.** The table, lobby and controls now redraw for
-  narrow screens, a phone held upright gets a tall table rather than a shrunken
-  wide one, and both were checked at 390px in a headless browser. No physical
-  phone has opened it, and a screenshot does not test a thumb, a notch or a
-  browser chrome that moves as you scroll.
+- **A hand played end to end on mainnet by two strangers.** The house session
+  runner plays real hands between two wallets the house owns, and the
+  two-browser gate plays them with injected keypairs. Neither is two people who
+  found each other.
+- **Real wallets, mostly.** Phantom has certainly *seen* the site — it is
+  warning on the domain — but every browser test still uses an injected
+  wallet-standard wallet backed by a keypair, and no extension has been driven
+  through a full sit-bet-cash-out here. The interface is the standard one, so
+  this is likely fine, and likely is not the same as tested.
+- **The two-browser gate has not run since the design rebuild.** The table it
+  drives was redrawn from the felt up between 27 and 30 August, and the gate
+  asserts on things a player looks at. Assume it needs repair before it is
+  trusted again — every previous rebuild broke it in exactly one selector.
+- **Mobile, on real hardware.** The table is drawn at a canvas size and scaled
+  as one object now, which is a better answer than the old breakpoint pair, and
+  it was checked at 390px in a headless browser. No physical phone has opened
+  it, and a screenshot does not test a thumb, a notch or a browser chrome that
+  moves as you scroll.
+- **The funder route under any load.** Its ceiling, kill switch and
+  restart-rate limit are written and reasoned about; none has been driven to
+  its limit deliberately.
+- **The RPC proxy under a real burst.** The direct-to-429-to-proxy fallback was
+  verified once by forcing a 429 by hand. It has never carried a crowd.
 - **More than two browsers at once.** The crank's collision handling is designed
   for six and tested with two in the UI, six by script.
 - **Long UI sessions.** The 100-hand run was scripted. The longest UI session is
-  one hand.
+  a handful of hands.
 - **Reconnection mid-hand in the browser.** The retry and reconnect logic is
   ported from the scripted runs, but a browser losing its socket during a hand
   has not been exercised deliberately.
 - **The one-hour abandoned-table sweep firing for real.** The rule is
   implemented and deployed, and deletion itself is verified end to end, but no
-  table has yet sat empty for a full hour and then been swept, because the rule
-  is newer than an hour.
-- **Mainnet.** Nothing has ever run there.
+  table has been observed sitting empty for a full hour and then being swept.
 
 ## What is left
 
-Roughly in the order I would do it. The first three are the mainnet gates from
-[Are we ready for mainnet?](#are-we-ready-for-mainnet); the rest is hygiene.
+Roughly in the order I would do it. The first four are what stands between this
+and a product that can be recommended to a stranger; the rest is hygiene.
 
 1. **Move the upgrade authority to a multisig, or burn it.** The single most
    important item, because it is the only one whose blast radius is the whole
-   vault. Squads is an afternoon. Do it before any real SOL exists.
-2. **Verify with a real wallet extension.** Phantom on devnet, one hand, by
-   hand. The largest gap between "tested" and "works".
-3. **Exercise a seat changing hands across a pause,** which is the one path that
-   could strand a re-taken seat's rent. Sit down, pause, have someone else take
-   the seat, restart, confirm they get dealt in.
-4. **Decide the program id question.** A fresh id is the only way to a launch
+   vault. Squads is an afternoon. Real money has been on it since 24 August,
+   which means this is now overdue rather than pending.
+2. **Get the Phantom warning cleared.** The appeal is drafted at
+   `docs/phantom-appeal.md` and needs sending to `review@phantom.com`. Nothing
+   downstream of the front door matters while the wallet is telling people to
+   turn around.
+3. **Security-review the server routes.** `/api/delegate`, `/api/hands`,
+   `/api/rpc`, `/api/rpc-token` and `/api/profile` are all newer than the last
+   audit, and the funder is a hot key that signs on request.
+4. **Repair and re-run the two-browser gate,** then keep it green. It is the
+   only check that has ever caught a table that passes every test and cannot be
+   played, and it has caught exactly that three separate times.
+5. **Priority fees and rebroadcast on the wallet-signed sends.** `sendSolana`
+   covers the funder's transactions; join, cash out, create table and deposits
+   still send once at zero priority and can vanish the same way.
+6. **Decide the program id question.** A fresh id is the only way to a room
    without 50 test players on the leaderboard, 48 of them unremovable; a
-   self-authorised `close_player` stops it recurring but cannot undo it.
-5. **Account versioning or a migration instruction,** so a future layout change
-   stops orphaning existing accounts. Until it exists, the layouts are frozen
-   once real money is on them.
-6. **Open it on an actual phone.** The responsive work is written and checked in
-   a headless browser at 390px, which is not the same thing.
-7. **A reveal timeout for salts,** the precondition for requiring one salt per
+   self-authorised `close_player` stops it recurring but cannot undo it. The
+   window for this closes as real balances accumulate.
+7. **Account versioning or a migration instruction,** so a future layout change
+   stops orphaning existing accounts. Until it exists, the layouts are frozen —
+   and real chips are already on them.
+8. **Open it on an actual phone.**
+9. **A reveal timeout for salts,** the precondition for requiring one salt per
    dealt-in seat. Raising the threshold without it lets one player who commits
    and walks away freeze a table — a denial of service that needs nobody in
    place of a fairness weakness that needs collusion.
-8. **Enclave measurement allowlist,** so attestation proves the code and not
-   just the hardware. The biggest remaining gap in the trust story.
-9. **Dependency bumps.** 24 advisories in the client's production tree, none
+10. **Enclave measurement allowlist,** so attestation proves the code and not
+    just the hardware. The biggest remaining gap in the trust story.
+11. **Bring devnet back level with mainnet,** or say plainly on the site that it
+    is not.
+12. **Dependency bumps.** Advisories in the client's production tree, none
     reachable from client runtime code, all transitive under `@solana/web3.js`,
     wallet-adapter, `next` and the mobile-wallet-adapter chain.
-10. **Multi-table and spectating,** neither of which exists.
-11. **A proper hand-history replay** rather than a final-state view.
+13. **Multi-table and spectating,** neither of which exists.
+14. **A proper hand-history replay** rather than a final-state view.
 
-Done since this list was last written: the mainnet audit and its four fixes; the
-`abandon_hand` and `reset_shuffle` break-glasses; the on-chain validator and
-queue pin; the deal gate restored as an exclusion; the TEE token cut to 12 hours
-and cleared on disconnect with the session key; a CSP and five security headers;
-the cluster switch that derives every endpoint and refuses a mainnet build
-carrying a devnet URL; and CI that runs `cargo test`, `clippy`, `tsc`, the unit
-tests, a production build, the page-load check, and an IDL-drift guard on every
-push. Undelegation, previously an unconditional between-hands griefing button, is
-now bound to its table and refused while a hand is live — the mid-hand split and
-the cross-table decoy are closed, though a `Waiting` table can still be knocked
-to the base layer and simply re-delegated.
+Done since this list was last written: the whole of the 27–30 August work above
+— a landing page and an onboarding gate, a lobby that reads as a room, house
+tables so nobody sits alone, a Postgres hand record whose every row is
+re-verified server-side, `sit_down`/`stand_up` so a session costs one
+signature, a funder that pays the delegation rent a player used to be asked
+for, websocket subscriptions in place of the polling that would not have
+survived fifty people, the RPC key out of the bundle behind a ticketed proxy,
+priority fees and rebroadcast on every server-sent transaction, and the session
+float finally sized from a mainnet measurement rather than a devnet guess —
+which is what turned mainnet from one hand ever dealt into a table that starts.
+
+Two items from the old list are closed. **Seats changing hands across a pause**
+is exercised: `release_hole` plus the `data_is_empty()` existence check were
+verified on devnet on 20 August, and the residual case (a tab closed without
+pausing) is documented and visible in the UI rather than silent. **Mainnet**
+is no longer unverified — it is where the product lives.
 
 ## Running it
 
 ```bash
 # program
-cargo test                      # 71 Rust tests
+cargo test                      # 77 Rust tests (48 unit, 8 property,
+                                # 7 shuffle-quality, 14 program)
 cargo clippy --workspace --all-targets --locked -- \
   -D warnings -A deprecated -A unexpected_cfgs   # what CI runs; the two allows
                                 # are Anchor's own macro expansion, not our code
@@ -1286,25 +2229,51 @@ HANDS=3 npm run test:session    # multi-hand session, and the only test that
 
 # client
 cd app
-npm install
+npm install                     # .npmrc pins legacy-peer-deps; see The stack
 npm run dev                     # http://localhost:3000
-npm test                        # 66 unit tests
+npm test                        # 94 unit tests
 npm run test:devnet             # a real hand through the client's modules
 npm run test:ui                 # every page in a browser, fails on console errors
+npm run design                  # layout check; fails on horizontal overflow at 390px
 npm run gate                    # two browsers, two wallets, a real hand
+
+# operating the room
+node scripts/house-tables.mjs       # open house tables up to the target count;
+                                    # counts what stands and opens the difference
+node scripts/house-session.mjs      # two house wallets play real hands
+node scripts/table-teardown.mjs     # empty and close a table without a browser
+node scripts/recover-table.mjs      # pull a half-delegated table back to Solana
+node scripts/rewards-snapshot.mjs   # rewards figures off chain + database
+node scripts/sweep-rake.mjs         # move accrued rake to the treasury
 node scripts/clear-tables.mjs       # delete tables this wallet created
 node scripts/clear-gate-tables.mjs  # delete tables created by a gate/persisted
                                     # wallet, signing as creator (no hour wait)
 node scripts/wipe-tables.mjs        # remove every table, wherever it is in its
                                     # lifecycle; run it twice, it converges
+
 vercel --prod                   # deploy the client, FROM THE REPOSITORY ROOT.
                                 # The project's Root Directory is `app`, so
                                 # running this from app/ looks for app/app.
-
-# For mainnet, set NEXT_PUBLIC_CLUSTER=mainnet in the Vercel project. Every
-# endpoint derives from it, and a mainnet build carrying a stale devnet URL
-# refuses to start rather than talk to the wrong chain.
 ```
+
+### Environment
+
+`NEXT_PUBLIC_CLUSTER` picks the chain and every endpoint derives from it; a
+mainnet build carrying a stale devnet URL refuses to start rather than talk to
+the wrong chain. Beyond that, three groups of variables, and the split between
+them is load-bearing:
+
+| Variable | Side | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_BASE_RPC` | browser | Keyless, per-IP-limited. Assume the world can read it. |
+| `BASE_RPC` | server only | The api-key url. Origin-locked at the provider, and three times faster for it. Never shipped. |
+| `RPC_TOKEN_SECRET` | server only | HMAC key for the fifteen-minute proxy ticket. |
+| `SITE_ORIGIN` | server only | Sent as `Origin` so the locked key accepts our own backend. |
+| `FUNDER_SECRET_KEY` / `FUNDER_KEYPAIR_PATH` | server only | The wallet that pays delegation rent. `FUNDER_DISABLED` is the kill switch. |
+| `DATABASE_URL` | server only | Also read as `POSTGRES_URL`, `STORAGE_URL`, `DATABASE_POSTGRES_URL`, because providers disagree on the name. Absent means every aggregate degrades to null. |
+
+`db.ts` and `funder.ts` both declare `server-only`, so importing either from a
+client component is a build failure rather than a leak discovered later.
 
 The gate needs the dev server on port 3111 and a funded wallet at
 `~/.config/solana/id.json`.
@@ -1327,7 +2296,7 @@ hole cards rest on Intel's hardware isolation and on MagicBlock operating the
 enclave honestly. `docs/TRUST_MODEL.md` covers what an enclave compromise would
 expose and why mental poker was not used instead.
 
-Two qualifications, both worth stating before someone else does.
+Three qualifications, all worth stating before someone else does.
 
 The shuffle needs two revealed salts, not one from every seated player, so a
 player who does not reveal is relying on the two who did and on the VRF. That is
@@ -1335,11 +2304,25 @@ unchanged, and the reason is still that raising the threshold without a reveal
 deadline trades a weakness needing collusion for a denial of service needing
 nobody.
 
-And **the seed that proves the shuffle was fair also reveals every folded hand.**
-"Provably fair" and "your mucked cards stay yours" are in direct tension here,
-and this design currently resolves it entirely in favour of the first. A player
-should know that before they sit down, which is why it is now the first thing in
-`docs/TRUST_MODEL.md` rather than something a careful reader could derive.
+**What is proven is the board, not the hand you were shown.** Until 20 August
+the published seed proved the entire deal and, in doing so, published every
+folded hand — "provably fair" and "your mucked cards stay yours" were in direct
+tension and the design resolved it entirely in favour of the first. Two
+independent VRF draws fixed that: the board draw is published at settlement and
+verifiable by anyone, the hole draw is never published and is wiped at hand
+end. The cost is real and is the qualification: **a shown hand can no longer be
+proven to be the hand the deck dealt.** The verifier still checks the board
+against the seed, and checks that a shown card is a real card, is not on the
+board, and was not also shown by someone else, but there is no derivation left
+to pin it to. That is exactly what `docs/TRUST_MODEL.md` has always claimed.
+
+**And the room's figures are real but they are not organic.** The lobby's
+volume, hand count and pot sizes come from hands that genuinely happened on
+chain and were re-verified before being stored — and a large share of them were
+played between two wallets the house owns, by `house-session.mjs`, with both
+addresses readable by anyone. The house-play header says so on the page. If
+those figures are ever presented as a room full of strangers finding each
+other, that is a claim the numbers will not support.
 
 The base-layer record is no longer a qualification: as of 20 August
 `record_hand_result` will only write what is already true on chain.
