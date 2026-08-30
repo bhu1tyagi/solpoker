@@ -512,6 +512,9 @@ export function TableFelt({
             stage={stage}
             busy={overlay}
             fallback={fallbackLabel}
+            // A split pays more than one person, and the line said "the
+            // winner" over three streams of chips leaving in three directions.
+            winners={showdown?.awards.length ?? 0}
             width={Math.min(460, canvasW * 0.82)}
             gap={compact ? 16 : 30}
           />
@@ -756,12 +759,15 @@ function StatusLine({
   stage,
   fallback,
   busy,
+  winners = 0,
   width,
   gap,
 }: {
   stage: ShowdownStage;
   fallback: string;
   busy?: string;
+  /** How many seats are being paid, so a split does not read as one winner. */
+  winners?: number;
   /** How wide the line may run, in canvas pixels. */
   width: number;
   /** Clear air between the board and the line, in canvas pixels. */
@@ -774,7 +780,9 @@ function StatusLine({
       : stage === "compare"
         ? "comparing"
         : stage === "award"
-          ? "paying the winner"
+          ? winners > 1
+            ? "splitting the pot"
+            : "paying the winner"
           : fallback);
 
   /*

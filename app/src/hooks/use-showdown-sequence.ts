@@ -49,7 +49,11 @@ const REVEAL_STAGGER_MS = 260;
 const awardHold = (winners: number) =>
   200 * Math.max(0, winners - 1) + 10 * 90 + 750 + 250;
 
-interface LiveSnapshot {
+/** How often the award beat re-reads the payouts, and for how long. */
+const SETTLE_POLL_MS = 150;
+const SETTLE_WAIT_MS = 900;
+
+export interface LiveSnapshot {
   handNumber: number;
   stacks: number[];
   pot: number;
@@ -59,6 +63,73 @@ interface LiveSnapshot {
    * keep on the table while the showdown plays.
    */
   dealtIn: number;
+}
+
+/**
+ * The live picture of the hand, recorded so that settlement cannot erase it.
+ *
+ * `settle` pays every winner, zeroes `committed_total`, and puts the table
+ * back to Waiting in ONE instruction — but the six seat accounts, the hand and
+ * the table arrive here as separate websocket notifications, in whatever order
+ * the socket delivers them. A seat's post-payout stack landing before the
+ * table's `Waiting` used to be recorded as the live one, because this ran
+ * while `table.state` still said a hand was in progress. The payout diff then
+ * came out as zero and the pot came out as zero, and the award beat played to
+ * an empty felt. That is the animation that goes missing "sometimes": it was a
+ * race, which is exactly why it was only sometimes.
+ *
+ * Both figures are monotone inside a hand, so they are accumulated rather than
+ * overwritten. A seat that was dealt in only ever loses chips until it is
+ * paid, and the pot only ever grows until it is cleared — so the low-water
+ * mark of one and the high-water mark of the other are the picture immediately
+ * before settlement, whichever push happens to land first.
+ */
+export function foldSnapshot(
+  prev: LiveSnapshot | null,
+  handNumber: number,
+  handDealtIn: number,
+  seats: (SeatView | null)[],
+): LiveSnapshot {
+  const carry = prev?.handNumber === handNumber ? prev : null;
+  const dealtIn = (carry?.dealtIn ?? 0) | handDealtIn;
+  return {
+    handNumber,
+    stacks: Array.from({ length: MAX_SEATS }, (_, i) => {
+      const stack = seats[i]?.stack ?? 0;
+      // The low-water mark applies only to seats that were dealt in. A player
+      // who takes a seat mid-hand goes from nothing to a full stack, and a
+      // low-water mark would read that as a payout — the pot animating to
+      // somebody who never played the hand.
+      if (!carry || !(dealtIn & (1 << i))) return stack;
+      return Math.min(carry.stacks[i] ?? stack, stack);
+    }),
+    pot: Math.max(
+      carry?.pot ?? 0,
+      seats.reduce((sum, s) => sum + (s?.committedTotal ?? 0), 0),
+    ),
+    dealtIn,
+  };
+}
+
+/**
+ * What each seat won, as the amount its stack actually grew by.
+ *
+ * Nothing is decided here. A split animates as two payments because it was two
+ * payments, an odd chip lands where the program put it, and rake is already
+ * out — these are the chain's own figures, read rather than derived.
+ */
+export function payoutsFrom(
+  snapshot: LiveSnapshot,
+  seats: (SeatView | null)[],
+): Award[] {
+  const paid: Award[] = [];
+  for (let i = 0; i < MAX_SEATS; i++) {
+    // Only a seat that was dealt into this hand can have won it.
+    if (!(snapshot.dealtIn & (1 << i))) continue;
+    const gained = (seats[i]?.stack ?? 0) - (snapshot.stacks[i] ?? 0);
+    if (gained > 0) paid.push({ seat: i, amount: gained });
+  }
+  return paid;
 }
 
 export function useShowdownSequence(
@@ -92,16 +163,11 @@ export function useShowdownSequence(
 
   // Remember the last live picture of the hand. Settlement pays winners and
   // clears the bets in one transaction, so the only way to know what each seat
-  // won is to have kept what it held a moment earlier.
+  // won is to have kept what it held a moment earlier — see foldSnapshot for
+  // why "the last reading" is not the same thing as "the latest reading".
   useEffect(() => {
     if (!hand || !table || table.state !== 1 || hand.handNumber === 0) return;
-    live.current = {
-      handNumber: hand.handNumber,
-      stacks: Array.from({ length: MAX_SEATS }, (_, i) => seats[i]?.stack ?? 0),
-      pot: seats.reduce((sum, s) => sum + (s?.committedTotal ?? 0), 0),
-      dealtIn: (live.current?.handNumber === hand.handNumber ? live.current.dealtIn : 0) |
-        hand.dealtIn,
-    };
+    live.current = foldSnapshot(live.current, hand.handNumber, hand.dealtIn, seats);
   }, [hand, table, seats]);
 
   useEffect(() => {
@@ -118,6 +184,11 @@ export function useShowdownSequence(
       return;
     }
     done.current.add(hand.handNumber);
+    // A sequence that is still running belongs to the previous hand. Its
+    // timers would otherwise turn cards over and clear the stage underneath
+    // this one.
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
     setPot(snapshot.pot);
     setDealtIn(snapshot.dealtIn);
 
@@ -142,31 +213,7 @@ export function useShowdownSequence(
 
     const revealDone = Math.max(REVEAL_MS, toShow.length * REVEAL_STAGGER_MS + 500);
     at(revealDone, () => setStage("compare"));
-    // What each seat won is what its stack gained across settlement, read now
-    // that the payout has certainly arrived. Every seat that gained gets its
-    // own stream, so a split pot animates as the two payments it actually was.
-    const readPayouts = (): Award[] => {
-      const now = seatsRef.current;
-      const paid: Award[] = [];
-      for (let i = 0; i < MAX_SEATS; i++) {
-        const gained = (now[i]?.stack ?? 0) - snapshot.stacks[i];
-        if (gained > 0) paid.push({ seat: i, amount: gained });
-      }
-      return paid;
-    };
-
     at(revealDone + COMPARE_MS, () => {
-      let paid = readPayouts();
-      /*
-       * One late notification must not swallow the whole payment.
-       *
-       * Stacks arrive as their own account updates, and a winner whose update
-       * has not landed by this beat reads as having gained nothing — so their
-       * stream is simply not drawn, and on a split that means the pot visibly
-       * pays one of the two winners. Rather than guess an amount, look again a
-       * beat later: the figures stay the ones the chain reported, and the only
-       * thing that changes is how long we were willing to wait for them.
-       */
       const start = (list: Award[]) => {
         setAwards(list);
         setStage("award");
@@ -176,14 +223,37 @@ export function useShowdownSequence(
           setShown(new Set());
         });
       };
-      if (paid.length === 0) {
-        at(600, () => {
-          paid = readPayouts();
+
+      /*
+       * Wait for the payouts to stop changing before drawing them.
+       *
+       * Every seat is its own account notification, so on a split pot the two
+       * winners' stacks almost never land on the same frame. Reading once and
+       * committing to whatever happened to be there drew the first winner's
+       * stream and silently dropped the second — a split pot that visibly paid
+       * one player, at the exact moment a player most needs to see the money
+       * divided. The old code half-knew this and looked again only when it had
+       * found nothing at all, which is the one case where the miss is obvious.
+       *
+       * So the beat re-reads until the set of paid seats holds still, or until
+       * it has waited longer than the pause it is filling. The figures are
+       * still the chain's; the only thing that changed is how long we are
+       * willing to wait for all of them.
+       */
+      let last: string | null = null;
+      let waited = 0;
+      const settle = () => {
+        const paid = payoutsFrom(snapshot, seatsRef.current);
+        const key = paid.map((p) => `${p.seat}:${p.amount}`).join(",");
+        if ((paid.length > 0 && key === last) || waited >= SETTLE_WAIT_MS) {
           start(paid);
-        });
-        return;
-      }
-      start(paid);
+          return;
+        }
+        last = key;
+        waited += SETTLE_POLL_MS;
+        at(SETTLE_POLL_MS, settle);
+      };
+      settle();
     });
   }, [hand, table, seats]);
 
