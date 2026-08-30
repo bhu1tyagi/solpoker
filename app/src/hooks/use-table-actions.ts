@@ -49,6 +49,15 @@ import { toast } from "@/stores/ui-store";
 import type { ActionKind } from "@/components/poker/ActionBar";
 
 /**
+ * What taking a chair produced: whether it happened, and any session key that
+ * had to be created to make it happen.
+ */
+export interface JoinResult {
+  ok: boolean;
+  session: SessionHandle | null;
+}
+
+/**
  * The things a player does deliberately, as opposed to the crank's background
  * work: sitting down, starting the game, betting, and cashing out.
  *
@@ -158,13 +167,25 @@ export function useTableActions(args: {
    * cash-out, runs on the session key: the wallet is asked once per session,
    * not once per chair.
    *
-   * Returns the session it created, or null if one already existed, so the
-   * caller can put it straight into state without a round trip.
+   * Reports whether the chair was actually taken, and hands back any session
+   * it created on the way so the caller can put it straight into state without
+   * a round trip. The two are separate answers: a sit that used an existing
+   * session creates nothing and still succeeded, and a rebuy needs to know the
+   * difference before it puts the table back on the rollup.
    */
   const join = useCallback(
-    async (seatIndex: number, buyIn: number): Promise<SessionHandle | null> => {
-      if (!tableId || !publicKey) return null;
-      setBusy("join");
+    async (
+      seatIndex: number,
+      buyIn: number,
+      opts: { nested?: boolean } = {},
+    ): Promise<JoinResult> => {
+      if (!tableId || !publicKey) return { ok: false, session: null };
+      // Inside a rebuy this is the middle of one errand, not an errand. The
+      // outer action owns the phase; see `Nested` below.
+      const phase = (s: string | null) => {
+        if (!opts.nested) setBusy(s);
+      };
+      phase("join");
       try {
         const conn = getBaseConnection();
 
@@ -182,7 +203,7 @@ export function useTableActions(args: {
             "sit down",
           );
           toast(`Sat down with ${buyIn.toLocaleString()} chips`, "good");
-          return null;
+          return { ok: true, session: null };
         }
 
         // Checked before signing rather than discovered inside a CPI, where
@@ -216,12 +237,12 @@ export function useTableActions(args: {
         // would leave one on disk that does not exist on chain.
         const handle = prepared ? prepared.commit() : null;
         toast(`Sat down with ${buyIn.toLocaleString()} chips`, "good");
-        return handle;
+        return { ok: true, session: handle };
       } catch (e) {
         toast(friendlyError(e), "bad");
-        return null;
+        return { ok: false, session: null };
       } finally {
-        setBusy(null);
+        phase(null);
       }
     },
     [tableId, sendBase, publicKey, session, sessionToken, sessionCanSign, sendBaseAsSession],
@@ -237,7 +258,7 @@ export function useTableActions(args: {
    * cash-out was still going. Nested calls narrate nothing, and the outermost
    * action owns the phase from beginning to end.
    */
-  type Nested = { nested?: boolean };
+  type Nested = { nested?: boolean; quiet?: boolean };
 
   /**
    * Put the seat stack back into the balance — promptless when the session
@@ -245,8 +266,8 @@ export function useTableActions(args: {
    * destination: the seat occupant's own balance.
    */
   const leave = useCallback(
-    async (seatIndex: number, opts: Nested = {}) => {
-      if (!table || !publicKey) return;
+    async (seatIndex: number, opts: Nested = {}): Promise<boolean> => {
+      if (!table || !publicKey) return false;
       const phase = (s: string | null) => {
         if (!opts.nested) setBusy(s);
       };
@@ -271,9 +292,14 @@ export function useTableActions(args: {
             "leave",
           );
         }
-        toast("Cashed out", "good");
+        // Silent inside a rebuy, where the chips come off the seat only to go
+        // straight back onto it: "Cashed out" there would announce the exact
+        // opposite of what the player asked for.
+        if (!opts.quiet) toast("Cashed out", "good");
+        return true;
       } catch (e) {
         toast(friendlyError(e), "bad");
+        return false;
       } finally {
         phase(null);
       }
@@ -1224,6 +1250,136 @@ export function useTableActions(args: {
   );
 
   /**
+   * Put fresh chips on the chair you are already sitting in.
+   *
+   * A busted player is the one state this table had no way out of. Their seat
+   * is theirs, their stack is zero, and a zero stack is not dealt in — so they
+   * sat and watched, and the only button offered to them was the one that
+   * leaves. The game they came for was behind a rebuy that did not exist.
+   *
+   * The program has no top-up instruction, and that is not an oversight: a
+   * stack is set when the chair is taken and `take_seat` refuses an occupied
+   * chair, which is what keeps a seat's chips accounted for through every hand
+   * it plays. So a rebuy is genuinely a stand-up followed by a sit-down at the
+   * same chair, and the chips travel back through the player balance — the one
+   * place the rollup can never reach — on the way.
+   *
+   * The sequence is the cash-out's, with a sit on the end:
+   *
+   *   1. Sit out, so the next hand is dealt without the chair being swapped
+   *      underneath it.
+   *   2. Let the current hand finish. Nobody's pot is interrupted.
+   *   3. Bring the table back to Solana, because balances only exist there.
+   *   4. Stand up, then sit down again with the new stack.
+   *   5. Put the table back on the rollup for everyone still playing.
+   *
+   * Same cost as a cash-out, paid for the same reason, and the player presses
+   * one button.
+   */
+  const rebuy = useCallback(
+    async (seatIndex: number, buyIn: number): Promise<JoinResult> => {
+      const nothing: JoinResult = { ok: false, session: null };
+      if (!table || !tableId || !publicKey) return nothing;
+      setBusy("rebuy");
+      // The crank must not re-secure a chair that is about to be vacated: the
+      // permission it would write names an occupant who is halfway out of it.
+      useTableStore.getState().setLeavingSeat(seatIndex);
+      try {
+        const conn = getBaseConnection();
+        let onRollup = await isDelegated(conn, table);
+
+        if (onRollup) {
+          // 1. Stop being dealt in. Best effort: a seat with no chips is not
+          //    being dealt in anyway, and a live hand refuses this outright.
+          if (erProgram && erConnection && session && sessionToken) {
+            try {
+              const tx = new Transaction().add(
+                await releaseHoleIx(erProgram, table, seatIndex, {
+                  payer: session.publicKey,
+                  authority: publicKey,
+                  sessionToken,
+                }),
+              );
+              await sendEr(erConnection, tx, {
+                signers: [session],
+                feePayer: session.publicKey,
+                label: "sit out",
+              });
+            } catch {
+              // Already out, or a hand is live. The wait below covers both.
+            }
+          }
+
+          // 2. Never cut a hand short.
+          if (useTableStore.getState().table?.state === 1) {
+            toast("Buying back in when this hand ends.", "good");
+            for (let i = 0; i < 180; i++) {
+              if (useTableStore.getState().table?.state !== 1) break;
+              await sleep(1000);
+            }
+          }
+
+          // 3. Home to Solana, where the balance lives.
+          setBusy("rebuy:pausing");
+          await pauseTable({ nested: true });
+          onRollup = await isDelegated(conn, table);
+        }
+
+        // `pauseTable` has already said why and for how long.
+        if (onRollup) return nothing;
+
+        // 4. The swap itself. If standing up fails the chair is untouched and
+        //    the player still has whatever they had, so it stops here rather
+        //    than trying to sit into a seat it never left.
+        setBusy("rebuy:leaving");
+        if (!(await leave(seatIndex, { nested: true, quiet: true }))) return nothing;
+
+        setBusy("rebuy:sitting");
+        const sat = await join(seatIndex, buyIn, { nested: true });
+
+        // 5. Back on the rollup for whoever is still playing, exactly as a
+        //    cash-out does it. Best effort: the fallback is the Start button.
+        //
+        //    Only when the sit landed. Resuming a table this player has just
+        //    stood up from, with their chips back in their balance and no
+        //    chair, would be the worst possible ending to a rebuy.
+        if (sat.ok) {
+          // The chair is not leaving any more, and the crank refuses to secure
+          // a seat that is: holding the flag through the resume would start a
+          // table with this player's own cards unsecured, which is the one
+          // seat at it that must not be.
+          useTableStore.getState().setLeavingSeat(null);
+
+          // This chair counts on the strength of the sit that just landed:
+          // the subscription carrying its new stack is a moment behind, and
+          // waiting for it would leave the table paused with two funded
+          // players sitting at it.
+          const playing = useTableStore
+            .getState()
+            .seats.filter((s) => s?.occupant && (s.stack > 0 || s.index === seatIndex));
+          if (playing.length >= 2) {
+            try {
+              setBusy("rebuy:resuming");
+              await startTable(playing.map((s) => s!.index), { nested: true });
+            } catch {
+              // They can press Start themselves.
+            }
+          }
+        }
+        return sat;
+      } catch (e) {
+        toast(friendlyError(e), "bad");
+        return nothing;
+      } finally {
+        useTableStore.getState().setLeavingSeat(null);
+        setBusy(null);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [table, tableId, publicKey, erProgram, erConnection, session, sessionToken],
+  );
+
+  /**
    * Bet, signed by the session key so there is no prompt.
    *
    * RaiseTo is a street total rather than an increment, which is what the
@@ -1275,5 +1431,5 @@ export function useTableActions(args: {
     [erProgram, erConnection, table, config, session, sessionToken, publicKey],
   );
 
-  return { join, leave, cashOut, deleteTable, startTable, pauseTable, act, busy };
+  return { join, leave, rebuy, cashOut, deleteTable, startTable, pauseTable, act, busy };
 }

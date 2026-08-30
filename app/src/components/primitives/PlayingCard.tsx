@@ -1,7 +1,8 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
-import { NO_CARD, RANK_CHARS, rankOf, suitOf } from "@/lib/engine/cards";
+import { NO_CARD } from "@/lib/engine/cards";
+import { cardArt, useArtReady } from "@/lib/deck-art";
 import { spring } from "@/styles/theme";
 
 type Size = "sm" | "md" | "lg";
@@ -31,7 +32,7 @@ export const CARD_HEIGHT: Record<Size, number> = {
 /**
  * The faces are the real deck, whole.
  *
- * Byron Knoll's public-domain vector deck, one PNG per card in public/cards/,
+ * Byron Knoll's public-domain vector deck, one file per card in public/cards/,
  * shown exactly as drawn — the indices, the pip layouts, the double-headed
  * courts, all the deck's own. This replaced a hand-set face (our type for
  * indices, our pips, court art grafted into the middle) whose seams showed:
@@ -39,13 +40,26 @@ export const CARD_HEIGHT: Record<Size, number> = {
  * corner said the suit twice. A deck drawn as one thing reads as one thing,
  * and a century of card players already trusts this one.
  *
+ * Re-rendered from the deck's own SVGs at twice the size it used to ship at,
+ * and as WebP rather than PNG. The felt is drawn on a canvas and scaled to the
+ * room, so on a wide screen every card is being enlarged — at 222px the art
+ * ran out of pixels doing it and the indices went soft. Twice the resolution
+ * survives the scale, and the whole deck still weighs less than the smaller
+ * PNGs did.
+ *
  * The one face that stays ours is the back, which carries the house logo —
  * a real casino brands the back and leaves the face to the printer.
  */
-const SUIT_FILE = ["c", "d", "h", "s"];
 
-const cardFile = (card: number) =>
-  `/cards/${RANK_CHARS[rankOf(card)].toLowerCase()}${SUIT_FILE[suitOf(card)]}.png`;
+/**
+ * White left showing around the art, as a fraction of the card.
+ *
+ * The deck's art runs to the very edge of its canvas, and the face it sits on
+ * is a rounded rectangle that clips — so the corner index, the one mark a
+ * player reads a card by, was being shaved off by the radius. Real cards are
+ * printed with a margin for exactly this reason.
+ */
+const ART_INSET = "5%";
 
 interface Props {
   /** Card byte, or NO_CARD. */
@@ -71,7 +85,15 @@ export function PlayingCard({
   const reduce = useReducedMotion();
   const s = SIZES[size];
   const known = card !== undefined && card !== NO_CARD && card < 52;
-  const showFace = known && !faceDown;
+  /*
+   * A face that has not arrived yet is a card that has not been turned over
+   * yet. The river used to flip onto a blank white rectangle while its art was
+   * still loading; now the card simply stays face down and turns when there is
+   * something to turn to, which with the deck pre-warmed is almost always the
+   * same frame.
+   */
+  const artReady = useArtReady(card, known);
+  const showFace = known && !faceDown && artReady;
 
   return (
     <motion.div
@@ -135,14 +157,16 @@ function Face({ card, highlighted }: { card?: number; highlighted: boolean }) {
     >
       {known && (
         <img
-          src={cardFile(card)}
+          src={cardArt(card)}
           alt=""
           draggable={false}
+          decoding="async"
           style={{
             position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
+            // Inside the radius, not under it: the corner index survives.
+            inset: ART_INSET,
+            width: `calc(100% - 2 * ${ART_INSET})`,
+            height: `calc(100% - 2 * ${ART_INSET})`,
             objectFit: "contain",
             pointerEvents: "none",
             userSelect: "none",

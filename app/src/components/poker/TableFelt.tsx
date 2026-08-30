@@ -113,6 +113,17 @@ export function TableFelt({
 
   const boardSize = compact ? "sm" : "lg";
 
+  /*
+   * Somebody is standing in the room with no chair, and a chair is free.
+   *
+   * A poker table explains itself to anyone who has sat at one before, and to
+   * nobody else: six circles, a dealer button, and no clue that the circles
+   * are the way in. `onSit` is already the room's answer to "may this person
+   * sit down" — a wallet, a seat free, the table not mid-game — so the hint
+   * rides on exactly that and cannot appear over a table nobody may join.
+   */
+  const inviting = onSit !== undefined && mySeat < 0 && seats.some((s) => !s?.occupant);
+
   const stage = showdown?.stage ?? null;
   const handLive = table?.state === 1;
   /** The room is doing invisible work, so its mark turns. */
@@ -518,6 +529,8 @@ export function TableFelt({
             width={Math.min(460, canvasW * 0.82)}
             gap={compact ? 16 : 30}
           />
+
+          <SitHint show={inviting} compact={compact} />
         </div>
 
         {/* Seats. */}
@@ -883,6 +896,59 @@ function StatusLine({
         </motion.span>
       </AnimatePresence>
     </div>
+  );
+}
+
+/**
+ * How to get into the game, said once, quietly, to somebody who is not in it.
+ *
+ * A visitor arrives at a felt with six circles on it and no way of knowing
+ * that the circles are the door — the seats hover and take a click, and none
+ * of that is visible until you have already guessed. One line under the board
+ * closes that gap.
+ *
+ * It is set below the status line rather than over the table, in the felt's
+ * own printed lettering rather than the brand's green, and it waits a beat
+ * before appearing so that the room is what a visitor sees first and the
+ * instruction second. It never argues with the game: the moment a hand is
+ * being played there are no free chairs to point at, because a table in play
+ * is not accepting anybody.
+ */
+function SitHint({ show, compact }: { show: boolean; compact: boolean }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!show) {
+      setReady(false);
+      return;
+    }
+    const t = setTimeout(() => setReady(true), 900);
+    return () => clearTimeout(t);
+  }, [show]);
+
+  return (
+    <AnimatePresence>
+      {show && ready && (
+        <motion.p
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 0.42, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+          style={{
+            margin: compact ? "6px 0 0" : "10px 0 0",
+            fontFamily: "var(--font-display)",
+            fontSize: compact ? 10 : 11,
+            fontWeight: 700,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: "var(--c-ink)",
+            textAlign: "center",
+            whiteSpace: "nowrap",
+          }}
+        >
+          take any open seat to buy in
+        </motion.p>
+      )}
+    </AnimatePresence>
   );
 }
 

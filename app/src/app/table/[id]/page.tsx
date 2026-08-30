@@ -3,7 +3,7 @@
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useReadiness } from "@/hooks/use-readiness";
 import { useUiStore } from "@/stores/ui-store";
@@ -13,6 +13,8 @@ import BN from "bn.js";
 import { TableFelt } from "@/components/poker/TableFelt";
 import { ActionBar, type ActionKind } from "@/components/poker/ActionBar";
 import { HandHistoryModal } from "@/components/poker/HandHistoryModal";
+import { RebuyModal } from "@/components/poker/RebuyModal";
+import { ExchangeModal } from "@/components/chips/ExchangeModal";
 import { Button } from "@/components/primitives/Button";
 import { ChipGlyph } from "@/components/primitives/Chip";
 import { PrivacyRing } from "@/components/primitives/ChipRing";
@@ -84,6 +86,13 @@ const OVERLAY_COPY: Record<string, string> = {
   "cashout:pausing": "cashing you out",
   "cashout:leaving": "sending your chips home",
   "cashout:resuming": "dealing the others back in",
+  // A rebuy takes the same road as a cash-out and comes back. The felt says so
+  // in the same voice, because everyone at the table is waiting through it.
+  rebuy: "buying you back in",
+  "rebuy:pausing": "letting the hand finish",
+  "rebuy:leaving": "picking your chair up",
+  "rebuy:sitting": "putting your chips down",
+  "rebuy:resuming": "dealing everyone back in",
   leave: "sending your chips home",
   delete: "putting the table away",
 };
@@ -153,6 +162,16 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   }, [publicKey]);
   const [sitting, setSitting] = useState<number | null>(null);
   const [buyIn, setBuyIn] = useState(0);
+  /*
+   * The two chip sheets this room can open, and they are different questions.
+   *
+   * `rebuying` is chips onto the chair, out of a balance you already have.
+   * `exchange` is USDC into chips, which is the trade the lobby does — the
+   * same sheet, because a player who runs dry mid-session should not be sent
+   * back to the lobby to fix it and lose their seat on the way.
+   */
+  const [rebuying, setRebuying] = useState(false);
+  const [exchange, setExchange] = useState<"buy" | "sell" | null>(null);
   const [delegated, setDelegated] = useState<boolean | null>(null);
   const [acting, setActing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -474,13 +493,7 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   const pot = potTotal(viewSeats);
 
   // Showdown highlighting: work out the winning five from what was shown.
-  const { winningCards, winnerSeats, myHandName, handNames } = useShowdown(
-    hand,
-    seats,
-    mySeat,
-    myHole,
-    myHoleHandNumber,
-  );
+  const { winningCards, winnerSeats, handNames } = useShowdown(hand);
 
   const onAct = useCallback(
     async (kind: ActionKind, toTotal: number) => {
@@ -538,6 +551,44 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
   // A seat with no chips left cannot be dealt in, so it does not count toward
   // the two players a hand needs.
   const fundedCount = seats.filter((s) => s?.occupant && s.stack > 0).length;
+
+  /*
+   * Out of chips, in the chair, with the game going on around you.
+   *
+   * Being all in is NOT this. An all-in player has a stack of zero and a live
+   * claim on the pot, and offering them a rebuy in the middle of it would be
+   * the room telling them they had lost a hand still being played. So the
+   * chips have to be gone AND the hand has to be over — or they were never
+   * dealt into it — before anything here says a word.
+   */
+  const myStack = mySeat >= 0 ? (seats[mySeat]?.stack ?? 0) : 0;
+  const inLiveHand =
+    tableView?.state === 1 && hand !== null && mySeat >= 0
+      ? (hand.dealtIn & (1 << mySeat)) !== 0
+      : false;
+  const busted = mySeat >= 0 && myStack === 0 && !inLiveHand && !outdated;
+
+  /*
+   * The prompt arrives once, and only once, per bust.
+   *
+   * A sheet that reopens every time the felt ticks is a room shouting at
+   * somebody who already heard it. It opens when the chips run out, and after
+   * that the notice on the action bar is what keeps the offer standing.
+   */
+  const bustAnnounced = useRef(false);
+  useEffect(() => {
+    if (!busted) {
+      bustAnnounced.current = false;
+      return;
+    }
+    // Not over the top of something else. A cash-out ends with an empty chair
+    // too and is not a rebuy; and the hand that took the chips is still being
+    // shown — cards turning over, the pot crossing the felt — which a player
+    // is entitled to watch before being asked for more money.
+    if (bustAnnounced.current || actions.busy || showdown.stage !== null) return;
+    bustAnnounced.current = true;
+    setRebuying(true);
+  }, [busted, actions.busy, showdown.stage]);
 
   /*
    * Your chair, and whether its card lock is a wait or a problem.
@@ -788,11 +839,13 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             }}
           >
             <BalancePill chips={player.state?.chips} small />
-            <Link href="/lobby" style={{ textDecoration: "none" }}>
-              <IconButton title="Buy more chips" solid>
-                <PlusIcon />
-              </IconButton>
-            </Link>
+            <IconButton
+              title={mySeat >= 0 ? "Add chips to the table" : "Buy chips"}
+              solid
+              onClick={() => (mySeat >= 0 ? setRebuying(true) : setExchange("buy"))}
+            >
+              <PlusIcon />
+            </IconButton>
           </div>
           {connected && !session && (
             <Button variant="primary" size="sm" loading={authorising} onClick={authorise}>
@@ -883,38 +936,38 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         </div>
 
         {/* Bottom left: what you are carrying. On a phone this corner is gone
-            and the balance lives in the top strip instead. */}
+            and the balance lives in the top strip instead.
+
+            The plus used to be a link back to the lobby, which is the one
+            place a seated player cannot afford to go: leaving the room to buy
+            chips means leaving the chair. It opens the chips sheet over the
+            table instead — onto the cloth if you are sitting, into your
+            balance if you are watching. */}
         <div className="hud-bl">
           <BalancePill chips={player.state?.chips} />
-          <Link href="/lobby" style={{ textDecoration: "none" }}>
-            <IconButton title="Buy more chips" solid>
-              <PlusIcon />
-            </IconButton>
-          </Link>
+          <IconButton
+            title={mySeat >= 0 ? "Add chips to the table" : "Buy chips"}
+            solid
+            onClick={() => (mySeat >= 0 ? setRebuying(true) : setExchange("buy"))}
+          >
+            <PlusIcon />
+          </IconButton>
         </div>
 
         {/* Bottom right: the decision in front of you. On a phone it spans the
             whole bottom edge, above the home bar. */}
         <div className="hud-br">
-          <AnimatePresence>
-            {myHandName && (
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={spring.snappy}
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: 12,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
-                  color: "var(--c-green)",
-                }}
-              >
-                you have {myHandName}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/*
+            Nothing here names your hand while you are playing it.
+
+            A line reading "you have high card, ace high" under your own cards
+            reads the board for you, and reading the board is the game. It was
+            put here as a kindness to new players and it takes the thinking out
+            of every street for everyone — so it is gone. The hands are still
+            named at showdown, beside each seat that showed one, which is what
+            a dealer says out loud and the one moment the answer is public
+            anyway.
+          */}
 
           {/* Always mounted, for everyone. The room's controls are part of
               the room: a spectator sees the same three greyed verbs a seated
@@ -956,6 +1009,27 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             </Notice>
           )}
 
+          {/* The offer stands for as long as the chair is empty of chips. The
+              sheet opened itself once when the stack ran out; this is what is
+              left afterwards, so a player who waved it away can still find the
+              way back in without hunting for it. */}
+          {busted && (
+            <Notice>
+              <span>
+                You are out of chips at this table. Buy back in and you are
+                dealt into the next hand.
+              </span>
+              <Button
+                variant="primary"
+                size="sm"
+                loading={actions.busy?.startsWith("rebuy")}
+                onClick={() => setRebuying(true)}
+              >
+                Buy back in
+              </Button>
+            </Notice>
+          )}
+
           {outdated && (
             <Notice tone="var(--c-loss)">
               <span>
@@ -972,6 +1046,52 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         tableId={String(id)}
+      />
+
+      {/* Chips onto the chair. Opens itself when a stack runs out, and from
+          the plus in the corner whenever a seated player wants more in front
+          of them. */}
+      <RebuyModal
+        open={rebuying}
+        onClose={() => setRebuying(false)}
+        stack={myStack}
+        balance={player.state?.chips ?? 0}
+        minBuyIn={minBuyIn}
+        maxBuyIn={tableConfig?.maxBuyIn ?? 0}
+        stakesKnown={stakesKnown}
+        tableLive={delegated === true}
+        busy={actions.busy}
+        onRebuy={async (total) => {
+          if (mySeat < 0) return;
+          const { ok, session: fresh } = await actions.rebuy(mySeat, total);
+          if (fresh) {
+            setSession(fresh.keypair);
+            setSessionToken(fresh.tokenPda);
+          }
+          if (ok) setRebuying(false);
+          await player.refresh();
+          await refreshDelegation();
+        }}
+        onBuyChips={() => {
+          setRebuying(false);
+          setExchange("buy");
+        }}
+      />
+
+      {/* USDC into chips, without leaving the room. The lobby's own sheet,
+          because a player who runs dry at the table should not have to give up
+          their seat to fix it. */}
+      <ExchangeModal
+        mode={exchange}
+        setMode={setExchange}
+        onClose={() => setExchange(null)}
+        chips={player.state?.chips ?? 0}
+        affordable={player.affordable}
+        busy={player.busy}
+        onBuy={player.buy}
+        onSell={player.sell}
+        blocked={exchange === "buy" ? player.buyBlocked : player.sellBlocked}
+        ready={player.state !== null}
       />
 
       <Modal
@@ -1144,13 +1264,13 @@ export default function TablePage({ params }: { params: Promise<{ id: string }> 
             // One signature covers the seat and the key that lets you act at
             // it; `join` bundles them. Whatever comes back is already real on
             // chain, so it goes straight into state.
-            const s = await actions.join(
+            const { session: fresh } = await actions.join(
               sitting,
               Math.min(Math.max(buyIn, minBuyIn), maxAffordable),
             );
-            if (s) {
-              setSession(s.keypair);
-              setSessionToken(s.tokenPda);
+            if (fresh) {
+              setSession(fresh.keypair);
+              setSessionToken(fresh.tokenPda);
             }
             setSitting(null);
             await player.refresh();
@@ -1578,39 +1698,26 @@ function useStatusLine(
  * Only hands that were actually shown are known, which is the point: a pot won
  * on a fold reveals nothing, so there is nothing to highlight.
  */
-function useShowdown(
-  hand: HandView | null,
-  seats: (SeatView | null)[],
-  mySeat: number,
-  myHole: number[] | null,
-  myHoleHandNumber: number,
-) {
+function useShowdown(hand: HandView | null) {
   return useMemo(() => {
     const empty = {
       winningCards: undefined as Set<number> | undefined,
       winnerSeats: undefined as Set<number> | undefined,
-      myHandName: undefined as string | undefined,
       handNames: undefined as Map<number, string> | undefined,
     };
     if (!hand) return empty;
 
     const board = hand.board.filter((c) => c !== NO_CARD);
 
-    // Your own hand, named, as soon as there is enough board to name it.
-    let myHandName: string | undefined;
-    if (
-      mySeat >= 0 &&
-      myHole &&
-      myHoleHandNumber === hand.handNumber &&
-      myHole[0] !== NO_CARD &&
-      board.length >= 3
-    ) {
-      myHandName = describe(evaluate([...myHole, ...board]));
-    }
-
-    if (hand.revealedMask === 0 || board.length < 5) {
-      return { ...empty, myHandName };
-    }
+    /*
+     * Only hands that were SHOWN are named.
+     *
+     * Your own used to be named the moment there was a flop to name it
+     * against, and that line played the hand for you. What survives here is
+     * the showdown: cards face up, the comparison public, a name beside each
+     * one — the dealer's job, not a coach's.
+     */
+    if (hand.revealedMask === 0 || board.length < 5) return empty;
 
     // Rank everyone who showed, and highlight the best five.
     let best = -1;
@@ -1631,7 +1738,7 @@ function useShowdown(
         bestSeats.push(i);
       }
     }
-    if (bestSeats.length === 0) return { ...empty, myHandName };
+    if (bestSeats.length === 0) return empty;
 
     const winningCards = new Set<number>();
     for (const s of bestSeats) for (const c of fives.get(s) ?? []) winningCards.add(c);
@@ -1639,10 +1746,9 @@ function useShowdown(
     return {
       winningCards,
       winnerSeats: new Set(bestSeats),
-      myHandName,
       handNames,
     };
-  }, [hand, seats, mySeat, myHole, myHoleHandNumber]);
+  }, [hand]);
 }
 
 /*
