@@ -260,11 +260,3 @@ Devnet TEE endpoint `https://devnet-tee.magicblock.app`, validator
 ## License
 
 MIT
-
-<!-- hypertribe:sponsors:start -->
-## Sponsors
-
-[![solpoker Sponsors](https://api.tribe.run/tokens/BpqaooSd9YFWfS7XkcpHzdrUr5WWES7GNiuxSoWmaCto/sponsors.svg)](https://tribe.run/token/BpqaooSd9YFWfS7XkcpHzdrUr5WWES7GNiuxSoWmaCto)
-
-Become a sponsor on [Tribe.run](https://tribe.run/token/BpqaooSd9YFWfS7XkcpHzdrUr5WWES7GNiuxSoWmaCto).
-<!-- hypertribe:sponsors:end -->
