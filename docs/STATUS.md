@@ -1,6 +1,6 @@
 # SolPoker: what is built, what is verified, what is left
 
-Written 15 August 2026. Updated 30 August 2026, after a week that moved the
+Written 15 August 2026. Updated 31 August 2026, after a week that moved the
 work out of "does the protocol hold" and into "does a stranger who arrives at
 the URL end up playing a hand". The program has been on mainnet since 22
 August and the client has pointed at it since 24 August. Real USDC, real
@@ -2130,6 +2130,65 @@ exactly 44 — which measures 43.99 about a third of the time at device pixel
 ratio 3, so a control sized to the exact minimum is a control that misses it on
 some device. All three now clear it with slack.
 
+## Green again, and verified again, 31 August
+
+Two things were red at once and neither was what it looked like.
+
+**CI had failed on every push since 25 August, from three unrelated causes
+stacked behind one another.** The IDL job never got past `anchor build`: a fresh
+checkout has no program keypair, so Anchor writes a throwaway and then refuses
+to build because it does not match `declare_id!`. The job was already built
+around that — `verify-idl.py` forgives the program id and nothing else — but the
+build was never told to, and `--ignore-keys` is all it wanted. The client job
+died on the design-token guard, which was not reporting drift at all: it exits
+non-zero on a breakpoint that is not in BREAKPOINTS, and `globals.css` had grown
+a 640/639px pair that is Tailwind's `sm` rather than one of ours.
+
+Behind that were two more failures nobody had seen, because the token guard
+runs first and nothing after it ever ran. `ui-check` was still asserting on
+`/history/1`, a route that stopped existing when hand history became a dialog,
+and on landing-page selectors from before the hero was rebuilt — the `h1` is not
+the wordmark any more and the CTA is a link, not a button. `design-check` was
+failing about two runs in three on the menu button, and the reason is worth
+keeping: at device pixel ratio 3, `getBoundingClientRect` returns 43.999996 for
+an element that is 44px by layout, and the failure message rounded it back to
+"44px", so the check reported the floor as the thing that had failed the floor.
+The note above about giving controls slack was the right instinct aimed at the
+wrong half of the problem — the measurement was what needed the tolerance.
+
+Snapping the two breakpoints to real ones also removed a layout bug nobody had
+filed. The `≤639px` rule that fixes the rewards board head was written wide
+enough to catch cards that never needed it: measured across widths, the head
+fits on one 45px line from 480px up, and the rule was making it 73px there for
+nothing. At the phone breakpoint it does what it was written to do and stops.
+
+**And the program was showing "Verified: false" on the explorers again.** The
+cause was not the verification, it was the deploy. The 28 August upgrade went
+out as a plain local `anchor build`, and a local build is a different binary
+from the same source — reproducible by nobody, so OtterSec can never agree with
+it. The registry was still holding 25 August's answer for a commit three days
+stale. Confirmed rather than assumed, in both directions: a local `anchor build`
+of HEAD reproduced the deployed `193f65e8` exactly, and a Docker build of the
+last verified commit reproduced OtterSec's recorded `306a65ca` exactly. So the
+deployed code was current `main` and nothing had drifted; only its provenance
+was gone.
+
+There is no way to verify a non-reproducible binary, so the fix was another
+deploy: the old binary dumped and kept first, the buffer hash compared against
+the verifiable build *before* the swap, the upgrade, then the PDA and the
+OtterSec job. `is_verified` is true again, against `df07163`. Cost 0.006 SOL;
+the 7.92 SOL buffer refunded in full.
+
+Two things cost time and are now in the runbook. `write-buffer` failed once with
+"Max retries exceeded" — normal under load, and not a lost 8 SOL, because the
+buffer keypair was kept and re-running the same command resumed it. And after
+the upgrade landed, the Helius RPC went on serving the *old* ProgramData hash
+for several minutes while the public RPC had the new one immediately, which for
+a moment looked exactly like an upgrade that had not taken.
+
+The real lesson is that the runbook said `anchor build && npm run deploy`, which
+is the trap, and has been rewritten to say the opposite.
+
 ## Known problems
 
 **Phantom shows a malicious-dApp warning on pokerable.fun.** Blowfish, the
@@ -2361,7 +2420,9 @@ cargo test                      # 77 Rust tests (48 unit, 8 property,
 cargo clippy --workspace --all-targets --locked -- \
   -D warnings -A deprecated -A unexpected_cfgs   # what CI runs; the two allows
                                 # are Anchor's own macro expansion, not our code
-anchor build && npm run deploy
+anchor build                    # for the IDL and for local testing ONLY.
+                                # Mainnet is deployed from the verifiable
+                                # build below, never from this one.
 cp target/idl/solpoker.json app/src/lib/idl/solpoker.json    # re-vendor after
 cp target/types/solpoker.ts  app/src/lib/idl/solpoker.ts     # any deploy
 npm run test:er                 # 15 devnet integration tests
@@ -2419,11 +2480,46 @@ client component is a build failure rather than a leak discovered later.
 The gate needs the dev server on port 3111 and a funded wallet at
 `~/.config/solana/id.json`.
 
-Upgrading the program needs roughly 6.6 SOL free for the deploy buffer, which is
+Upgrading the program needs roughly 8 SOL free for the deploy buffer, which is
 refunded afterwards, and the account must be large enough for the new binary or
 the upgrade is refused outright: `solana program extend <id> <bytes>`. The
 public devnet faucet is usually rate-limited; `solana airdrop 1 --url
 https://rpc.magicblock.app/devnet` worked when it would not.
+
+**Mainnet is upgraded from the verifiable build, not from `anchor build`.** This
+is the whole ballgame and it has already been got wrong once: the 28 August
+upgrade went out as a local `anchor build`, which is a different binary from the
+same source, and it silently un-verified the program for three days. A local
+build is not reproducible by anyone else, so OtterSec cannot ever agree with it
+and the explorer badge stays false no matter how many times verification is
+re-run. The only fix is another deploy, so get it right the first time:
+
+```bash
+git push                        # OtterSec builds from a pushed commit, so the
+                                # commit must exist on GitHub before any of this
+solana-verify build --base-image solanafoundation/solana-verifiable-build:3.1.14 \
+  --library-name solpoker
+solana program dump <id> ROLLBACK.so -u m          # keep the old binary first
+solana-keygen new -o buffer.json                   # a buffer we KEEP, so a
+                                                   # partial upload resumes
+solana program write-buffer target/deploy/solpoker.so --buffer buffer.json \
+  --use-rpc --with-compute-unit-price 30000 -u <rpc>
+solana-verify get-buffer-hash -u <rpc> <buffer>    # MUST equal the build hash
+                                                   # BEFORE the swap, not after
+solana program upgrade <buffer> <id> --upgrade-authority ~/.config/solana/id.json \
+  -u <rpc>                                         # takes no fee flags
+solana-verify verify-from-repo --program-id <id> --commit-hash <sha> \
+  --base-image solanafoundation/solana-verifiable-build:3.1.14 \
+  --library-name solpoker -u <rpc> -y <repo-url>   # writes the PDA
+solana-verify remote submit-job --program-id <id> --uploader <the authority>
+```
+
+Two things that will waste an hour otherwise. `write-buffer` failing with "Max
+retries exceeded" is normal under load and is not a lost 8 SOL — re-run the same
+command with the same buffer keypair and it resumes. And the Helius RPC served a
+stale ProgramData account for several minutes after the upgrade, reporting the
+*old* hash long after the swap had landed; the public RPC had it immediately.
+Check a second RPC before believing an upgrade did not take.
 
 Re-vendoring the IDL after a deploy is not optional. The account layouts and the
 error list live in it, and a stale copy makes the client send the wrong accounts

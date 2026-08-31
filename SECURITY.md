@@ -70,10 +70,19 @@ The deployed binary is meant to be reproducible from this repository:
 ```
 solana-verify verify-from-repo \
   --program-id Z2JAck8LPeRvUQp4Pn34FcYAHAGiBZg6FYtnF8Poker \
+  --base-image solanafoundation/solana-verifiable-build:3.1.14 \
+  --library-name solpoker \
   https://github.com/bhu1tyagi/solpoker
 ```
 
-If that ever disagrees with what an explorer shows, treat the disagreement
+The base image is not optional and is not a preference. The default container
+ships cargo 1.84, which cannot parse a crate that reaches the tree through
+`anchor-attribute-account` 1.0.2 — so without that flag the build fails to
+compile rather than producing a hash that disagrees. A compile error here is
+our packaging, not a finding.
+
+A hash that *does* disagree is a finding. If this command builds successfully
+and the result differs from what an explorer shows, treat the disagreement
 itself as a security finding and tell us.
 
 ## Acknowledgements
