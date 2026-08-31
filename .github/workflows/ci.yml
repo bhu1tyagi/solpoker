@@ -143,8 +143,14 @@ jobs:
       - name: Install Anchor
         run: cargo install --git https://github.com/coral-xyz/anchor --tag v1.0.2 anchor-cli --locked
 
+      # `--ignore-keys` because a fresh checkout has no program keypair. Anchor
+      # writes itself a throwaway one, then refuses to build because it does not
+      # match the `declare_id!` in the source. That mismatch is expected here and
+      # only ever expected here: the real keypair is the upgrade authority and is
+      # not in the repository. The id is the one thing the comparison below
+      # forgives; everything else is still compared exactly.
       - name: Build
-        run: anchor build
+        run: anchor build --ignore-keys
 
       # Compares everything except the program id. A fresh checkout has no
       # program keypair, because the real one is the upgrade authority and is

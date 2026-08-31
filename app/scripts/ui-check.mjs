@@ -19,11 +19,15 @@ mkdirSync(shotDir, { recursive: true });
 
 const PAGES = [
   {
+    // The hero CTA is a link styled as a button, not a `button`, and its label
+    // depends on wallet state — "Connect wallet" for a stranger, "Go to the
+    // lobby" once the adapter says it knows them. Both are the same anchor to
+    // the same gate, so match the anchor rather than pinning the copy.
     path: "/",
     expect: {
-      connect: "button:has-text('Select Wallet'), button:has-text('Connect')",
-      trustLink: "[aria-label='How this works']",
-      heading: "h1:has-text('Pokerable')",
+      connect: "a[href='/lobby']",
+      trustLink: "a[href='/trust']",
+      heading: "h1:has-text('on-chain')",
     },
   },
   {
@@ -43,7 +47,8 @@ const PAGES = [
       historyLink: "[aria-label='Hand history']",
     },
   },
-  { path: "/history/1", expect: { heading: "h1:has-text('Hand history')" } },
+  // There is no /history route any more. Hand history is a dialog opened from
+  // the table itself, and the button that opens it is asserted above.
 ];
 
 /** Copy that must never appear, however the sentence around it is phrased. */

@@ -193,11 +193,30 @@ const browser = await chromium.launch();
          */
         .filter((el) => el.getRootNode() === el.ownerDocument)
         .filter((el) => !el.closest(".stack-chip") && !el.classList.contains("stack-chip"))
+        /*
+         * Half a pixel of tolerance, because the measurement is noisier than
+         * the layout is.
+         *
+         * `getBoundingClientRect` is the right instrument — it sees transforms,
+         * so a control scaled below the floor still fails — but at
+         * deviceScaleFactor 3 it returns the rect in device pixels divided by
+         * 3, and 132/3 does not always come back as exactly 44. A control that
+         * is 44px by layout (`offsetHeight` 44, computed height "44px", no
+         * transform) measured 43.999996 on roughly half of all runs, which
+         * failed this check at random and reported the height as "44px"
+         * because the message rounded it. Nothing was ever wrong with the
+         * button.
+         *
+         * A real violation is a whole pixel or more under the floor, so this
+         * tolerance cannot hide one.
+         */
         .filter((el) => {
           const r = el.getBoundingClientRect();
-          return r.width > 0 && r.height > 0 && r.height < 44;
+          return r.width > 0 && r.height > 0 && r.height < 44 - 0.5;
         })
-        .map((el) => `${el.tagName}.${el.className || "-"}:${Math.round(el.getBoundingClientRect().height)}px`)
+        // One decimal, not rounded to the nearest pixel: a near-miss should
+        // read as a near-miss rather than as the floor it just failed.
+        .map((el) => `${el.tagName}.${el.className || "-"}:${el.getBoundingClientRect().height.toFixed(1)}px`)
         .slice(0, 8),
     );
     if (small.length) fail(`${path} has tap targets under 44px: ${small.join(", ")}`);

@@ -5455,8 +5455,12 @@ input[type="range"]::-moz-range-thumb {
  * Eight figures: four up and two down once there is room, two up before that.
  * They are one block rather than two rows of four with a gap, because they are
  * read in one glance and each card's own label says whose number it is.
+ *
+ * "There is room" is the tablet breakpoint, the same one that splits the hero
+ * above — so the block goes four-wide at the moment it moves into the hero's
+ * right-hand column, rather than at a width of its own invention.
  */
-@media (min-width: 640px) {
+@media (min-width: 768px) {
   .pool-figs {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -5670,8 +5674,13 @@ input[type="range"]::-moz-range-thumb {
  * head 115px on a 269px card. Reordering puts the control up on the title's
  * line and gives the hint the second one to itself, which is two lines rather
  * than three and the same information.
+ *
+ * "On a phone" is the phone breakpoint, and only that. Written wider it forced
+ * the second line onto cards that had never needed one: the head fits on a
+ * single 45px line from 480px up, and this rule was making it 73px there for
+ * nothing.
  */
-@media (max-width: 639px) {
+@media (max-width: 479px) {
   .rewards-board-head {
     row-gap: var(--sp-2);
   }
